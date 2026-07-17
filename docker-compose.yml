@@ -1,0 +1,21 @@
+name: fixflow
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fixflow}
+      POSTGRES_USER: ${POSTGRES_USER:-fixflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fixflow} -d ${POSTGRES_DB:-fixflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - fixflow-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  fixflow-postgres-data:
