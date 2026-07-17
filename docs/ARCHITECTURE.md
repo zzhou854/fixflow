@@ -35,24 +35,25 @@ use the same Pydantic request and result schemas.
   structured model snapshots, tool request/results, fault configuration, and
   state-delta details.
 
-## Candidate week-1 data model
+## Proposed week-1 data model
 
-This is a design proposal, not implemented schema.
+This is the frozen, user-approved state-design proposal. It is not an implemented
+schema; implementation starts only under the separately authorized Task 2.
 
 | Aggregate/table | Key responsibilities and constraints |
 | --- | --- |
 | `users` | Preset resident/operator identities and active status |
 | `properties` | Property identity, building/unit, and service area |
 | `resident_property_relations` | Authorized resident-property relation with FKs and uniqueness |
-| `repair_tickets` | Issue fields, current candidate status, resident/property FKs, version, rework count |
+| `repair_tickets` | Issue fields, proposed ticket status, resident/property FKs, version, rework count, and current escalation prior status |
 | `ticket_status_history` | Every accepted status change with actor and trace identifiers |
-| `ticket_events` | Append-only domain events and conflict evidence |
+| `ticket_events` | Append-only scheduling, rework, acceptance, and conflict evidence |
 | `workers` | Active flag, service area, and stable identity |
 | `worker_skills` | Worker-to-supported-issue-category relation |
 | `worker_availability` | Time windows used by deterministic matching |
-| `appointments` | Immutable time interval, current candidate status, ticket/worker FKs, version |
-| `appointment_history` | Every accepted appointment transition and supersession link |
-| `worker_events` | Append-only worker behavior linked to ticket/appointment and actor |
+| `appointments` | Immutable time interval, proposed status, ticket/worker FKs, version, required terminal-outcome actor/reason/evidence/timestamp data, and supersession link |
+| `appointment_history` | Every accepted transition with actor, trace, and version data |
+| `worker_events` | Canonical append-only behavior linked to ticket/appointment, subject worker, real recording actor, sequence, and source idempotency key |
 | `idempotency_records` | Unique operation scope/key, request hash, result reference, and status |
 
 Future-phase tables such as conversations, checkpoints, policies, Trace,
@@ -64,11 +65,25 @@ not created during stage 0.
 - Ticket and appointment mutations use optimistic versions.
 - Active worker appointments use a PostgreSQL range exclusion constraint to
   prevent overlaps even under concurrent requests.
+- A partial unique index allows at most one active `BOOKED` appointment per
+  ticket. Appointment interval and worker fields are immutable after creation.
 - Idempotency keys have a database unique constraint and are scoped to the
   business operation/actor as defined during week 1.
 - A service commits the business mutation and history in one transaction.
 - In phase 3, externally observed events also write an Outbox record in that
   transaction.
+
+The proposed storage strategy is a Python string Enum paired with a PostgreSQL
+string column and named `CHECK` constraint, rather than PostgreSQL Native Enum.
+The approved transition rules will live in the domain layer; API, MCP, workflow,
+and ORM adapters never set statuses directly.
+
+For generic appointment `CANCELLED`/`NO_SHOW`, the database and domain schema
+retain `actor_type`, `actor_id`, `reason_code`, `reason_text`, `evidence`, and
+`occurred_at`. Reason codes distinguish resident/worker no-show and resident,
+worker, worker-rejection, operator, and system cancellation without expanding
+the appointment-status enum. Terminal appointments never reactivate; later work
+creates a new row and audit corrections are append-only.
 
 ## Error taxonomy
 
@@ -96,5 +111,5 @@ import FastAPI, MCP, LangGraph, or SQLAlchemy sessions.
 - Python: exactly 3.12.
 - Dependency management: uv, committed `uv.lock`, no parallel dependency files.
 - PostgreSQL image line: pgvector-enabled PostgreSQL 16 for local development.
-- Domain enums remain documentation candidates pending explicit approval.
-
+- The approved final enums and matrices are in `docs/STATE_MACHINE.md` and remain
+  unimplemented pending the user's explicit Task 2 instruction.
