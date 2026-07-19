@@ -11,17 +11,23 @@ demo.
 
 ## Current status
 
-Stage 0 establishes the week-1 engineering boundary only:
+The deterministic foundation through Task 3.5 is complete:
 
 - Python 3.12 and uv project configuration;
 - a minimal FastAPI health endpoint;
-- an initialized asynchronous Alembic environment;
-- PostgreSQL with pgvector through Docker Compose;
-- candidate domain-state matrices for approval;
-- architecture and MCP contract documentation.
+- PostgreSQL with pgvector through Docker Compose, validated healthy;
+- frozen domain states and pure transition rules;
+- SQLAlchemy persistence mappings and the first business Alembic migration;
+- PostgreSQL constraints and disposable-database integration tests;
+- the implementation roadmap and mandatory task-alignment gates.
+
+The current verified baseline is 215 passing tests. The next implementation task
+adds repositories, Unit of Work, and deterministic application services for the
+future MCP and Agent layers.
 
 No LangGraph workflow, LLM, RAG, JWT, frontend, Outbox worker, Trace UI, or
-fault-injection implementation exists yet.
+fault-injection implementation exists yet; these remain mandatory roadmap work,
+not cancelled scope.
 
 ## Prerequisites
 
@@ -64,7 +70,7 @@ after relevant tests pass.
 
 1. Database engine, session lifecycle, pgvector extension, and migration smoke test.
 2. Users, properties, and resident-property relations with authorization tests.
-3. Repair-ticket schema, candidate status matrix approval, and domain transition tests.
+3. Repair-ticket schema, approved status matrix, and domain transition tests.
 4. Workers, skills, service areas, and availability windows.
 5. Appointments, versioning, and PostgreSQL overlap exclusion constraints.
 6. Idempotency records and duplicate-request behavior.

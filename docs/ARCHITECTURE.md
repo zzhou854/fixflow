@@ -22,6 +22,19 @@ ports. LLM and workflow code never opens ORM transactions.
 The MCP server is a separate process. Online and fake MCP implementations must
 use the same Pydantic request and result schemas.
 
+## Current implementation status
+
+Completed foundations are project initialization, the approved domain-state
+design, pure domain transitions, SQLAlchemy persistence mappings, the first
+business Alembic migration, PostgreSQL constraint/integration tests, and the
+implementation-roadmap alignment gates. The verified baseline at Task 3.5 is
+215 passing tests.
+
+The next implementation boundary is repositories, Unit of Work, and
+deterministic application services. MCP, FastAPI business endpoints, LangGraph,
+RAG, Trace, Outbox, Harness, evaluation, and frontend work remain later roadmap
+stages.
+
 ## Source-of-truth rules
 
 - PostgreSQL owns users, properties, authorization relations, tickets,
@@ -35,30 +48,30 @@ use the same Pydantic request and result schemas.
   structured model snapshots, tool request/results, fault configuration, and
   state-delta details.
 
-## Proposed week-1 data model
+## Implemented core persistence model
 
-This is the frozen, user-approved state-design proposal. It is not an implemented
-schema; implementation starts only under the separately authorized Task 2.
+The user-approved state design is implemented in the pure domain layer and the
+core PostgreSQL schema. Revision `20260719_0001` is the first business migration;
+`docs/DATABASE_SCHEMA.md` records its exact tables and constraints.
 
 | Aggregate/table | Key responsibilities and constraints |
 | --- | --- |
 | `users` | Preset resident/operator identities and active status |
 | `properties` | Property identity, building/unit, and service area |
 | `resident_property_relations` | Authorized resident-property relation with FKs and uniqueness |
-| `repair_tickets` | Issue fields, proposed ticket status, resident/property FKs, version, rework count, and current escalation prior status |
+| `repair_tickets` | Issue fields, approved ticket status, resident/property FKs, version, rework count, and current escalation prior status |
 | `ticket_status_history` | Every accepted status change with actor and trace identifiers |
-| `ticket_events` | Append-only scheduling, rework, acceptance, and conflict evidence |
 | `workers` | Active flag, service area, and stable identity |
 | `worker_skills` | Worker-to-supported-issue-category relation |
 | `worker_availability` | Time windows used by deterministic matching |
-| `appointments` | Immutable time interval and `INITIAL_REPAIR`/`REWORK` purpose, proposed status, ticket/worker FKs, version, required terminal-outcome actor/reason/evidence/timestamp data, and supersession link |
-| `appointment_history` | Every accepted transition with actor, trace, and version data |
+| `appointments` | Immutable time interval and `INITIAL_REPAIR`/`REWORK` purpose, approved status, ticket/worker FKs, version, required terminal-outcome actor/reason/evidence/timestamp data, and supersession link |
+| `appointment_status_history` | Every accepted transition with actor and version data |
 | `worker_events` | Canonical append-only behavior linked to ticket/appointment, subject worker, real recording actor, sequence, and source idempotency key |
 | `idempotency_records` | Unique operation scope/key, request hash, result reference, and status |
 
 Future-phase tables such as conversations, checkpoints, policies, Trace,
-Outbox, and dead letters are documented in the project specification but are
-not created during stage 0.
+Outbox, dead letters, and any additional ticket event stream are documented in
+the project specification and roadmap but are not created yet.
 
 ## Concurrency and transaction boundary
 
@@ -73,7 +86,7 @@ not created during stage 0.
 - In phase 3, externally observed events also write an Outbox record in that
   transaction.
 
-The proposed storage strategy is a Python string Enum paired with a PostgreSQL
+The implemented storage strategy is a Python string Enum paired with a PostgreSQL
 string column and named `CHECK` constraint, rather than PostgreSQL Native Enum.
 The approved transition rules will live in the domain layer; API, MCP, workflow,
 and ORM adapters never set statuses directly.
@@ -112,11 +125,13 @@ API / MCP / future workflow
 Infrastructure imports domain/application contracts; domain code does not
 import FastAPI, MCP, LangGraph, or SQLAlchemy sessions.
 
-## Stage-0 decisions
+## Established implementation decisions
 
 - Repository root: `F:\agent\fixflow`.
 - Python: exactly 3.12.
 - Dependency management: uv, committed `uv.lock`, no parallel dependency files.
 - PostgreSQL image line: pgvector-enabled PostgreSQL 16 for local development.
-- The approved final enums and matrices are in `docs/STATE_MACHINE.md` and remain
-  unimplemented pending the user's explicit Task 2 instruction.
+- The approved final enums and matrices are implemented in the pure domain layer
+  and covered by domain tests.
+- The core ORM and first business migration are implemented and verified through
+  real PostgreSQL upgrade/downgrade and constraint tests.
