@@ -50,6 +50,7 @@ class WorkerEvent(UUIDPrimaryKeyMixin, Base):
     actor_id: Mapped[str] = mapped_column(String(64), nullable=False)
     external_event_key: Mapped[str] = mapped_column(String(128), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    trace_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")

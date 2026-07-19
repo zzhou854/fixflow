@@ -127,6 +127,7 @@ class AppointmentStatusHistory(UUIDPrimaryKeyMixin, Base):
     evidence: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
+    trace_id: Mapped[UUID] = mapped_column(nullable=False, index=True)
     occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     version_before: Mapped[int] = mapped_column(BigInteger, nullable=False)
     version_after: Mapped[int] = mapped_column(BigInteger, nullable=False)

@@ -2,7 +2,8 @@
 
 ## Scope and ownership
 
-This first business schema persists the deterministic release-1 repair loop.
+The core business schema and its Task 4 audit extension persist the deterministic
+release-1 repair loop.
 PostgreSQL is the source of truth for identities, authorization links, repair
 tickets, workers, formal appointments, accepted worker events, status history,
 and idempotency records. Pure domain objects and transition rules remain under
@@ -22,8 +23,8 @@ and idempotency records. Pure domain objects and transition rules remain under
 | `worker_skills` | Unique typed capability held by a worker |
 | `worker_availability` | Non-empty `TSTZRANGE` availability declarations |
 | `appointments` | Formal appointment snapshot, immutable purpose/range, terminal outcome facts, supersession, and optimistic version |
-| `appointment_status_history` | Append-only accepted appointment transition evidence |
-| `worker_events` | Canonical accepted behavior evidence with per-appointment sequence and external identity |
+| `appointment_status_history` | Append-only accepted appointment transition evidence with request Trace identity |
+| `worker_events` | Canonical accepted behavior evidence linked to its appointment, with request Trace identity, per-appointment sequence, and external identity |
 | `idempotency_records` | Mutation identity, request hash, execution state, and durable result envelope |
 
 All core foreign keys explicitly use `ON DELETE RESTRICT`. Users, properties,
@@ -73,7 +74,7 @@ PostgreSQL does not implement the complete ticket or appointment state machine,
 worker-event predecessor order, actor/reason authorization, emergency routing,
 resident acceptance, rework-purpose consistency, safe escalation recovery, or
 atomic mapping from domain decisions to multiple aggregates and histories.
-Those rules remain deterministic domain and future application-service logic.
+Those rules remain deterministic domain and application-service logic.
 There are no business triggers or ORM event listeners.
 
 Worker events have a positive, unique `(appointment_id, sequence_no)` and a
@@ -88,11 +89,19 @@ and `btree_gist` with `IF NOT EXISTS`, then creates tables in foreign-key order.
 Downgrade removes only this revision's tables and indexes in reverse order; it
 does not drop shared extensions.
 
+Revision `20260719_0002` (`add_mutation_audit_links`) leaves the first migration
+immutable and adds the Task 4 audit fields required for transactional use cases:
+non-null `trace_id` on appointment history and Worker Event rows. Worker Events
+derive their ticket through the authoritative appointment relationship instead
+of duplicating `ticket_id`. Downgrade removes only the new Trace columns and
+indexes.
+
 Integration tests create randomly named databases with the prefix
 `fixflow_migration_test_`, use the project PostgreSQL container only as the
 administrative server, and always terminate remaining test connections before
 dropping each database. They verify `upgrade -> downgrade -> upgrade`, metadata,
-typed checks, restrictive foreign keys, appointment uniqueness and overlap,
+typed checks, restrictive foreign keys, Task 4 audit columns, appointment
+uniqueness and overlap,
 supersession, idempotency uniqueness, timezone-aware fields, and ORM relationship
 loading. The normal `fixflow` development database is not migrated or cleared by
 these tests.

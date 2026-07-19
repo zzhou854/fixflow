@@ -33,15 +33,44 @@ async def _public_tables(database_url: str) -> set[str]:
         await connection.close()
 
 
+async def _task4_audit_columns(database_url: str) -> set[tuple[str, str, str]]:
+    connection = await asyncpg.connect(
+        database_url.replace("postgresql+asyncpg://", "postgresql://")
+    )
+    try:
+        rows = await connection.fetch(
+            "SELECT table_name, column_name, is_nullable "
+            "FROM information_schema.columns "
+            "WHERE (table_name = 'appointment_status_history' AND column_name = 'trace_id') "
+            "OR (table_name = 'worker_events' AND column_name = 'trace_id')"
+        )
+        return {
+            (str(row["table_name"]), str(row["column_name"]), str(row["is_nullable"]))
+            for row in rows
+        }
+    finally:
+        await connection.close()
+
+
 def test_upgrade_downgrade_upgrade_cycle(empty_database_url: str) -> None:
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", empty_database_url)
 
     command.upgrade(config, "head")
     assert EXPECTED_TABLES <= asyncio.run(_public_tables(empty_database_url))
+    assert asyncio.run(_task4_audit_columns(empty_database_url)) == {
+        ("appointment_status_history", "trace_id", "NO"),
+        ("worker_events", "trace_id", "NO"),
+    }
 
-    command.downgrade(config, "base")
-    assert EXPECTED_TABLES.isdisjoint(asyncio.run(_public_tables(empty_database_url)))
+    command.downgrade(config, "20260719_0001")
+    assert EXPECTED_TABLES <= asyncio.run(_public_tables(empty_database_url))
+    assert asyncio.run(_task4_audit_columns(empty_database_url)) == set()
 
     command.upgrade(config, "head")
     assert EXPECTED_TABLES <= asyncio.run(_public_tables(empty_database_url))
+    assert asyncio.run(_task4_audit_columns(empty_database_url)) == {
+        ("appointment_status_history", "trace_id", "NO"),
+        ("worker_events", "trace_id", "NO"),
+    }
+    command.check(config)

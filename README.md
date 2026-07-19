@@ -11,19 +11,25 @@ demo.
 
 ## Current status
 
-The deterministic foundation through Task 3.5 is complete:
+The deterministic foundation through Task 4 is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a minimal FastAPI health endpoint;
 - PostgreSQL with pgvector through Docker Compose, validated healthy;
 - frozen domain states and pure transition rules;
-- SQLAlchemy persistence mappings and the first business Alembic migration;
+- SQLAlchemy persistence mappings and the first two business Alembic migrations;
 - PostgreSQL constraints and disposable-database integration tests;
+- focused Repository ports and SQLAlchemy implementations;
+- explicit ORM/domain mapping and Unit of Work;
+- deterministic transactional services for tickets, appointments, Worker Events,
+  acceptance/rework, and escalation/recovery;
+- request idempotency, optimistic locking, status history, authorization, and
+  real PostgreSQL concurrency tests;
 - the implementation roadmap and mandatory task-alignment gates.
 
-The current verified baseline is 215 passing tests. The next implementation task
-adds repositories, Unit of Work, and deterministic application services for the
-future MCP and Agent layers.
+The next approved implementation boundary after Task 4 review is the independent
+MCP server for these services. The exact final test count is recorded by the
+Task 4 review report.
 
 No LangGraph workflow, LLM, RAG, JWT, frontend, Outbox worker, Trace UI, or
 fault-injection implementation exists yet; these remain mandatory roadmap work,

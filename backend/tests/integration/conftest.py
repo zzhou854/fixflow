@@ -1,4 +1,4 @@
-"""Isolated PostgreSQL databases for persistence integration tests."""
+"""Isolated PostgreSQL databases shared by all integration test packages."""
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
@@ -60,7 +60,7 @@ def _migrate(database_url: str, revision: str) -> None:
 
 @pytest.fixture(scope="session")
 def migrated_database_url() -> Iterator[str]:
-    """A random migrated database shared by transactional constraint tests."""
+    """A random migrated database shared by integration tests."""
 
     try:
         with _temporary_database() as database_url:

@@ -11,7 +11,11 @@ from app.domain.enums import (
     AppointmentStatus,
     CancellationReason,
     FailureReason,
+    IssueCategory,
     NoShowReason,
+    Severity,
+    TicketStatus,
+    WorkerEventType,
 )
 
 
@@ -71,3 +75,35 @@ class AppointmentDraft:
     ends_at: datetime
     status: AppointmentStatus = AppointmentStatus.BOOKED
     supersedes_appointment_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TicketSnapshot:
+    """Infrastructure-free current facts for the ticket aggregate."""
+
+    ticket_id: UUID
+    resident_id: UUID
+    property_id: UUID
+    issue_category: IssueCategory
+    issue_location: str
+    issue_description: str
+    severity: Severity
+    status: TicketStatus
+    escalated_from_status: TicketStatus | None
+    rework_count: int
+    version: int
+    cancelled_at: datetime | None = None
+    closed_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerEventSnapshot:
+    """Minimal immutable event facts used for replay and sequence validation."""
+
+    event_id: UUID
+    appointment_id: UUID
+    subject_worker_id: UUID
+    sequence_no: int
+    event_type: WorkerEventType
+    external_event_key: str
+    request_hash: str

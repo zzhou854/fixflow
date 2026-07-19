@@ -24,16 +24,16 @@ use the same Pydantic request and result schemas.
 
 ## Current implementation status
 
-Completed foundations are project initialization, the approved domain-state
-design, pure domain transitions, SQLAlchemy persistence mappings, the first
-business Alembic migration, PostgreSQL constraint/integration tests, and the
-implementation-roadmap alignment gates. The verified baseline at Task 3.5 is
-215 passing tests.
+Completed foundations now include project initialization, the approved domain
+state design, pure domain transitions, SQLAlchemy persistence mappings, two
+reviewable business migrations, focused Repository ports and SQLAlchemy
+implementations, Unit of Work, deterministic application services, and real
+PostgreSQL transaction/concurrency tests.
 
-The next implementation boundary is repositories, Unit of Work, and
-deterministic application services. MCP, FastAPI business endpoints, LangGraph,
-RAG, Trace, Outbox, Harness, evaluation, and frontend work remain later roadmap
-stages.
+Task 4 is at its code-review gate. The next implementation boundary after
+approval remains the independent MCP server. FastAPI business endpoints,
+LangGraph, RAG, Trace, Outbox, Harness, evaluation, and frontend work remain
+later roadmap stages.
 
 ## Source-of-truth rules
 
@@ -51,8 +51,9 @@ stages.
 ## Implemented core persistence model
 
 The user-approved state design is implemented in the pure domain layer and the
-core PostgreSQL schema. Revision `20260719_0001` is the first business migration;
-`docs/DATABASE_SCHEMA.md` records its exact tables and constraints.
+core PostgreSQL schema. Revision `20260719_0001` is the first business migration
+and revision `20260719_0002` adds Task 4 audit links without rewriting it;
+`docs/DATABASE_SCHEMA.md` records their exact tables and constraints.
 
 | Aggregate/table | Key responsibilities and constraints |
 | --- | --- |
@@ -65,8 +66,8 @@ core PostgreSQL schema. Revision `20260719_0001` is the first business migration
 | `worker_skills` | Worker-to-supported-issue-category relation |
 | `worker_availability` | Time windows used by deterministic matching |
 | `appointments` | Immutable time interval and `INITIAL_REPAIR`/`REWORK` purpose, approved status, ticket/worker FKs, version, required terminal-outcome actor/reason/evidence/timestamp data, and supersession link |
-| `appointment_status_history` | Every accepted transition with actor and version data |
-| `worker_events` | Canonical append-only behavior linked to ticket/appointment, subject worker, real recording actor, sequence, and source idempotency key |
+| `appointment_status_history` | Every accepted transition with actor, Trace, and version data |
+| `worker_events` | Canonical append-only behavior linked to its appointment (and through it the ticket), subject worker, real recording actor, Trace, sequence, and source idempotency key |
 | `idempotency_records` | Unique operation scope/key, request hash, result reference, and status |
 
 Future-phase tables such as conversations, checkpoints, policies, Trace,
@@ -85,6 +86,13 @@ the project specification and roadmap but are not created yet.
 - A service commits the business mutation and history in one transaction.
 - In phase 3, externally observed events also write an Outbox record in that
   transaction.
+
+Repository ports are use-case focused rather than generic CRUD interfaces.
+Application services acquire request idempotency, authorize the actor, reread
+current snapshots, call pure domain rules, perform version-guarded writes, append
+history, and persist the successful result inside one Unit of Work. SQLAlchemy
+repositories explicitly map ORM rows to immutable domain snapshots. Named
+database constraints are translated to stable application conflict codes.
 
 The implemented storage strategy is a Python string Enum paired with a PostgreSQL
 string column and named `CHECK` constraint, rather than PostgreSQL Native Enum.

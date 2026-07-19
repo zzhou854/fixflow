@@ -91,13 +91,13 @@ Completed:
 - pure domain state model and transition tests
 - PostgreSQL ORM mappings and first business migration
 
-In progress next:
-- repositories
-- Unit of Work
+Implemented for Task 4 review:
+- focused Repository ports and SQLAlchemy implementations
+- Unit of Work and explicit ORM/domain mapping
 - deterministic application services
-- transaction, authorization, idempotency, optimistic-lock, and concurrency tests
+- transaction, authorization, idempotency, optimistic-lock, history, and concurrency tests
 
-Then:
+Next:
 - independent MCP server
 - MCP contract tests
 ```
@@ -165,15 +165,15 @@ is still required. No row may be removed or weakened without explicit user appro
 | Resident natural-language repair request | B | deferred | `docs/PROJECT_SPEC.md` | Three categories start from natural language | No |
 | Multi-turn information completion | B | deferred | `docs/PROJECT_SPEC.md` | Missing fields are requested and validated | No |
 | User correction and `intent_version` | B | deferred | this roadmap | Old analysis, slots, confirmations, and pending actions become invalid | No |
-| Duplicate open-ticket detection | A | deferred | `docs/MCP_CONTRACTS.md` | Idempotent deterministic duplicate scenarios | No |
+| Exact structured open-ticket candidate query | A | implemented | `backend/app/application/ticket_service.py`, `backend/app/infrastructure/database/repositories/ticket.py`, Task 4 review | Exact resident, property, category, and normalized-location filtering plus explicit operator override pass; semantic duplicate detection remains deferred | No |
 | Policy RAG | B | deferred | `docs/PROJECT_SPEC.md` | Hybrid retrieval returns attributable evidence | No |
 | Policy effective-time validation | B | deferred | this roadmap | Expired policy misuse rate is zero in frozen cases | No |
-| Worker skill matching | A | partial | `backend/app/domain/enums.py`, `8f7afbb` | Typed category-skill mapping exists; service query remains | No |
+| Worker skill matching | A | implemented | `backend/app/domain/enums.py`, `backend/app/infrastructure/database/repositories/appointment.py`, Task 4 review | Formal booking validates the typed mapping against active worker skill and availability | No |
 | Candidate-slot ordering | A | deferred | original project specification | Earliest time, workload, area, then stable ID | No |
-| Booking and rescheduling | A | partial | domain rules and `8f7afbb` | Transactional service flow and concurrency tests remain | No |
-| Worker events | A | partial | domain rules and `8f7afbb` | Strict sequence plus persisted atomic effects | No |
-| Resident acceptance and rework | A | partial | `docs/STATE_MACHINE.md`, `c8da39c` | Acceptance closes; rejection preserves same-ticket rework | No |
-| Human escalation | A/B | partial | `docs/STATE_MACHINE.md`, `c8da39c` | Safe escalation and reviewed recovery service tests | No |
+| Booking and rescheduling | A | implemented | `backend/app/application/appointment_service.py`, Task 4 review | Atomic booking/rescheduling and PostgreSQL concurrency tests pass | No |
+| Worker events | A | implemented | `backend/app/application/worker_event_service.py`, Task 4 review | Strict sequence, source replay, distinct-key concurrency, and atomic cross-entity effects pass against PostgreSQL | No |
+| Resident acceptance and rework | A | implemented | `backend/app/application/ticket_service.py`, Task 4 review | Acceptance closes; concurrent rejection increments once; rejected or cancelled rework booking preserves the same ticket | No |
+| Human escalation | A/B | implemented | `backend/app/application/ticket_service.py`, Task 4 review | Safe operator recovery derives its target and cannot substitute resident acceptance | No |
 | Resident/worker state conflict | C | deferred | original F06 scenario | Automation stops and operator review is required | No |
 | Independent MCP server | A | deferred | `docs/MCP_CONTRACTS.md` | Streamable HTTP contract tests call application services | No |
 | LangGraph orchestrator | B | deferred | `docs/ARCHITECTURE.md` | Typed graph resumes from fresh domain snapshots | No |

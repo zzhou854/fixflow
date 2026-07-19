@@ -183,15 +183,16 @@ async def test_worker_event_rejects_missing_appointment(
     with pytest.raises(asyncpg.ForeignKeyViolationError):
         await db_connection.execute(
             "INSERT INTO worker_events "
-            "(id, appointment_id, subject_worker_id, sequence_no, event_type, actor_type, "
-            "actor_id, external_event_key, request_hash, occurred_at) "
-            "VALUES ($1, $2, $3, 1, 'ACCEPTED', 'WORKER', $4, $5, $6, $7)",
+            "(id, appointment_id, subject_worker_id, sequence_no, event_type, "
+            "actor_type, actor_id, external_event_key, request_hash, trace_id, occurred_at) "
+            "VALUES ($1, $2, $3, 1, 'ACCEPTED', 'WORKER', $4, $5, $6, $7, $8)",
             uuid4(),
             uuid4(),
             core["worker"],
             str(core["worker"]),
             uuid4().hex,
             "a" * 64,
+            uuid4(),
             datetime.now(UTC),
         )
 
@@ -407,9 +408,10 @@ async def test_invalid_worker_event_type_is_rejected(
 ) -> None:
     core = await _seed_core(db_connection)
     now = datetime.now(UTC)
+    ticket_id = await _ticket(db_connection, core)
     appointment_id = await _appointment(
         db_connection,
-        ticket_id=await _ticket(db_connection, core),
+        ticket_id=ticket_id,
         worker_id=core["worker"],
         starts_at=now,
         ends_at=now + timedelta(hours=1),
@@ -417,14 +419,15 @@ async def test_invalid_worker_event_type_is_rejected(
     with pytest.raises(asyncpg.CheckViolationError):
         await db_connection.execute(
             "INSERT INTO worker_events "
-            "(id, appointment_id, subject_worker_id, sequence_no, event_type, actor_type, "
-            "actor_id, external_event_key, request_hash, occurred_at) "
-            "VALUES ($1, $2, $3, 1, 'SKIPPED', 'WORKER', $4, $5, $6, $7)",
+            "(id, appointment_id, subject_worker_id, sequence_no, event_type, "
+            "actor_type, actor_id, external_event_key, request_hash, trace_id, occurred_at) "
+            "VALUES ($1, $2, $3, 1, 'SKIPPED', 'WORKER', $4, $5, $6, $7, $8)",
             uuid4(),
             appointment_id,
             core["worker"],
             str(core["worker"]),
             uuid4().hex,
             "b" * 64,
+            uuid4(),
             now,
         )
