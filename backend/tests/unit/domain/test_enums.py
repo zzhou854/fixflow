@@ -1,15 +1,47 @@
 """Frozen enum regression tests."""
 
+from typing import cast
+
+import pytest
 from app.domain.enums import (
     ESCALATABLE_TICKET_STATUSES,
+    ISSUE_CATEGORY_REQUIRED_SKILL,
     TERMINAL_APPOINTMENT_STATUSES,
     ActorType,
     AppointmentPurpose,
     AppointmentStatus,
+    IssueCategory,
+    Severity,
     TicketStatus,
     WorkerEventType,
+    WorkerSkillType,
     WorkflowStage,
 )
+
+
+def test_issue_categories_severities_and_skills_are_frozen() -> None:
+    assert [item.value for item in IssueCategory] == [
+        "WATER_LEAK",
+        "ELECTRICAL",
+        "DOOR_LOCK",
+    ]
+    assert [item.value for item in Severity] == ["LOW", "MEDIUM", "HIGH", "EMERGENCY"]
+    assert [item.value for item in WorkerSkillType] == [
+        "PLUMBING",
+        "ELECTRICAL",
+        "LOCKSMITH",
+    ]
+
+
+def test_issue_category_to_worker_skill_mapping_is_explicit_and_immutable() -> None:
+    assert ISSUE_CATEGORY_REQUIRED_SKILL == {
+        IssueCategory.WATER_LEAK: WorkerSkillType.PLUMBING,
+        IssueCategory.ELECTRICAL: WorkerSkillType.ELECTRICAL,
+        IssueCategory.DOOR_LOCK: WorkerSkillType.LOCKSMITH,
+    }
+    mutable_view = cast(dict[IssueCategory, WorkerSkillType], ISSUE_CATEGORY_REQUIRED_SKILL)
+    with pytest.raises(TypeError):
+        mutable_view[IssueCategory.WATER_LEAK] = WorkerSkillType.LOCKSMITH
 
 
 def test_ticket_status_values_are_frozen() -> None:

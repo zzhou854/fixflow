@@ -1,6 +1,42 @@
 """Frozen domain enums and explicit state sets."""
 
+from collections.abc import Mapping
 from enum import StrEnum
+from types import MappingProxyType
+
+
+class IssueCategory(StrEnum):
+    """Issue categories accepted for persisted release-1 repair tickets."""
+
+    WATER_LEAK = "WATER_LEAK"
+    ELECTRICAL = "ELECTRICAL"
+    DOOR_LOCK = "DOOR_LOCK"
+
+
+class Severity(StrEnum):
+    """Persisted repair urgency; routing remains a domain-service decision."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    EMERGENCY = "EMERGENCY"
+
+
+class WorkerSkillType(StrEnum):
+    """Concrete maintenance capabilities used for deterministic matching."""
+
+    PLUMBING = "PLUMBING"
+    ELECTRICAL = "ELECTRICAL"
+    LOCKSMITH = "LOCKSMITH"
+
+
+ISSUE_CATEGORY_REQUIRED_SKILL: Mapping[IssueCategory, WorkerSkillType] = MappingProxyType(
+    {
+        IssueCategory.WATER_LEAK: WorkerSkillType.PLUMBING,
+        IssueCategory.ELECTRICAL: WorkerSkillType.ELECTRICAL,
+        IssueCategory.DOOR_LOCK: WorkerSkillType.LOCKSMITH,
+    }
+)
 
 
 class TicketStatus(StrEnum):

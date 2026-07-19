@@ -5,6 +5,7 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
+import sqlalchemy as sa
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -14,6 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 BACKEND_DIR = ROOT_DIR / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
+import app.infrastructure.database.models  # noqa: E402, F401
 from app.config import get_settings  # noqa: E402
 from app.infrastructure.database.base import Base  # noqa: E402
 
@@ -22,8 +24,28 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url.get_secret_value())
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", get_settings().database_url.get_secret_value())
 target_metadata = Base.metadata
+
+
+def _compare_type(
+    context: object,
+    inspected_column: object,
+    metadata_column: object,
+    inspected_type: object,
+    metadata_type: object,
+) -> bool | None:
+    """Treat approved non-native Enum storage as equivalent to PostgreSQL VARCHAR."""
+
+    del context, inspected_column, metadata_column
+    if (
+        isinstance(metadata_type, sa.Enum)
+        and not metadata_type.native_enum
+        and isinstance(inspected_type, sa.String)
+    ):
+        return False
+    return None
 
 
 def run_migrations_offline() -> None:
@@ -34,7 +56,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=True,
+        compare_type=_compare_type,
     )
 
     with context.begin_transaction():
@@ -42,7 +64,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=_compare_type,
+    )
 
     with context.begin_transaction():
         context.run_migrations()
