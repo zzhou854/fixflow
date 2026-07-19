@@ -126,7 +126,10 @@ ticket/appointment transitions atomically.
 `ACCEPTED` and `REJECTED` require a current `BOOKED` appointment; release 1 has no
 separate worker-assignment entity. Acceptance changes neither aggregate.
 Rejection atomically cancels the appointment with worker actor metadata and
-`WORKER_REJECTED`, then returns the ticket to `OPEN` for rescheduling.
+`WORKER_REJECTED`. An `INITIAL_REPAIR` appointment returns the ticket to `OPEN`;
+a `REWORK` appointment returns it to `REWORK_REQUIRED` without changing the
+existing rework count. Purpose is typed input and must match the current ticket
+snapshot.
 `COMPLETED` fulfills the appointment and moves the ticket to acceptance, never
 directly to closure. `FAILED_TO_COMPLETE` fulfills the appointment and uses its
 typed cause to select same-ticket rework or escalation.

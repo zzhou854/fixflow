@@ -32,7 +32,7 @@ package = false
 addopts = "-q"
 asyncio_mode = "auto"
 pythonpath = ["backend"]
-testpaths = ["tests"]
+testpaths = ["tests", "backend/tests"]
 
 [tool.ruff]
 line-length = 100

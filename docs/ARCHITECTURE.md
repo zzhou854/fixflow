@@ -51,7 +51,7 @@ schema; implementation starts only under the separately authorized Task 2.
 | `workers` | Active flag, service area, and stable identity |
 | `worker_skills` | Worker-to-supported-issue-category relation |
 | `worker_availability` | Time windows used by deterministic matching |
-| `appointments` | Immutable time interval, proposed status, ticket/worker FKs, version, required terminal-outcome actor/reason/evidence/timestamp data, and supersession link |
+| `appointments` | Immutable time interval and `INITIAL_REPAIR`/`REWORK` purpose, proposed status, ticket/worker FKs, version, required terminal-outcome actor/reason/evidence/timestamp data, and supersession link |
 | `appointment_history` | Every accepted transition with actor, trace, and version data |
 | `worker_events` | Canonical append-only behavior linked to ticket/appointment, subject worker, real recording actor, sequence, and source idempotency key |
 | `idempotency_records` | Unique operation scope/key, request hash, result reference, and status |
@@ -84,6 +84,13 @@ retain `actor_type`, `actor_id`, `reason_code`, `reason_text`, `evidence`, and
 worker, worker-rejection, operator, and system cancellation without expanding
 the appointment-status enum. Terminal appointments never reactivate; later work
 creates a new row and audit corrections are append-only.
+
+## Known worker-event ordering limitation
+
+Release 1 uses strict worker-event ordering to simplify audit and state
+consistency. It cannot directly handle missing intermediate events. If offline
+backfill is later required, add an explicit Operator reconciliation workflow
+rather than weakening ordinary Worker Event validation.
 
 ## Error taxonomy
 

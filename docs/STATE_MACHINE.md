@@ -83,6 +83,8 @@ NO_SHOW
 
 Candidate slots never create appointment rows. There is no appointment `PENDING`,
 `IN_PROGRESS`, or automatic `EXPIRED`. All statuses except `BOOKED` are terminal.
+Every formal appointment has a typed purpose: `INITIAL_REPAIR` or `REWORK`.
+Purpose is immutable and never inferred from free text.
 
 `FULFILLED`, `SUPERSEDED`, `CANCELLED`, and `NO_SHOW` are immutable terminal
 statuses. They cannot reactivate, and their worker or core time interval cannot
@@ -143,8 +145,10 @@ history in the same transaction. Outbox is required in phase 3 once implemented.
 | `OPEN` | escalate | `ESCALATED` | deterministic service, operator | typed reason/evidence; save prior status | yes | yes | phase 3 | reject with no mutation |
 | `SCHEDULED` | valid worker `STARTED` | `IN_PROGRESS` | subject worker via service, operator simulation | active `BOOKED`; valid order and identities | yes | yes | phase 3 | reject event/transition; trace attempt |
 | `SCHEDULED` | reschedule atomically | `SCHEDULED` | resident owner, operator | old row -> `SUPERSEDED`; one replacement `BOOKED` succeeds | yes | yes, scheduling event | phase 3 | whole transaction rolls back |
-| `SCHEDULED` | worker rejects/cancels initial visit | `OPEN` | subject worker via service, operator simulation | valid event; appointment -> `CANCELLED`; not a rework cycle | yes | yes | phase 3 | reject event; retain booking |
-| `SCHEDULED` | worker rejects/cancels rework visit | `REWORK_REQUIRED` | subject worker via service, operator simulation | valid event; appointment -> `CANCELLED`; rework cycle | yes | yes | phase 3 | reject event; retain booking |
+| `SCHEDULED` | worker `REJECTED` initial visit | `OPEN` | subject worker via service, operator simulation | valid event; appointment purpose `INITIAL_REPAIR` -> `CANCELLED`; reason `WORKER_REJECTED`; restart ordinary scheduling | yes | yes | phase 3 | reject event attempt; retain booking |
+| `SCHEDULED` | worker `REJECTED` rework visit | `REWORK_REQUIRED` | subject worker via service, operator simulation | valid event; appointment purpose `REWORK` -> `CANCELLED`; reason `WORKER_REJECTED`; preserve rework count and restart rework scheduling | yes | yes | phase 3 | reject event attempt; retain booking |
+| `SCHEDULED` | worker `CANCELLED` initial visit | `OPEN` | subject worker via service, operator simulation | valid event; appointment -> `CANCELLED`; reason `WORKER_CANCELLED`; initial cycle | yes | yes | phase 3 | reject event attempt; retain booking |
+| `SCHEDULED` | worker `CANCELLED` rework visit | `REWORK_REQUIRED` | subject worker via service, operator simulation | valid event; appointment -> `CANCELLED`; reason `WORKER_CANCELLED`; rework cycle remains recorded | yes | yes | phase 3 | reject event attempt; retain booking |
 | `SCHEDULED` | resident cancels appointment only | `OPEN` or `REWORK_REQUIRED` | resident owner, operator | policy passes; target depends on current cycle | yes | yes | phase 3 | reject with no mutation |
 | `SCHEDULED` | cancel ticket | `CANCELLED` | resident owner, operator | work not started; appointment cancelled atomically; reason | yes | yes | phase 3 | roll back both aggregates |
 | `SCHEDULED` | reviewed no-show/conflict | `ESCALATED` | operator, reconciliation service | appointment -> `NO_SHOW`; typed subject/evidence; save prior | yes | yes | phase 3 | stop automation; no mutation |
@@ -225,13 +229,13 @@ and evidence, trace ID, source key, and request hash.
 | Event | Allowed roles | Required ticket | Required appointment | Ticket effect | Appointment effect | Duplicate allowed | Illegal sequence behavior |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `ACCEPTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | none | none | no; same key/hash returns existing | reject; trace attempt; no canonical event |
-| `REJECTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | -> `OPEN`; restart scheduling | -> `CANCELLED`; actor worker; reason `WORKER_REJECTED` | idempotent replay only | reject after departure/start or wrong actor; never reactivate |
+| `REJECTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | initial purpose -> `OPEN`; rework purpose -> `REWORK_REQUIRED`; count unchanged | -> `CANCELLED`; actor worker; reason `WORKER_REJECTED` | idempotent replay only | only before `ACCEPTED`; require typed purpose consistent with rework count; never reactivate |
 | `DEPARTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | none | none | idempotent replay only | require `ACCEPTED` |
 | `ARRIVED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | none | none | idempotent replay only | require `DEPARTED` |
 | `STARTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | -> `IN_PROGRESS` | remains `BOOKED` | idempotent replay only | require `ARRIVED`, versions, no conflict |
 | `COMPLETED` | subject worker, operator simulation | `IN_PROGRESS` | `BOOKED` | -> `PENDING_ACCEPTANCE` | -> `FULFILLED` | idempotent replay only | require `STARTED`; reject terminal contradiction |
 | `FAILED_TO_COMPLETE` | subject worker, operator simulation | `IN_PROGRESS` | `BOOKED` | ordinary retry -> `REWORK_REQUIRED`; exceptional/indeterminate -> `ESCALATED` | -> `FULFILLED` | idempotent replay only | require `STARTED`, typed reason, evidence, worker statement |
-| `CANCELLED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | initial -> `OPEN`; rework -> `REWORK_REQUIRED` | -> `CANCELLED` | idempotent replay only | only before `STARTED`; otherwise outcome event |
+| `CANCELLED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | initial -> `OPEN`; rework -> `REWORK_REQUIRED`; count unchanged | -> `CANCELLED`; reason `WORKER_CANCELLED` | idempotent replay only | require prior `ACCEPTED`; only before `STARTED`; otherwise outcome event |
 | `NO_SHOW` | operator/reconciliation; subject is assigned worker | `SCHEDULED` | `BOOKED` | -> `ESCALATED` | -> `NO_SHOW` | idempotent replay only | require reviewed evidence/window |
 
 Formal assignment is the committed appointment plus its worker. Matching
@@ -246,9 +250,10 @@ appointment; neither aggregate changes status, and an identical replay is
 idempotent. `REJECTED` must also reference a `BOOKED` appointment. It atomically
 changes that appointment to `CANCELLED`, persists
 `cancelled_by_actor_type=WORKER`, typed reason `WORKER_REJECTED`, explanation and
-evidence, and returns the ticket from `SCHEDULED` to `OPEN`. If replacement
-scheduling later fails, a separate deterministic command escalates the ticket.
-The rejected appointment never reactivates.
+evidence. An `INITIAL_REPAIR` appointment returns the ticket from `SCHEDULED` to
+`OPEN`; a `REWORK` appointment returns it to `REWORK_REQUIRED` without changing
+`rework_count`. If replacement scheduling later fails, a separate deterministic
+command escalates the ticket. The rejected appointment never reactivates.
 
 For residents, `SCHEDULED` means the system has reserved a time and worker, not
 that the worker can no longer reject it. A rejection must be surfaced as active
@@ -369,6 +374,8 @@ Historical rows are intentional audit evidence, not meaningless data inflation.
 21. `FAILED_TO_COMPLETE` always ends the current appointment and never closes the
     ticket; its typed classification determines rework versus escalation.
 22. Terminal appointment facts are immutable; audit annotations are append-only.
+23. Appointment purpose and `rework_count` must agree; rejecting or cancelling a
+    rework appointment preserves the existing count and rework semantics.
 
 ## Database constraint candidates
 
