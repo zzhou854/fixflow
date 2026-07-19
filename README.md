@@ -53,8 +53,9 @@ and never maintained manually.
 
 - [Project specification](docs/PROJECT_SPEC.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Candidate state machines](docs/STATE_MACHINE.md)
+- [Approved state machines](docs/STATE_MACHINE.md)
 - [MCP contracts](docs/MCP_CONTRACTS.md)
+- [Implementation roadmap and alignment gates](docs/IMPLEMENTATION_ROADMAP.md)
 
 ## Week-1 delivery order
 
