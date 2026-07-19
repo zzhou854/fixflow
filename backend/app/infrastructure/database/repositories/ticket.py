@@ -68,6 +68,27 @@ class SqlAlchemyTicketRepository:
         )
         return bool(await self._session.scalar(statement))
 
+    async def find_exact_open_matches(
+        self, resident_id: UUID, property_id: UUID, category: IssueCategory, location: str
+    ) -> list[TicketSnapshot]:
+        active = tuple(
+            status
+            for status in TicketStatus
+            if status not in {TicketStatus.CLOSED, TicketStatus.CANCELLED}
+        )
+        rows = await self._session.scalars(
+            select(RepairTicket)
+            .where(
+                RepairTicket.resident_id == resident_id,
+                RepairTicket.property_id == property_id,
+                RepairTicket.issue_category == category,
+                func.lower(func.btrim(RepairTicket.issue_location)) == location.strip().lower(),
+                RepairTicket.status.in_(active),
+            )
+            .order_by(RepairTicket.created_at, RepairTicket.id)
+        )
+        return [ticket_to_snapshot(row) for row in rows]
+
     async def add(self, snapshot: TicketSnapshot) -> None:
         self._session.add(
             RepairTicket(

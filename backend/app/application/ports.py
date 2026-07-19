@@ -9,6 +9,7 @@ from types import TracebackType
 from typing import Any, Protocol
 from uuid import UUID
 
+from app.application.query_models import ResidentPropertyReadModel, SlotWorkerSource
 from app.domain.enums import (
     ActorType,
     AppointmentStatus,
@@ -89,6 +90,9 @@ class TicketRepository(Protocol):
     async def has_exact_open_match(
         self, resident_id: UUID, property_id: UUID, category: IssueCategory, location: str
     ) -> bool: ...
+    async def find_exact_open_matches(
+        self, resident_id: UUID, property_id: UUID, category: IssueCategory, location: str
+    ) -> Sequence[TicketSnapshot]: ...
     async def add(self, snapshot: TicketSnapshot) -> None: ...
     async def update(self, snapshot: TicketSnapshot, *, expected_version: int) -> None: ...
     async def add_history(self, record: TicketHistoryRecord) -> None: ...
@@ -103,6 +107,7 @@ class AppointmentRepository(Protocol):
     async def worker_can_service(
         self,
         worker_id: UUID,
+        property_id: UUID,
         skill: WorkerSkillType,
         starts_at: datetime,
         ends_at: datetime,
@@ -147,11 +152,26 @@ class IdempotencyRepository(Protocol):
     ) -> None: ...
 
 
+class QueryRepository(Protocol):
+    async def get_property(
+        self, resident_id: UUID, property_id: UUID
+    ) -> ResidentPropertyReadModel | None: ...
+    async def get_property_service_area(self, property_id: UUID) -> str | None: ...
+    async def list_slot_worker_sources(
+        self,
+        *,
+        skill: WorkerSkillType,
+        search_window_start: datetime,
+        search_window_end: datetime,
+    ) -> Sequence[SlotWorkerSource]: ...
+
+
 class UnitOfWork(Protocol):
     tickets: TicketRepository
     appointments: AppointmentRepository
     worker_events: WorkerEventRepository
     idempotency: IdempotencyRepository
+    queries: QueryRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
     async def __aexit__(

@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.errors import PersistenceConflict
 from app.application.ports import AppointmentHistoryRecord
+from app.application.slot_queries import normalize_service_area
 from app.domain.enums import AppointmentStatus, WorkerSkillType
 from app.domain.models import AppointmentDraft, AppointmentSnapshot
 from app.infrastructure.database.mappers import appointment_to_snapshot
 from app.infrastructure.database.models.appointment import Appointment, AppointmentStatusHistory
+from app.infrastructure.database.models.user import Property
 from app.infrastructure.database.models.worker import Worker, WorkerAvailability, WorkerSkill
 
 
@@ -52,24 +54,32 @@ class SqlAlchemyAppointmentRepository:
     async def worker_can_service(
         self,
         worker_id: UUID,
+        property_id: UUID,
         skill: WorkerSkillType,
         starts_at: datetime,
         ends_at: datetime,
     ) -> bool:
         requested = Range(starts_at, ends_at, bounds="[)")
-        statement = select(
-            select(Worker.id)
+        statement = (
+            select(Worker.service_area, Property.community_name)
             .join(WorkerSkill, WorkerSkill.worker_id == Worker.id)
             .join(WorkerAvailability, WorkerAvailability.worker_id == Worker.id)
+            .join(Property, Property.id == property_id)
             .where(
                 Worker.id == worker_id,
                 Worker.is_active.is_(True),
+                Property.is_active.is_(True),
                 WorkerSkill.skill_type == skill,
                 WorkerAvailability.available_range.contains(requested),
             )
-            .exists()
+            .limit(1)
         )
-        return bool(await self._session.scalar(statement))
+        row = (await self._session.execute(statement)).one_or_none()
+        return bool(
+            row is not None
+            and normalize_service_area(row.service_area)
+            == normalize_service_area(row.community_name)
+        )
 
     async def add(self, draft: AppointmentDraft) -> None:
         self._session.add(

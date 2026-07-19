@@ -44,7 +44,11 @@ class AppointmentApplicationService(TransactionalService):
         await self._authorize_ticket(uow, ticket, command.metadata)
         skill = ISSUE_CATEGORY_REQUIRED_SKILL[ticket.issue_category]
         if not await uow.appointments.worker_can_service(
-            command.worker_id, skill, command.starts_at, command.ends_at
+            command.worker_id,
+            ticket.property_id,
+            skill,
+            command.starts_at,
+            command.ends_at,
         ):
             raise AuthorizationFailed("worker_not_eligible", worker_id=command.worker_id)
         purpose = (
@@ -137,7 +141,11 @@ class AppointmentApplicationService(TransactionalService):
         await self._authorize_ticket(uow, ticket, command.metadata)
         skill = ISSUE_CATEGORY_REQUIRED_SKILL[ticket.issue_category]
         if not await uow.appointments.worker_can_service(
-            command.worker_id, skill, command.starts_at, command.ends_at
+            command.worker_id,
+            ticket.property_id,
+            skill,
+            command.starts_at,
+            command.ends_at,
         ):
             raise AuthorizationFailed("worker_not_eligible", worker_id=command.worker_id)
         replacement_id = self._id_factory()

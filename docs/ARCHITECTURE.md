@@ -9,7 +9,7 @@ flowchart LR
     API --> Orchestrator["Single typed orchestrator - later"]
     Orchestrator --> Services["Deterministic application services"]
     Orchestrator --> LLM["Interpret and compose only - later"]
-    Orchestrator --> MCPClient["MCP client - later"]
+    Orchestrator --> MCPClient["MCP client - Stage B"]
     MCPClient --> MCP["property-operations-mcp"]
     MCP --> Services
     Services --> PostgreSQL[("PostgreSQL + pgvector")]
@@ -30,10 +30,13 @@ reviewable business migrations, focused Repository ports and SQLAlchemy
 implementations, Unit of Work, deterministic application services, and real
 PostgreSQL transaction/concurrency tests.
 
-Task 4 is at its code-review gate. The next implementation boundary after
-approval remains the independent MCP server. FastAPI business endpoints,
-LangGraph, RAG, Trace, Outbox, Harness, evaluation, and frontend work remain
-later roadmap stages.
+Task 5 adds a deterministic candidate-slot Application query and the independent
+`property-operations-mcp` process with eight typed tools, Streamable HTTP, and
+real MCP-client transport coverage.
+
+Task 5 is at its code-review gate and has not been committed. FastAPI business
+endpoints, LangGraph, RAG, Trace, Outbox, Harness, evaluation, and frontend work
+remain later roadmap stages.
 
 ## Source-of-truth rules
 
@@ -47,6 +50,15 @@ later roadmap stages.
 - Core entities use relational columns. JSONB is limited to trace payloads,
   structured model snapshots, tool request/results, fault configuration, and
   state-delta details.
+
+Candidate starts use a centralized 30-minute natural-clock boundary. Eligibility
+requires an active worker, the frozen issue-to-skill mapping, normalized exact
+service-area equality, full availability coverage, and no overlapping `BOOKED`
+appointment. In release 1, `properties.community_name` is the property service-area
+identifier. Normalization is limited to trimming, case folding, and collapsing
+spaces. Results sort by start time, open-ticket workload, and stable worker ID.
+Every returned worker already passed the hard area constraint, so area is
+explanatory metadata and not a ranking term.
 
 ## Implemented core persistence model
 
@@ -115,7 +127,7 @@ rather than weakening ordinary Worker Event validation.
 
 ## Error taxonomy
 
-Future implementation separates:
+The application/MCP boundary separates:
 
 - domain errors: illegal transition, invariant violation, overlap;
 - application errors: permission denial, idempotency conflict, stale version;
@@ -132,6 +144,14 @@ API / MCP / future workflow
 
 Infrastructure imports domain/application contracts; domain code does not
 import FastAPI, MCP, LangGraph, or SQLAlchemy sessions.
+
+The MCP composition root creates one async engine and session factory per server
+process, then wires Unit of Work, Application Service, a thin adapter, and tool
+handlers. Each Application call receives its own Unit of Work. Handlers never
+import ORM models or Repository implementations and the engine is disposed at
+server shutdown. MCP currently trusts an upstream-authenticated actor identity;
+the Application layer still rechecks database-backed business authorization.
+JWT authentication belongs to Stage B.
 
 ## Established implementation decisions
 

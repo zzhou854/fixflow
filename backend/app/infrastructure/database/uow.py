@@ -14,12 +14,14 @@ from app.application.errors import (
 from app.application.ports import (
     AppointmentRepository,
     IdempotencyRepository,
+    QueryRepository,
     TicketRepository,
     WorkerEventRepository,
 )
 from app.infrastructure.database.repositories import (
     SqlAlchemyAppointmentRepository,
     SqlAlchemyIdempotencyRepository,
+    SqlAlchemyQueryRepository,
     SqlAlchemyTicketRepository,
     SqlAlchemyWorkerEventRepository,
 )
@@ -104,6 +106,7 @@ class SqlAlchemyUnitOfWork:
         self.appointments: AppointmentRepository = SqlAlchemyAppointmentRepository(self.session)
         self.worker_events: WorkerEventRepository = SqlAlchemyWorkerEventRepository(self.session)
         self.idempotency: IdempotencyRepository = SqlAlchemyIdempotencyRepository(self.session)
+        self.queries: QueryRepository = SqlAlchemyQueryRepository(self.session)
         return self
 
     async def __aexit__(

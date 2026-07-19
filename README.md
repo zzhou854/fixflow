@@ -11,7 +11,7 @@ demo.
 
 ## Current status
 
-The deterministic foundation through Task 4 is at its code-review gate:
+The deterministic Stage-A foundation through Task 5 is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a minimal FastAPI health endpoint;
@@ -25,11 +25,16 @@ The deterministic foundation through Task 4 is at its code-review gate:
   acceptance/rework, and escalation/recovery;
 - request idempotency, optimistic locking, status history, authorization, and
   real PostgreSQL concurrency tests;
+- deterministic 30-minute candidate-slot queries with hard skill, activity,
+  service-area, availability, and booking-conflict filters;
+- an independent `property-operations-mcp` process exposing eight typed tools
+  over Streamable HTTP through the existing Application layer;
+- Pydantic contract, handler, real PostgreSQL tool, and real MCP client transport
+  tests;
 - the implementation roadmap and mandatory task-alignment gates.
 
-The next approved implementation boundary after Task 4 review is the independent
-MCP server for these services. The exact final test count is recorded by the
-Task 4 review report.
+Task 5 is intentionally uncommitted pending its code-review gate. Stage B has
+not started.
 
 No LangGraph workflow, LLM, RAG, JWT, frontend, Outbox worker, Trace UI, or
 fault-injection implementation exists yet; these remain mandatory roadmap work,
@@ -52,7 +57,13 @@ uv run mypy
 docker compose up -d postgres
 uv run alembic upgrade head
 uv run uvicorn app.main:app --app-dir backend --reload
+uv run python -m mcp_server
 ```
+
+The last command starts the independent `property-operations-mcp` service at
+`http://127.0.0.1:8765/mcp` by default. Configure `MCP_HOST`, `MCP_PORT`, and
+`DATABASE_URL` through the environment. The service uses Streamable HTTP and
+does not run inside the FastAPI process.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.

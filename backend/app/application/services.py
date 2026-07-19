@@ -15,6 +15,17 @@ from app.application.models import (
     ReviewRepairCommand,
 )
 from app.application.ports import UnitOfWorkFactory
+from app.application.query_models import (
+    AvailableSlotReadModel,
+    FindOpenRepairTicketsQuery,
+    GetResidentPropertyQuery,
+    GetTicketSnapshotQuery,
+    ListAvailableSlotsQuery,
+    OpenRepairTicketReadModel,
+    ResidentPropertyReadModel,
+    TicketSnapshotReadModel,
+)
+from app.application.query_service import FixFlowQueryService
 from app.application.ticket_service import TicketApplicationService
 from app.application.worker_event_service import WorkerEventApplicationService
 
@@ -31,6 +42,25 @@ class FixFlowApplicationService:
         self._tickets = TicketApplicationService(uow_factory, id_factory=id_factory)
         self._appointments = AppointmentApplicationService(uow_factory, id_factory=id_factory)
         self._worker_events = WorkerEventApplicationService(uow_factory, id_factory=id_factory)
+        self._queries = FixFlowQueryService(uow_factory)
+
+    async def get_resident_property(
+        self, query: GetResidentPropertyQuery
+    ) -> ResidentPropertyReadModel:
+        return await self._queries.get_resident_property(query)
+
+    async def find_open_repair_tickets(
+        self, query: FindOpenRepairTicketsQuery
+    ) -> tuple[OpenRepairTicketReadModel, ...]:
+        return await self._queries.find_open_repair_tickets(query)
+
+    async def get_ticket_snapshot(self, query: GetTicketSnapshotQuery) -> TicketSnapshotReadModel:
+        return await self._queries.get_ticket_snapshot(query)
+
+    async def list_available_slots(
+        self, query: ListAvailableSlotsQuery
+    ) -> tuple[AvailableSlotReadModel, ...]:
+        return await self._queries.list_available_slots(query)
 
     async def create_ticket(self, command: CreateTicketCommand) -> OperationResult:
         return await self._tickets.create_ticket(command)

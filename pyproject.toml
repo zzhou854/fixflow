@@ -31,7 +31,7 @@ package = false
 [tool.pytest.ini_options]
 addopts = "-q"
 asyncio_mode = "auto"
-pythonpath = ["backend"]
+pythonpath = [".", "backend"]
 testpaths = ["tests", "backend/tests"]
 
 [tool.ruff]

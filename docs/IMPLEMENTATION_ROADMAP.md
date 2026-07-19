@@ -91,15 +91,19 @@ Completed:
 - pure domain state model and transition tests
 - PostgreSQL ORM mappings and first business migration
 
-Implemented for Task 4 review:
+Implemented and accepted through Task 4:
 - focused Repository ports and SQLAlchemy implementations
 - Unit of Work and explicit ORM/domain mapping
 - deterministic application services
 - transaction, authorization, idempotency, optimistic-lock, history, and concurrency tests
 
-Next:
-- independent MCP server
-- MCP contract tests
+Implemented for Task 5 review:
+- deterministic 30-minute candidate-slot generation and stable ordering
+- independent Streamable HTTP MCP server with eight typed tools
+- Pydantic contracts, PostgreSQL tool tests, and real MCP client transport tests
+
+Next after Task 5 approval:
+- Stage B Agent, RAG, and product main flow
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,
@@ -169,13 +173,13 @@ is still required. No row may be removed or weakened without explicit user appro
 | Policy RAG | B | deferred | `docs/PROJECT_SPEC.md` | Hybrid retrieval returns attributable evidence | No |
 | Policy effective-time validation | B | deferred | this roadmap | Expired policy misuse rate is zero in frozen cases | No |
 | Worker skill matching | A | implemented | `backend/app/domain/enums.py`, `backend/app/infrastructure/database/repositories/appointment.py`, Task 4 review | Formal booking validates the typed mapping against active worker skill and availability | No |
-| Candidate-slot ordering | A | deferred | original project specification | Earliest time, workload, area, then stable ID | No |
+| Candidate-slot ordering | A | implemented | `backend/app/application/slot_queries.py`, Task 5 review | Hard eligibility filters; 30-minute starts; earliest time, workload, then stable worker ID | No |
 | Booking and rescheduling | A | implemented | `backend/app/application/appointment_service.py`, Task 4 review | Atomic booking/rescheduling and PostgreSQL concurrency tests pass | No |
 | Worker events | A | implemented | `backend/app/application/worker_event_service.py`, Task 4 review | Strict sequence, source replay, distinct-key concurrency, and atomic cross-entity effects pass against PostgreSQL | No |
 | Resident acceptance and rework | A | implemented | `backend/app/application/ticket_service.py`, Task 4 review | Acceptance closes; concurrent rejection increments once; rejected or cancelled rework booking preserves the same ticket | No |
 | Human escalation | A/B | implemented | `backend/app/application/ticket_service.py`, Task 4 review | Safe operator recovery derives its target and cannot substitute resident acceptance | No |
 | Resident/worker state conflict | C | deferred | original F06 scenario | Automation stops and operator review is required | No |
-| Independent MCP server | A | deferred | `docs/MCP_CONTRACTS.md` | Streamable HTTP contract tests call application services | No |
+| Independent MCP server | A | implemented | `mcp_server/`, Task 5 review | Eight Streamable HTTP tools call application services; real MCP SDK client and PostgreSQL tests pass | No |
 | LangGraph orchestrator | B | deferred | `docs/ARCHITECTURE.md` | Typed graph resumes from fresh domain snapshots | No |
 | Three-layer task memory | B | deferred | original project specification | Checkpoint work state never replaces PostgreSQL facts | No |
 | Business Trace | C | deferred | original project specification | Complete, replayable timeline explains retries and recovery | No |
@@ -195,13 +199,12 @@ is still required. No row may be removed or weakened without explicit user appro
 The following are not implemented yet and are not cancelled:
 
 - semantic duplicate-ticket detection;
-- deterministic worker candidate ordering;
 - resident appointment cancellation and ticket cancellation;
 - ticket progress queries;
 - resident/worker state-conflict handling;
 - `intent_version` and conversation checkpoints;
 - policy RAG;
-- MCP client and independent server;
+- Agent-runtime MCP client integration (the standalone server and transport contract are implemented);
 - LangGraph and an LLM provider;
 - business Trace;
 - Outbox and `UNKNOWN_COMMIT` recovery;

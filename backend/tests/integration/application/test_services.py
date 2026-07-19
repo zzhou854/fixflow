@@ -137,7 +137,7 @@ async def application_env(
                 Worker(
                     id=worker_id,
                     name=f"worker-{index}-{worker_id}",
-                    service_area="Task4",
+                    service_area=f"Task4-{property_id}",
                 )
             )
             session.add(WorkerSkill(worker_id=worker_id, skill_type=WorkerSkillType.PLUMBING))
