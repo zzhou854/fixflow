@@ -106,9 +106,11 @@ fault injection, or evaluation, stop for scope review.
 
 ## Current phase
 
-Project initialization, the approved domain model, and the first persistence
-schema are complete. The next approved implementation boundary is Task 4:
-repositories, Unit of Work, and deterministic application services. Task 4
-exists to serve future MCP and Agent callers; it does not authorize LangGraph,
-LLM, RAG, JWT, Outbox, Trace, frontend work, or generic backend frameworks.
-After Task 4, the next Stage-A priority is the independent MCP server.
+Stage A is complete: the domain and persistence model, transactional Application
+services, deterministic scheduling, and the independent MCP server are committed.
+The current approved boundary is Task 6: typed Agent State, deterministic
+`intent_version` invalidation, provider-neutral LLM contracts, and the two
+language-only nodes. Task 6 does not authorize a LangGraph graph/checkpoint, MCP
+client, RAG, online provider, JWT/API, Trace, Outbox, frontend, Harness, or
+evaluation implementation. The next separately reviewed task is Task 7 policy
+RAG; it must not silently expand the Agent or persistence infrastructure.

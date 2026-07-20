@@ -11,7 +11,7 @@ demo.
 
 ## Current status
 
-The deterministic Stage-A foundation through Task 5 is at its code-review gate:
+Stage A is complete and the Task 6 typed Agent core is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a minimal FastAPI health endpoint;
@@ -31,14 +31,19 @@ The deterministic Stage-A foundation through Task 5 is at its code-review gate:
   over Streamable HTTP through the existing Application layer;
 - Pydantic contract, handler, real PostgreSQL tool, and real MCP client transport
   tests;
+- strict JSON-serializable Agent State with separate utterance/task intents,
+  typed user availability and non-guaranteed candidate slots;
+- deterministic missing-field computation, `intent_version` invalidation,
+  safety-review routing boundary, and explicit timezone context;
+- provider-neutral LLM contracts, versioned prompts, language-only interpret and
+  compose nodes, and a scripted test provider;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Task 5 is intentionally uncommitted pending its code-review gate. Stage B has
-not started.
+Task 6 does not yet provide a LangGraph runtime or a real online model.
 
-No LangGraph workflow, LLM, RAG, JWT, frontend, Outbox worker, Trace UI, or
-fault-injection implementation exists yet; these remain mandatory roadmap work,
-not cancelled scope.
+No LangGraph workflow, online LLM provider, RAG, JWT, frontend, Outbox worker,
+Trace UI, or fault-injection implementation exists yet; these remain mandatory
+roadmap work, not cancelled scope.
 
 ## Prerequisites
 
@@ -78,6 +83,7 @@ and never maintained manually.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Approved state machines](docs/STATE_MACHINE.md)
 - [MCP contracts](docs/MCP_CONTRACTS.md)
+- [Typed Agent core](docs/AGENT_STATE.md)
 - [Implementation roadmap and alignment gates](docs/IMPLEMENTATION_ROADMAP.md)
 
 ## Week-1 delivery order

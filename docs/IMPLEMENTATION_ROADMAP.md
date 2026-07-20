@@ -97,13 +97,20 @@ Implemented and accepted through Task 4:
 - deterministic application services
 - transaction, authorization, idempotency, optimistic-lock, history, and concurrency tests
 
-Implemented for Task 5 review:
+Implemented and accepted through Task 5:
 - deterministic 30-minute candidate-slot generation and stable ordering
 - independent Streamable HTTP MCP server with eight typed tools
 - Pydantic contracts, PostgreSQL tool tests, and real MCP client transport tests
 
-Next after Task 5 approval:
-- Stage B Agent, RAG, and product main flow
+Implemented for Task 6 review:
+- strict typed Agent State and JSON contracts
+- deterministic durable-task intent versioning, missing-field computation,
+  safety-review boundary, and stale-plan invalidation
+- provider-neutral LLM Protocol and Scripted Provider
+- versioned interpret/compose language nodes with node-level tests
+
+Next after Task 6 approval:
+- Task 7 policy RAG, effective-time filtering, conflict detection, and retrieval evaluation
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,
@@ -166,9 +173,9 @@ is still required. No row may be removed or weakened without explicit user appro
 
 | Capability | Target stage | Current status | Corresponding file / commit | Acceptance evidence | Deletable? |
 | --- | --- | --- | --- | --- | --- |
-| Resident natural-language repair request | B | deferred | `docs/PROJECT_SPEC.md` | Three categories start from natural language | No |
-| Multi-turn information completion | B | deferred | `docs/PROJECT_SPEC.md` | Missing fields are requested and validated | No |
-| User correction and `intent_version` | B | deferred | this roadmap | Old analysis, slots, confirmations, and pending actions become invalid | No |
+| Resident natural-language repair request | B | partial | `backend/app/agent/nodes/interpret_message.py`, Task 6 review | Typed interpretation supports all three categories; Graph/API/online model remain | No |
+| Multi-turn information completion | B | partial | `backend/app/agent/models.py`, Task 6 review | Bounded history, known fields, and missing fields are typed and node-tested; runtime loop remains | No |
+| User correction and `intent_version` | B | implemented | `backend/app/agent/merge.py`, Task 6 review | Category, normalized location, and target changes invalidate stale planning in deterministic tests | No |
 | Exact structured open-ticket candidate query | A | implemented | `backend/app/application/ticket_service.py`, `backend/app/infrastructure/database/repositories/ticket.py`, Task 4 review | Exact resident, property, category, and normalized-location filtering plus explicit operator override pass; semantic duplicate detection remains deferred | No |
 | Policy RAG | B | deferred | `docs/PROJECT_SPEC.md` | Hybrid retrieval returns attributable evidence | No |
 | Policy effective-time validation | B | deferred | this roadmap | Expired policy misuse rate is zero in frozen cases | No |
@@ -202,10 +209,10 @@ The following are not implemented yet and are not cancelled:
 - resident appointment cancellation and ticket cancellation;
 - ticket progress queries;
 - resident/worker state-conflict handling;
-- `intent_version` and conversation checkpoints;
+- conversation checkpoints and runtime memory (`intent_version` core is implemented);
 - policy RAG;
 - Agent-runtime MCP client integration (the standalone server and transport contract are implemented);
-- LangGraph and an LLM provider;
+- LangGraph and a real online LLM provider (the Protocol and Scripted Provider are implemented);
 - business Trace;
 - Outbox and `UNKNOWN_COMMIT` recovery;
 - fault injection, Replay, and the Engineering Harness;

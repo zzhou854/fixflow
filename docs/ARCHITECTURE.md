@@ -8,7 +8,7 @@ flowchart LR
     Operator["Operator workbench - later"] --> API
     API --> Orchestrator["Single typed orchestrator - later"]
     Orchestrator --> Services["Deterministic application services"]
-    Orchestrator --> LLM["Interpret and compose only - later"]
+    Orchestrator --> LLM["Typed interpret/compose core"]
     Orchestrator --> MCPClient["MCP client - Stage B"]
     MCPClient --> MCP["property-operations-mcp"]
     MCP --> Services
@@ -34,9 +34,34 @@ Task 5 adds a deterministic candidate-slot Application query and the independent
 `property-operations-mcp` process with eight typed tools, Streamable HTTP, and
 real MCP-client transport coverage.
 
-Task 5 is at its code-review gate and has not been committed. FastAPI business
-endpoints, LangGraph, RAG, Trace, Outbox, Harness, evaluation, and frontend work
-remain later roadmap stages.
+Stage A is committed. Task 6 adds the strict Agent State, deterministic
+`intent_version` invalidation, provider-neutral LLM contract, versioned prompts,
+and independently tested interpret/compose nodes. FastAPI business endpoints,
+LangGraph Graph/Checkpoint, online LLM integration, RAG, Trace, Outbox, Harness,
+evaluation, and frontend work remain later roadmap stages.
+
+## Typed Agent core boundary
+
+```text
+future Orchestrator -> Agent State / deterministic merge
+future Orchestrator -> interpret_message / compose_response -> LLMProvider
+future Orchestrator -> MCP Client (later) -> property-operations-mcp
+```
+
+The two language nodes receive bounded typed inputs and return validated typed
+results. They import no MCP, Application Service, Repository, Unit of Work, ORM,
+or database session. Only deterministic merge code can update work state after
+interpretation. The LLM cannot set domain status, authorize property access,
+select mutation retry behavior, or claim a business write succeeded.
+
+Agent State contains conversation work and cached aggregate versions, never the
+authoritative ticket/appointment record. Established category,
+normalized-location, or durable task-intent changes increment `intent_version`,
+invalidate stale planning, preserve cached versions, and require a PostgreSQL
+snapshot refresh. New safety evidence only marks safety review as required and
+invalidates risk-dependent plans; a separate deterministic router may then set
+`EMERGENCY_REVIEW`. Model output cannot set severity or workflow stage. See
+`docs/AGENT_STATE.md` for the full matrix.
 
 ## Source-of-truth rules
 
