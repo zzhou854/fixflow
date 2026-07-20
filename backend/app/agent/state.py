@@ -15,6 +15,7 @@ from app.agent.models import (
     normalize_issue_location,
 )
 from app.domain.enums import ActorType, IssueCategory, Severity, WorkflowStage
+from app.policy.enums import EvidenceSufficiency, PolicyTopic
 
 
 class ToolResultSummary(AgentModel):
@@ -96,6 +97,10 @@ class AgentState(AgentModel):
     missing_fields: tuple[IssueField, ...] = Field(default=(), max_length=12)
     policy_evidence_ids: tuple[UUID, ...] = Field(default=(), max_length=50)
     policy_conflict: bool = False
+    policy_sufficiency: EvidenceSufficiency | None = None
+    missing_policy_topics: tuple[PolicyTopic, ...] = Field(default=(), max_length=9)
+    policy_retrieved_as_of: datetime | None = None
+    policy_query_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     safety_review_required: bool = False
     snapshot_refresh_required: bool = False
     workflow_stage: WorkflowStage = WorkflowStage.INTAKE

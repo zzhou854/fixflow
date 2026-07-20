@@ -11,13 +11,13 @@ demo.
 
 ## Current status
 
-Stage A is complete and the Task 6 typed Agent core is at its code-review gate:
+Stage A and Task 6 are complete; Task 7 Policy RAG is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a minimal FastAPI health endpoint;
 - PostgreSQL with pgvector through Docker Compose, validated healthy;
 - frozen domain states and pure transition rules;
-- SQLAlchemy persistence mappings and the first two business Alembic migrations;
+- SQLAlchemy persistence mappings and three reviewable Alembic migrations;
 - PostgreSQL constraints and disposable-database integration tests;
 - focused Repository ports and SQLAlchemy implementations;
 - explicit ORM/domain mapping and Unit of Work;
@@ -37,9 +37,13 @@ Stage A is complete and the Task 6 typed Agent core is at its code-review gate:
   safety-review routing boundary, and explicit timezone context;
 - provider-neutral LLM contracts, versioned prompts, language-only interpret and
   compose nodes, and a scripted test provider;
+- synthetic, versioned policy documents and 384-dimensional pgvector chunks;
+- SQL-first category/topic/effective-time filtering, deterministic hybrid
+  retrieval, attributable evidence, conflict and sufficiency decisions;
+- a 21-case frozen policy retrieval evaluation without an LLM judge;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Task 6 does not yet provide a LangGraph runtime or a real online model.
+Task 7 does not provide LangGraph, an MCP Client, or a real online embedding model.
 
 No LangGraph workflow, online LLM provider, RAG, JWT, frontend, Outbox worker,
 Trace UI, or fault-injection implementation exists yet; these remain mandatory
@@ -84,6 +88,7 @@ and never maintained manually.
 - [Approved state machines](docs/STATE_MACHINE.md)
 - [MCP contracts](docs/MCP_CONTRACTS.md)
 - [Typed Agent core](docs/AGENT_STATE.md)
+- [Policy RAG](docs/POLICY_RAG.md)
 - [Implementation roadmap and alignment gates](docs/IMPLEMENTATION_ROADMAP.md)
 
 ## Week-1 delivery order

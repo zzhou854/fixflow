@@ -80,6 +80,10 @@ def merge_interpretation(state: AgentState, output: InterpretMessageOutput) -> A
         updates.update(
             policy_evidence_ids=(),
             policy_conflict=False,
+            policy_sufficiency=None,
+            missing_policy_topics=(),
+            policy_retrieved_as_of=None,
+            policy_query_fingerprint=None,
             candidate_slots=(),
             user_confirmation=None,
             pending_action=PendingAction.NONE,

@@ -7,6 +7,7 @@ import pytest
 from app.domain.enums import AppointmentStatus, TicketStatus
 from app.infrastructure.database.base import Base
 from app.infrastructure.database.models import Property, ResidentPropertyRelation, User
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Enum, select
 from sqlalchemy.dialects.postgresql import TSTZRANGE
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -27,6 +28,8 @@ def test_metadata_contains_exact_core_tables() -> None:
         "appointment_status_history",
         "worker_events",
         "idempotency_records",
+        "policy_documents",
+        "policy_chunks",
     }
 
 
@@ -47,6 +50,12 @@ def test_business_times_are_timezone_aware_and_ranges_are_tstzrange() -> None:
     assert isinstance(tickets.c.created_at.type, DateTime)
     assert tickets.c.created_at.type.timezone is True
     assert isinstance(appointments.c.scheduled_range.type, TSTZRANGE)
+    policy_documents = Base.metadata.tables["policy_documents"]
+    policy_chunks = Base.metadata.tables["policy_chunks"]
+    assert isinstance(policy_documents.c.effective_from.type, DateTime)
+    assert policy_documents.c.effective_from.type.timezone is True
+    assert isinstance(policy_chunks.c.embedding.type, Vector)
+    assert policy_chunks.c.embedding.type.dim == 384
 
 
 def test_orm_models_define_no_domain_transition_methods() -> None:

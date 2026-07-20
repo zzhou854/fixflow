@@ -78,6 +78,16 @@ def empty_database_url() -> Iterator[str]:
         yield database_url
 
 
+@pytest.fixture
+def two_migrated_database_urls() -> Iterator[tuple[str, str]]:
+    """Two independent fresh schemas for cross-rebuild identity evidence."""
+
+    with _temporary_database() as first, _temporary_database() as second:
+        _migrate(first, "head")
+        _migrate(second, "head")
+        yield first, second
+
+
 @pytest_asyncio.fixture
 async def db_connection(migrated_database_url: str) -> AsyncIterator[asyncpg.Connection]:
     connection = await asyncpg.connect(

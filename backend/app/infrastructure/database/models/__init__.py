@@ -9,6 +9,7 @@ from app.infrastructure.database.models.idempotency import (
     IdempotencyExecutionStatus,
     IdempotencyRecord,
 )
+from app.infrastructure.database.models.policy import PolicyChunk, PolicyDocument
 from app.infrastructure.database.models.ticket import RepairTicket, TicketStatusHistory
 from app.infrastructure.database.models.user import Property, ResidentPropertyRelation, User
 from app.infrastructure.database.models.worker import Worker, WorkerAvailability, WorkerSkill
@@ -19,6 +20,8 @@ __all__ = [
     "IdempotencyExecutionStatus",
     "IdempotencyRecord",
     "Property",
+    "PolicyChunk",
+    "PolicyDocument",
     "RepairTicket",
     "ResidentPropertyRelation",
     "TicketStatusHistory",

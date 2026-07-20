@@ -32,7 +32,9 @@ issue: issue_category, issue_location, normalized_issue_location,
 risk: safety_flags, safety_review_required
 time: user_availability_windows, candidate_slots
 planning: missing_fields, policy_evidence_ids, policy_conflict,
-          workflow_stage, pending_action, user_confirmation
+          policy_sufficiency, missing_policy_topics, policy_retrieved_as_of,
+          policy_query_fingerprint, workflow_stage, pending_action,
+          user_confirmation
 snapshots: ticket_snapshot_version, appointment_version,
            snapshot_refresh_required
 execution: last_tool_result, retry_count, escalation_reason
@@ -138,6 +140,17 @@ Errors are transport-neutral: `AgentError`, `LLMProviderUnavailable`,
 database write handle, so invalid output and provider failures cannot partially
 mutate State or business data.
 
-Policy RAG, online provider integration, MCP client, LangGraph/checkpoints,
-conversation persistence, JWT/API, Trace runtime, frontend, Harness, and
+Online provider integration, MCP client, LangGraph/checkpoints, conversation
+persistence, JWT/API, Trace runtime, frontend, Harness, and system-level
 evaluation remain deferred mandatory work.
+
+Task 7 now provides the policy retrieval service, effective-time filtering,
+conflict/sufficiency result, and frozen retrieval evaluation. The LangGraph
+integration remains deferred. `merge_policy_result` can update only policy
+evidence IDs, conflict/sufficiency, missing topics, retrieval time, and query
+fingerprint. It cannot modify identity, resource IDs, snapshots, severity,
+workflow stage, pending action, or confirmation. Task-6 intent invalidation also
+clears all of these policy metadata fields.
+Merge additionally requires the result intent version and deterministic query
+fingerprint to match current State and the expected request. A late result is
+rejected without clearing or overwriting newer policy metadata.

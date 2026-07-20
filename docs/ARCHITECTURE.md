@@ -34,11 +34,29 @@ Task 5 adds a deterministic candidate-slot Application query and the independent
 `property-operations-mcp` process with eight typed tools, Streamable HTTP, and
 real MCP-client transport coverage.
 
-Stage A is committed. Task 6 adds the strict Agent State, deterministic
+Stage A and Task 6 are committed. Task 7 adds versioned synthetic policy
+documents, pgvector chunks, SQL-first effective/category/topic filtering,
+deterministic hybrid retrieval, evidence conflicts, sufficiency, and frozen
+retrieval evaluation. Embedding-space identity is persisted and must match
+exactly before vector comparison; evidence IDs survive clean database rebuilds,
+and stale retrieval results cannot merge into a newer intent. Task 6 adds the strict Agent State, deterministic
 `intent_version` invalidation, provider-neutral LLM contract, versioned prompts,
 and independently tested interpret/compose nodes. FastAPI business endpoints,
-LangGraph Graph/Checkpoint, online LLM integration, RAG, Trace, Outbox, Harness,
+LangGraph Graph/Checkpoint, online LLM/embedding integration, RAG orchestration, Trace, Outbox, Harness,
 evaluation, and frontend work remain later roadmap stages.
+
+## Policy retrieval boundary
+
+```text
+future Orchestrator -> PolicyRetrievalService -> Policy Repository -> PostgreSQL/pgvector
+```
+
+The policy Application layer owns strict requests, import idempotency, fusion,
+conflict detection, sufficiency, and safe evidence models without importing
+SQLAlchemy. Infrastructure performs one SQL-filtered candidate query and never
+commits inside the Repository. A dedicated Policy Unit of Work owns atomic
+document/chunk import. Policy text is untrusted evidence and has no access to
+Agent State, tools, or business mutations. See `docs/POLICY_RAG.md`.
 
 ## Typed Agent core boundary
 

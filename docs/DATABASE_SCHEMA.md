@@ -26,6 +26,8 @@ and idempotency records. Pure domain objects and transition rules remain under
 | `appointment_status_history` | Append-only accepted appointment transition evidence with request Trace identity |
 | `worker_events` | Canonical accepted behavior evidence linked to its appointment, with request Trace identity, per-appointment sequence, and external identity |
 | `idempotency_records` | Mutation identity, request hash, execution state, and durable result envelope |
+| `policy_documents` | Versioned synthetic-policy metadata, category/topic, authority, effective interval, source/content identity, and exact embedding profile |
+| `policy_chunks` | Bounded evidence text, explicit search terms, paired decision fields, and fixed `vector(384)` embedding |
 
 All core foreign keys explicitly use `ON DELETE RESTRICT`. Users, properties,
 workers, tickets, appointments, histories, worker events, and idempotency rows
@@ -96,6 +98,20 @@ derive their ticket through the authoritative appointment relationship instead
 of duplicating `ticket_id`. Downgrade removes only the new Trace columns and
 indexes.
 
+Revision `20260720_0003` (`add_policy_retrieval_schema`) adds versioned
+`policy_documents` and fixed `vector(384)` `policy_chunks`. It enforces unique
+code/version and document/chunk index pairs, finite enum-shaped topic/category
+values, valid timezone-aware effective intervals, paired decision key/value,
+non-empty content/search terms, restrictive document foreign keys, and a named
+GiST exclusion constraint preventing same-code effective-period overlap.
+The exact profile fields are `embedding_provider`, `embedding_model`,
+`embedding_dimension`, and `embedding_profile_version`; the dimension is fixed
+to 384 and profile strings are non-blank. The exclusion range explicitly
+coalesces an open end to timestamp infinity. Disabled documents remain covered
+because disablement affects retrieval visibility, not historical integrity.
+Upgrade ensures `vector` and `btree_gist`; downgrade removes only these policy
+tables and indexes and preserves shared extensions.
+
 Integration tests create randomly named databases with the prefix
 `fixflow_migration_test_`, use the project PostgreSQL container only as the
 administrative server, and always terminate remaining test connections before
@@ -110,5 +126,6 @@ these tests.
 
 This revision deliberately does not create conversations, Agent checkpoints,
 Trace runs/events, Outbox/dead-letter records, policy documents/chunks/embeddings,
-or any frontend and evaluation storage. Each requires a separately reviewed
-future migration.
+or any frontend and evaluation storage. Policy documents/chunks are now supplied
+by revision `20260720_0003`; the remaining deferred tables require separately
+reviewed future migrations.

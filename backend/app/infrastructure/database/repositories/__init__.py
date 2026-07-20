@@ -6,6 +6,7 @@ from app.infrastructure.database.repositories.appointment import (
 from app.infrastructure.database.repositories.idempotency import (
     SqlAlchemyIdempotencyRepository,
 )
+from app.infrastructure.database.repositories.policy import SqlAlchemyPolicyRepository
 from app.infrastructure.database.repositories.query import SqlAlchemyQueryRepository
 from app.infrastructure.database.repositories.ticket import SqlAlchemyTicketRepository
 from app.infrastructure.database.repositories.worker_event import (
@@ -15,6 +16,7 @@ from app.infrastructure.database.repositories.worker_event import (
 __all__ = [
     "SqlAlchemyAppointmentRepository",
     "SqlAlchemyIdempotencyRepository",
+    "SqlAlchemyPolicyRepository",
     "SqlAlchemyQueryRepository",
     "SqlAlchemyTicketRepository",
     "SqlAlchemyWorkerEventRepository",

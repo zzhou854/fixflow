@@ -22,6 +22,10 @@ def test_category_change_increments_version_and_invalidates_plan(agent_state: Ag
     merged = merge_interpretation(agent_state, _output(issue_category=IssueCategory.ELECTRICAL))
     assert merged.intent_version == 4
     assert merged.policy_evidence_ids == ()
+    assert merged.policy_sufficiency is None
+    assert merged.missing_policy_topics == ()
+    assert merged.policy_retrieved_as_of is None
+    assert merged.policy_query_fingerprint is None
     assert merged.user_availability_windows == ()
     assert merged.candidate_slots == ()
     assert merged.pending_action is PendingAction.NONE

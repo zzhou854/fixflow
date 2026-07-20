@@ -102,15 +102,23 @@ Implemented and accepted through Task 5:
 - independent Streamable HTTP MCP server with eight typed tools
 - Pydantic contracts, PostgreSQL tool tests, and real MCP client transport tests
 
-Implemented for Task 6 review:
+Implemented and accepted through Task 6:
 - strict typed Agent State and JSON contracts
 - deterministic durable-task intent versioning, missing-field computation,
   safety-review boundary, and stale-plan invalidation
 - provider-neutral LLM Protocol and Scripted Provider
 - versioned interpret/compose language nodes with node-level tests
 
-Next after Task 6 approval:
-- Task 7 policy RAG, effective-time filtering, conflict detection, and retrieval evaluation
+Implemented for Task 7 review:
+- versioned synthetic policy schema and atomic import
+- SQL-first effective/category/topic filtering and pgvector hybrid retrieval
+- attributable evidence, deterministic conflicts and sufficiency
+- 21-case frozen retrieval evaluation without an LLM judge
+- exact persisted embedding-profile matching, deterministic cross-rebuild IDs,
+  and stale-result fingerprint protection
+
+Next after Task 7 approval:
+- Task 8 LangGraph Single Orchestrator, MCP Client, Checkpoint, Interrupt, and recovery
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,
@@ -177,8 +185,8 @@ is still required. No row may be removed or weakened without explicit user appro
 | Multi-turn information completion | B | partial | `backend/app/agent/models.py`, Task 6 review | Bounded history, known fields, and missing fields are typed and node-tested; runtime loop remains | No |
 | User correction and `intent_version` | B | implemented | `backend/app/agent/merge.py`, Task 6 review | Category, normalized location, and target changes invalidate stale planning in deterministic tests | No |
 | Exact structured open-ticket candidate query | A | implemented | `backend/app/application/ticket_service.py`, `backend/app/infrastructure/database/repositories/ticket.py`, Task 4 review | Exact resident, property, category, and normalized-location filtering plus explicit operator override pass; semantic duplicate detection remains deferred | No |
-| Policy RAG | B | deferred | `docs/PROJECT_SPEC.md` | Hybrid retrieval returns attributable evidence | No |
-| Policy effective-time validation | B | deferred | this roadmap | Expired policy misuse rate is zero in frozen cases | No |
+| Policy RAG | B | implemented | `backend/app/policy`, `docs/POLICY_RAG.md`, Task 7 review | SQL-filtered vector/lexical RRF returns typed attributable evidence; online provider remains deferred | No |
+| Policy effective-time validation | B | implemented | `backend/app/infrastructure/database/repositories/policy.py`, Task 7 review | Half-open SQL filtering and frozen evaluation produce zero expired-policy retrieval | No |
 | Worker skill matching | A | implemented | `backend/app/domain/enums.py`, `backend/app/infrastructure/database/repositories/appointment.py`, Task 4 review | Formal booking validates the typed mapping against active worker skill and availability | No |
 | Candidate-slot ordering | A | implemented | `backend/app/application/slot_queries.py`, Task 5 review | Hard eligibility filters; 30-minute starts; earliest time, workload, then stable worker ID | No |
 | Booking and rescheduling | A | implemented | `backend/app/application/appointment_service.py`, Task 4 review | Atomic booking/rescheduling and PostgreSQL concurrency tests pass | No |
