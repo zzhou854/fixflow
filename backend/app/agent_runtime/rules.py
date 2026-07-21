@@ -1,0 +1,37 @@
+"""Small deterministic orchestration rules, never model choices."""
+
+from types import MappingProxyType
+
+from app.agent.enums import AgentIntent
+from app.agent.state import AgentState
+from app.domain.enums import IssueCategory, Severity
+
+SERVICE_DURATION_MINUTES_BY_CATEGORY = MappingProxyType(
+    {
+        IssueCategory.WATER_LEAK: 60,
+        IssueCategory.ELECTRICAL: 60,
+        IssueCategory.DOOR_LOCK: 60,
+    }
+)
+
+
+def apply_new_repair_defaults(state: AgentState) -> AgentState:
+    """Set only approved non-safety defaults for a complete new repair."""
+
+    updates: dict[str, object] = {}
+    if state.issue_category is not None:
+        updates["service_duration_minutes"] = SERVICE_DURATION_MINUTES_BY_CATEGORY[
+            state.issue_category
+        ]
+    if (
+        state.task_intent is not AgentIntent.NEW_REPAIR
+        or state.safety_review_required
+        or state.issue_category is None
+        or state.missing_fields
+    ):
+        return state.model_copy(update=updates)
+    severity = (
+        state.cached_ticket_snapshot.severity if state.cached_ticket_snapshot else state.severity
+    )
+    updates["severity"] = severity or Severity.MEDIUM
+    return state.model_copy(update=updates)

@@ -108,9 +108,8 @@ fault injection, or evaluation, stop for scope review.
 
 Stage A is complete: the domain and persistence model, transactional Application
 services, deterministic scheduling, and the independent MCP server are committed.
-Task 6 typed Agent State and language nodes are committed. The current approved
-boundary is Task 7: versioned synthetic policy storage, SQL-first effective-time
-filtering, deterministic hybrid retrieval, conflicts, sufficiency, and frozen
-retrieval evaluation. Task 7 does not authorize LangGraph/checkpoints, an MCP
-client, online providers, JWT/API, Trace, Outbox, frontend, or general knowledge-
-base infrastructure. The next separately reviewed work is Task 8 orchestration.
+Task 6 typed Agent State and Task 7 auditable policy retrieval are committed.
+The current approved boundary is Task 8: one LangGraph orchestrator, the formal
+MCP client, isolated PostgreSQL checkpoints, Interrupt/Resume, fresh snapshots,
+stable idempotency, and the first natural-language repair/booking flow. Task 8
+does not authorize online providers, JWT/API, Trace, Outbox, frontend, or Stage C.

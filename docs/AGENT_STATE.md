@@ -2,9 +2,9 @@
 
 ## Scope
 
-Task 6 implements the provider-neutral language core for the future single
-orchestrator. It does not implement LangGraph, checkpoint persistence, an MCP
-client, policy retrieval, an online model, or a business-state engine.
+Task 6 implements the provider-neutral language core. Task 8 now uses it in the
+single LangGraph orchestrator with checkpoint persistence and an MCP client.
+It still does not provide an online model or a second business-state engine.
 PostgreSQL remains the source of truth for tickets and appointments.
 
 ```text
@@ -53,6 +53,15 @@ reference is only a claim to compare against the already authorized
 snapshot potentially stale, merge preserves the versions and sets
 `snapshot_refresh_required=true` so deterministic orchestration can reread
 PostgreSQL.
+
+After a new thread has passed `get_resident_property`, its state freezes
+`actor_type`, `actor_id`, `user_id`, `property_id`, and
+`property_context_verified=true` as the thread owner identity. Later external
+calls must prove the same trusted actor/user identity; property may be omitted
+only because the frozen verified value is reused and reauthorised. A user-text
+property reference and a model field never change this identity. Authorisation
+revocation resets only checkpoint execution permissions (`pending_operation`,
+confirmation, and chosen slots), preserving database facts.
 
 ## Utterance intent and task intent
 
@@ -140,13 +149,14 @@ Errors are transport-neutral: `AgentError`, `LLMProviderUnavailable`,
 database write handle, so invalid output and provider failures cannot partially
 mutate State or business data.
 
-Online provider integration, MCP client, LangGraph/checkpoints, conversation
-persistence, JWT/API, Trace runtime, frontend, Harness, and system-level
-evaluation remain deferred mandatory work.
+Online provider integration, JWT/API, Trace runtime, frontend, Harness, and
+system-level evaluation remain deferred mandatory work. Task 8 adds bounded
+conversation messages, cached snapshots, candidate fingerprints, pending
+operations, verified property context, and deterministic service duration.
 
 Task 7 now provides the policy retrieval service, effective-time filtering,
 conflict/sufficiency result, and frozen retrieval evaluation. The LangGraph
-integration remains deferred. `merge_policy_result` can update only policy
+integration is now owned by Task 8. `merge_policy_result` can update only policy
 evidence IDs, conflict/sufficiency, missing topics, retrieval time, and query
 fingerprint. It cannot modify identity, resource IDs, snapshots, severity,
 workflow stage, pending action, or confirmation. Task-6 intent invalidation also

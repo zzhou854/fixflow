@@ -6,10 +6,10 @@
 flowchart LR
     Resident["Resident UI - later"] --> API["FastAPI Online API"]
     Operator["Operator workbench - later"] --> API
-    API --> Orchestrator["Single typed orchestrator - later"]
+    API --> Orchestrator["Single typed orchestrator"]
     Orchestrator --> Services["Deterministic application services"]
     Orchestrator --> LLM["Typed interpret/compose core"]
-    Orchestrator --> MCPClient["MCP client - Stage B"]
+    Orchestrator --> MCPClient["Streamable HTTP MCP client"]
     MCPClient --> MCP["property-operations-mcp"]
     MCP --> Services
     Services --> PostgreSQL[("PostgreSQL + pgvector")]
@@ -34,7 +34,10 @@ Task 5 adds a deterministic candidate-slot Application query and the independent
 `property-operations-mcp` process with eight typed tools, Streamable HTTP, and
 real MCP-client transport coverage.
 
-Stage A and Task 6 are committed. Task 7 adds versioned synthetic policy
+Stage A, Task 6, and Task 7 are committed. Task 8 adds a single typed LangGraph,
+strict Interrupt/Resume, an isolated PostgreSQL checkpointer, fresh business
+snapshot recovery, stable mutation idempotency keys, and a production
+Streamable HTTP MCP client. Task 7 adds versioned synthetic policy
 documents, pgvector chunks, SQL-first effective/category/topic filtering,
 deterministic hybrid retrieval, evidence conflicts, sufficiency, and frozen
 retrieval evaluation. Embedding-space identity is persisted and must match
@@ -42,13 +45,13 @@ exactly before vector comparison; evidence IDs survive clean database rebuilds,
 and stale retrieval results cannot merge into a newer intent. Task 6 adds the strict Agent State, deterministic
 `intent_version` invalidation, provider-neutral LLM contract, versioned prompts,
 and independently tested interpret/compose nodes. FastAPI business endpoints,
-LangGraph Graph/Checkpoint, online LLM/embedding integration, RAG orchestration, Trace, Outbox, Harness,
-evaluation, and frontend work remain later roadmap stages.
+online LLM/embedding integration, Trace, Outbox, Harness, full system evaluation,
+and frontend work remain later roadmap stages.
 
 ## Policy retrieval boundary
 
 ```text
-future Orchestrator -> PolicyRetrievalService -> Policy Repository -> PostgreSQL/pgvector
+Orchestrator -> PolicyRetrievalService -> Policy Repository -> PostgreSQL/pgvector
 ```
 
 The policy Application layer owns strict requests, import idempotency, fusion,
@@ -61,9 +64,9 @@ Agent State, tools, or business mutations. See `docs/POLICY_RAG.md`.
 ## Typed Agent core boundary
 
 ```text
-future Orchestrator -> Agent State / deterministic merge
-future Orchestrator -> interpret_message / compose_response -> LLMProvider
-future Orchestrator -> MCP Client (later) -> property-operations-mcp
+Orchestrator -> Agent State / deterministic merge
+Orchestrator -> interpret_message / compose_response -> LLMProvider
+Orchestrator -> Streamable HTTP MCP Client -> property-operations-mcp
 ```
 
 The two language nodes receive bounded typed inputs and return validated typed
@@ -80,6 +83,19 @@ snapshot refresh. New safety evidence only marks safety review as required and
 invalidates risk-dependent plans; a separate deterministic router may then set
 `EMERGENCY_REVIEW`. Model output cannot set severity or workflow stage. See
 `docs/AGENT_STATE.md` for the full matrix.
+
+Task 8.1 keeps the graph as one fixed orchestration topology but moves node
+implementations into responsibility modules (property, interpretation, policy,
+tickets, scheduling, escalation, interrupts, and response). `graph.py` only
+registers those fixed nodes and edges. Nodes receive a frozen, non-checkpointed
+`NodeContext`, never an ORM session, repository, or application transaction.
+Routers remain deterministic plain Python; this is not a dynamic node or tool
+execution framework.
+
+The checkpointed thread is owned by the immutable verified tuple
+`actor_type + actor_id + user_id + property_id`. Every normal turn and every
+resume rechecks owner identity and property authorisation before language or
+business work. A trace ID is an invocation correlation value, not authority.
 
 ## Source-of-truth rules
 

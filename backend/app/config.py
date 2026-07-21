@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +17,10 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     database_url: SecretStr
+    checkpoint_database_url: SecretStr | None = Field(
+        default=None, validation_alias="CHECKPOINT_DATABASE_URL"
+    )
+    property_operations_mcp_url: str = "http://127.0.0.1:8765/mcp"
 
 
 @lru_cache

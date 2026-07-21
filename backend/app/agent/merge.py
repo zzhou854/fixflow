@@ -85,12 +85,21 @@ def merge_interpretation(state: AgentState, output: InterpretMessageOutput) -> A
             policy_retrieved_as_of=None,
             policy_query_fingerprint=None,
             candidate_slots=(),
+            candidate_slots_fingerprint=None,
+            selected_candidate_slot=None,
+            duplicate_ticket_candidates=(),
+            duplicate_candidates_fingerprint=None,
             user_confirmation=None,
             pending_action=PendingAction.NONE,
+            pending_operation=None,
             last_tool_result=None,
         )
     if version_changed:
-        updates.update(user_availability_windows=(), snapshot_refresh_required=True)
+        updates.update(
+            user_availability_windows=(),
+            service_duration_minutes=None,
+            snapshot_refresh_required=True,
+        )
         merged_user_availability = ()
     if new_safety:
         updates["safety_review_required"] = True

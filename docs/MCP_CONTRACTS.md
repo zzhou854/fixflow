@@ -170,6 +170,17 @@ a random-port Streamable HTTP server. The transport test initializes, lists tool
 reads schemas, invokes read and mutation tools, receives structured results, and
 shuts down the server.
 
-LangGraph, LLMs, policy RAG, JWT, FastAPI business routes, Agent-runtime MCP
-client integration, Outbox, Trace runtime, recovery, frontend, Harness, and
-evaluation remain deferred and mandatory roadmap work.
+Task 8 adds a lifecycle-managed Agent-runtime Streamable HTTP client. It
+discovers exactly these eight tools, validates their request schemas,
+`contract_version`, and structured results, and exposes only typed methods to
+the deterministic Graph. JWT, FastAPI business routes, Outbox, Trace runtime,
+frontend, Harness, and full evaluation remain deferred mandatory roadmap work.
+
+## Shared contract ownership
+
+`app.property_operations.contracts` is the single formal source for
+`CONTRACT_VERSION` and every request/result schema. The MCP server and the
+Agent-runtime client both import that package. `mcp_server.schemas` contains
+compatibility re-exports only—no duplicate model definitions—and must not be
+used as a dependency by the Agent runtime. The shared contract package imports
+neither the server, the runtime, SQLAlchemy, LangGraph, nor a process lifecycle.

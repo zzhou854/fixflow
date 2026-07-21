@@ -117,8 +117,11 @@ Implemented for Task 7 review:
 - exact persisted embedding-profile matching, deterministic cross-rebuild IDs,
   and stale-result fingerprint protection
 
-Next after Task 7 approval:
-- Task 8 LangGraph Single Orchestrator, MCP Client, Checkpoint, Interrupt, and recovery
+Implemented for Task 8 review:
+- LangGraph Single Orchestrator and deterministic routing
+- production Streamable HTTP MCP Client over the shared Task 5 contracts
+- isolated PostgreSQL Checkpoint, typed Interrupt/Resume, and snapshot refresh
+- stable mutation idempotency and the first natural-language repair/booking flow
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,
@@ -181,8 +184,8 @@ is still required. No row may be removed or weakened without explicit user appro
 
 | Capability | Target stage | Current status | Corresponding file / commit | Acceptance evidence | Deletable? |
 | --- | --- | --- | --- | --- | --- |
-| Resident natural-language repair request | B | partial | `backend/app/agent/nodes/interpret_message.py`, Task 6 review | Typed interpretation supports all three categories; Graph/API/online model remain | No |
-| Multi-turn information completion | B | partial | `backend/app/agent/models.py`, Task 6 review | Bounded history, known fields, and missing fields are typed and node-tested; runtime loop remains | No |
+| Resident natural-language repair request | B | partial | `backend/app/agent_runtime/graph.py`, Task 8 review | Scripted-provider Graph completes create-and-book; API/online model remain | No |
+| Multi-turn information completion | B | implemented | `backend/app/agent_runtime/graph.py`, Task 8 review | Typed missing-information Interrupt resumes from persisted checkpoint | No |
 | User correction and `intent_version` | B | implemented | `backend/app/agent/merge.py`, Task 6 review | Category, normalized location, and target changes invalidate stale planning in deterministic tests | No |
 | Exact structured open-ticket candidate query | A | implemented | `backend/app/application/ticket_service.py`, `backend/app/infrastructure/database/repositories/ticket.py`, Task 4 review | Exact resident, property, category, and normalized-location filtering plus explicit operator override pass; semantic duplicate detection remains deferred | No |
 | Policy RAG | B | implemented | `backend/app/policy`, `docs/POLICY_RAG.md`, Task 7 review | SQL-filtered vector/lexical RRF returns typed attributable evidence; online provider remains deferred | No |
@@ -195,8 +198,8 @@ is still required. No row may be removed or weakened without explicit user appro
 | Human escalation | A/B | implemented | `backend/app/application/ticket_service.py`, Task 4 review | Safe operator recovery derives its target and cannot substitute resident acceptance | No |
 | Resident/worker state conflict | C | deferred | original F06 scenario | Automation stops and operator review is required | No |
 | Independent MCP server | A | implemented | `mcp_server/`, Task 5 review | Eight Streamable HTTP tools call application services; real MCP SDK client and PostgreSQL tests pass | No |
-| LangGraph orchestrator | B | deferred | `docs/ARCHITECTURE.md` | Typed graph resumes from fresh domain snapshots | No |
-| Three-layer task memory | B | deferred | original project specification | Checkpoint work state never replaces PostgreSQL facts | No |
+| LangGraph orchestrator | B | implemented | `backend/app/agent_runtime`, Task 8 review | Typed graph routes deterministically and resumes after fresh domain snapshots | No |
+| Three-layer task memory | B | partial | `backend/app/agent_runtime/checkpoint.py`, Task 8 review | Isolated persistent checkpoint plus bounded conversation and PostgreSQL truth; full product/API context remains | No |
 | Business Trace | C | deferred | original project specification | Complete, replayable timeline explains retries and recovery | No |
 | Transactional Outbox | C | deferred | `docs/ARCHITECTURE.md` | Business write and event commit atomically | No |
 | `UNKNOWN_COMMIT` recovery | C | deferred | `docs/STATE_MACHINE.md` | Real post-commit timeout is reconciled without duplication | No |

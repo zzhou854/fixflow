@@ -11,7 +11,8 @@ demo.
 
 ## Current status
 
-Stage A and Task 6 are complete; Task 7 Policy RAG is at its code-review gate:
+Stage A, Task 6, and Task 7 are complete. Task 8 orchestration is at its
+code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a minimal FastAPI health endpoint;
@@ -41,13 +42,15 @@ Stage A and Task 6 are complete; Task 7 Policy RAG is at its code-review gate:
 - SQL-first category/topic/effective-time filtering, deterministic hybrid
   retrieval, attributable evidence, conflict and sufficiency decisions;
 - a 21-case frozen policy retrieval evaluation without an LLM judge;
+- a single deterministic LangGraph orchestrator with typed Interrupt/Resume;
+- a production Streamable HTTP MCP client using the shared eight-tool contract;
+- an isolated official PostgreSQL checkpointer and fresh-snapshot recovery;
+- the natural-language create-ticket and book-appointment main flow;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Task 7 does not provide LangGraph, an MCP Client, or a real online embedding model.
-
-No LangGraph workflow, online LLM provider, RAG, JWT, frontend, Outbox worker,
-Trace UI, or fault-injection implementation exists yet; these remain mandatory
-roadmap work, not cancelled scope.
+Online LLM/embedding providers, JWT/API/SSE, frontend, Outbox, Trace UI, full
+unknown-commit reconciliation, and fault injection remain mandatory roadmap
+work, not cancelled scope.
 
 ## Prerequisites
 
@@ -67,12 +70,20 @@ docker compose up -d postgres
 uv run alembic upgrade head
 uv run uvicorn app.main:app --app-dir backend --reload
 uv run python -m mcp_server
+$env:PYTHONPATH = "backend"; uv run python -m app.agent_runtime.initialize_checkpoints
 ```
 
 The last command starts the independent `property-operations-mcp` service at
 `http://127.0.0.1:8765/mcp` by default. Configure `MCP_HOST`, `MCP_PORT`, and
 `DATABASE_URL` through the environment. The service uses Streamable HTTP and
 does not run inside the FastAPI process.
+
+The checkpoint-initialization command is a one-time local development step once
+Docker PostgreSQL is healthy. It uses `CHECKPOINT_DATABASE_URL` to create the
+isolated checkpoint database if needed and lets the official LangGraph saver
+create its four internal tables; business Alembic never manages those tables.
+On Windows this command sets the required Selector event-loop policy before the
+event loop starts. Future Agent-host entrypoints use the same explicit setup.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
