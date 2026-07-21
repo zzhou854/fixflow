@@ -21,6 +21,11 @@ class Settings(BaseSettings):
         default=None, validation_alias="CHECKPOINT_DATABASE_URL"
     )
     property_operations_mcp_url: str = "http://127.0.0.1:8765/mcp"
+    jwt_secret: SecretStr | None = None
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_minutes: int = 30
+    runtime_mode: str = "demo"
+    cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
 
 
 @lru_cache

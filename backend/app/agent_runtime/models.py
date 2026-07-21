@@ -7,8 +7,10 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
+from app.agent.enums import AgentIntent, IssueField
 from app.agent.models import AgentModel
-from app.domain.enums import ActorType, WorkflowStage
+from app.domain.enums import ActorType, IssueCategory, Severity, WorkflowStage
+from app.policy.enums import EvidenceSufficiency
 
 
 class RunStatus(StrEnum):
@@ -175,6 +177,19 @@ class AgentStateView(AgentModel):
     ticket_snapshot_version: int | None
     appointment_version: int | None
     last_assistant_message: str | None
+    run_status: RunStatus
+    interrupt: InterruptPayload | None = None
+    issue_category: IssueCategory | None = None
+    issue_location: str | None = None
+    issue_description: str | None = None
+    severity: Severity | None = None
+    policy_evidence_ids: tuple[UUID, ...] = ()
+    policy_conflict: bool = False
+    policy_sufficiency: EvidenceSufficiency | None = None
+    safety_review_required: bool = False
+    task_intent: AgentIntent = AgentIntent.UNKNOWN
+    missing_fields: tuple[IssueField, ...] = ()
+    updated_at: datetime | None = None
 
 
 class AgentRunResult(AgentModel):

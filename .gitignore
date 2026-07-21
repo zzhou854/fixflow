@@ -12,3 +12,5 @@ htmlcov/
 .vscode/
 dist/
 build/
+node_modules/
+*.tsbuildinfo

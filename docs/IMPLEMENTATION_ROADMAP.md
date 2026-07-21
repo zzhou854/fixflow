@@ -122,6 +122,14 @@ Implemented for Task 8 review:
 - production Streamable HTTP MCP Client over the shared Task 5 contracts
 - isolated PostgreSQL Checkpoint, typed Interrupt/Resume, and snapshot refresh
 - stable mutation idempotency and the first natural-language repair/booking flow
+
+Implemented for Task 9 review:
+- Argon2 development accounts, short-lived JWT, and trusted caller context
+- resident, Agent Thread/Resume, operator, and bounded SSE APIs
+- Bearer-header Fetch Streaming, bounded API request replay, and ticket-linked
+  read-only Operator thread review
+- React/TypeScript resident chat and operator workbench
+- real API -> Agent -> MCP -> Application -> PostgreSQL vertical evidence
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,
@@ -184,7 +192,7 @@ is still required. No row may be removed or weakened without explicit user appro
 
 | Capability | Target stage | Current status | Corresponding file / commit | Acceptance evidence | Deletable? |
 | --- | --- | --- | --- | --- | --- |
-| Resident natural-language repair request | B | partial | `backend/app/agent_runtime/graph.py`, Task 8 review | Scripted-provider Graph completes create-and-book; API/online model remain | No |
+| Resident natural-language repair request | B | implemented | `backend/app/api`, `frontend`, Task 9 review | Authenticated demo UI/API completes create-and-book; online provider remains separately deferred | No |
 | Multi-turn information completion | B | implemented | `backend/app/agent_runtime/graph.py`, Task 8 review | Typed missing-information Interrupt resumes from persisted checkpoint | No |
 | User correction and `intent_version` | B | implemented | `backend/app/agent/merge.py`, Task 6 review | Category, normalized location, and target changes invalidate stale planning in deterministic tests | No |
 | Exact structured open-ticket candidate query | A | implemented | `backend/app/application/ticket_service.py`, `backend/app/infrastructure/database/repositories/ticket.py`, Task 4 review | Exact resident, property, category, and normalized-location filtering plus explicit operator override pass; semantic duplicate detection remains deferred | No |
@@ -199,7 +207,7 @@ is still required. No row may be removed or weakened without explicit user appro
 | Resident/worker state conflict | C | deferred | original F06 scenario | Automation stops and operator review is required | No |
 | Independent MCP server | A | implemented | `mcp_server/`, Task 5 review | Eight Streamable HTTP tools call application services; real MCP SDK client and PostgreSQL tests pass | No |
 | LangGraph orchestrator | B | implemented | `backend/app/agent_runtime`, Task 8 review | Typed graph routes deterministically and resumes after fresh domain snapshots | No |
-| Three-layer task memory | B | partial | `backend/app/agent_runtime/checkpoint.py`, Task 8 review | Isolated persistent checkpoint plus bounded conversation and PostgreSQL truth; full product/API context remains | No |
+| Three-layer task memory | B | implemented | `backend/app/agent_runtime/checkpoint.py`, `backend/app/api`, Task 9 review | Isolated persistent checkpoint, bounded conversation, PostgreSQL truth, and product caller context | No |
 | Business Trace | C | deferred | original project specification | Complete, replayable timeline explains retries and recovery | No |
 | Transactional Outbox | C | deferred | `docs/ARCHITECTURE.md` | Business write and event commit atomically | No |
 | `UNKNOWN_COMMIT` recovery | C | deferred | `docs/STATE_MACHINE.md` | Real post-commit timeout is reconciled without duplication | No |
@@ -208,8 +216,8 @@ is still required. No row may be removed or weakened without explicit user appro
 | Evaluation suite | D | deferred | original project specification | Approx. 100 scenarios and frozen deterministic report | No |
 | ReAct baseline | D | deferred | original project specification | Same-model/tool/data comparison is reproducible | No |
 | Core ablations | D | deferred | this roadmap | Three approved removals produce comparable metrics | No |
-| Resident frontend | B | deferred | `docs/PROJECT_SPEC.md` | Chat, status, slots, cancellation, and acceptance work | No |
-| Operator workbench | B/C | deferred | `docs/PROJECT_SPEC.md` | Ticket operations, evidence, conflicts, and Trace timeline work | No |
+| Resident frontend | B | partial | `frontend/src/pages/ResidentPage.tsx`, Task 9 review | Chat, status, typed interrupts, reschedule/human request work; cancellation and acceptance remain manual | No |
+| Operator workbench | B/C | partial | `frontend/src/pages/OperatorPage.tsx`, Task 9 review | Filters, details, histories, latest event and ticket-linked read-only thread review work; pre-ticket review queue and Trace remain deferred | No |
 | Docker Compose delivery | A/D | partial | `docker-compose.yml`, `448f9e2` | PostgreSQL works now; final one-command system remains | No |
 
 ## Deferred but mandatory features

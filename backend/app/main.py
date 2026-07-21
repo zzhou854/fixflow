@@ -1,22 +1,6 @@
-"""Minimal FastAPI entry point for stage 0 environment verification."""
+"""ASGI entry point for FixFlow."""
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+from app.api.app import create_app
+from app.config import get_settings
 
-
-class HealthResponse(BaseModel):
-    status: str
-    service: str
-
-
-def create_app() -> FastAPI:
-    application = FastAPI(title="FixFlow API", version="0.1.0")
-
-    @application.get("/health", response_model=HealthResponse, tags=["system"])
-    async def health() -> HealthResponse:
-        return HealthResponse(status="ok", service="fixflow-api")
-
-    return application
-
-
-app = create_app()
+app = create_app(cors_origins=get_settings().cors_origins)

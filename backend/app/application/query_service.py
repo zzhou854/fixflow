@@ -14,11 +14,19 @@ from app.application.query_models import (
     OpenRepairTicketReadModel,
     QueryActor,
     ResidentPropertyReadModel,
+    TicketDetailReadModel,
+    TicketListItemReadModel,
     TicketSnapshotReadModel,
     WorkerEventReadModel,
 )
 from app.application.slot_queries import generate_available_slots, validate_slot_query
-from app.domain.enums import ISSUE_CATEGORY_REQUIRED_SKILL, ActorType
+from app.domain.enums import (
+    ISSUE_CATEGORY_REQUIRED_SKILL,
+    ActorType,
+    IssueCategory,
+    Severity,
+    TicketStatus,
+)
 from app.domain.models import TicketSnapshot
 
 
@@ -159,6 +167,61 @@ class FixFlowQueryService:
                 requested_duration_minutes=query.requested_duration_minutes,
                 max_results=query.max_results,
             )
+
+    async def list_resident_properties(
+        self, actor: QueryActor
+    ) -> tuple[ResidentPropertyReadModel, ...]:
+        if actor.actor_type is not ActorType.RESIDENT or actor.actor_id is None:
+            raise AuthorizationFailed("resident_required")
+        async with self._uow_factory() as uow:
+            return tuple(await uow.queries.list_resident_properties(actor.actor_id))
+
+    async def list_resident_tickets(
+        self, actor: QueryActor, *, limit: int, offset: int
+    ) -> tuple[TicketListItemReadModel, ...]:
+        if actor.actor_type is not ActorType.RESIDENT:
+            raise AuthorizationFailed("resident_required")
+        async with self._uow_factory() as uow:
+            return tuple(
+                await uow.queries.list_resident_tickets(actor.actor_id, limit=limit, offset=offset)
+            )
+
+    async def list_operator_tickets(
+        self,
+        actor: QueryActor,
+        *,
+        ticket_status: TicketStatus | None,
+        issue_category: IssueCategory | None,
+        severity: Severity | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[TicketListItemReadModel, ...]:
+        async with self._uow_factory() as uow:
+            if (
+                actor.actor_type is not ActorType.OPERATOR
+                or not await uow.tickets.actor_is_operator(actor.actor_id)
+            ):
+                raise AuthorizationFailed("operator_required")
+            return tuple(
+                await uow.queries.list_operator_tickets(
+                    ticket_status=ticket_status,
+                    issue_category=issue_category,
+                    severity=severity,
+                    limit=limit,
+                    offset=offset,
+                )
+            )
+
+    async def get_ticket_detail(self, actor: QueryActor, ticket_id: UUID) -> TicketDetailReadModel:
+        async with self._uow_factory() as uow:
+            ticket = await uow.tickets.get(ticket_id)
+            if ticket is None:
+                raise ResourceNotFound("ticket_not_found")
+            await self._authorize_ticket(uow, actor, ticket)
+            detail = await uow.queries.get_ticket_detail(ticket_id)
+            if detail is None:
+                raise ResourceNotFound("ticket_not_found")
+            return detail
 
     @staticmethod
     def _open_ticket(ticket: TicketSnapshot) -> OpenRepairTicketReadModel:

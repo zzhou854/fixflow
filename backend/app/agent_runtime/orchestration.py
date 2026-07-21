@@ -27,6 +27,7 @@ from app.agent_runtime.runtime_state import RuntimeGraphState
 from app.domain.enums import WorkflowStage
 from app.property_operations.contracts.common import ResultCode
 from app.property_operations.contracts.properties import GetResidentPropertyRequest
+from app.property_operations.contracts.tickets import GetTicketSnapshotRequest
 
 
 class AgentOrchestrator:
@@ -257,6 +258,63 @@ class AgentOrchestrator:
         if error:
             await self._invalidate_authorization(state)
             raise ThreadIdentityConflict("caller no longer has property access")
+        snapshot = await self._graph.aget_state(self._config(thread_id))
+        return self._state_view(state, snapshot)
+
+    async def get_operator_state(
+        self, thread_id: UUID, caller: AgentCallerContext, trace_id: UUID
+    ) -> AgentStateView | None:
+        """Return a sanitized supervisor view after formal operator authorization."""
+
+        if caller.actor_type.value != "OPERATOR":
+            raise ThreadIdentityConflict("operator role required")
+        state = await self._stored_state(thread_id)
+        if state is None or state.property_id is None:
+            return None
+        response = await self._mcp.get_resident_property(
+            GetResidentPropertyRequest(
+                actor_type=caller.actor_type,
+                actor_id=caller.actor_id,
+                trace_id=trace_id,
+                resident_id=state.user_id,
+                property_id=state.property_id,
+            )
+        )
+        if response.result_code is not ResultCode.FOUND:
+            raise ThreadIdentityConflict("operator is not authorized")
+        if state.active_ticket_id is None:
+            return None
+        ticket_response = await self._mcp.get_ticket_snapshot(
+            GetTicketSnapshotRequest(
+                actor_type=caller.actor_type,
+                actor_id=caller.actor_id,
+                trace_id=trace_id,
+                ticket_id=state.active_ticket_id,
+            )
+        )
+        ticket = ticket_response.data
+        if (
+            ticket_response.result_code is not ResultCode.FOUND
+            or ticket is None
+            or ticket.ticket_id != state.active_ticket_id
+            or ticket.property_id != state.property_id
+            or ticket.resident_id != state.user_id
+        ):
+            return None
+        snapshot = await self._graph.aget_state(self._config(thread_id))
+        return self._state_view(state, snapshot)
+
+    @staticmethod
+    def _state_view(state: AgentState, snapshot: object) -> AgentStateView:
+        payload: InterruptPayload | None = None
+        tasks = getattr(snapshot, "tasks", ())
+        for task in tasks:
+            if task.interrupts:
+                payload = INTERRUPT_ADAPTER.validate_python(task.interrupts[0].value)
+                break
+        run_status = RunStatus.INTERRUPTED if payload is not None else RunStatus.COMPLETED
+        if state.workflow_stage in {WorkflowStage.HUMAN_REVIEW, WorkflowStage.EMERGENCY_REVIEW}:
+            run_status = RunStatus.NEEDS_HUMAN_REVIEW
         return AgentStateView(
             thread_id=state.thread_id,
             intent_version=state.intent_version,
@@ -268,6 +326,19 @@ class AgentOrchestrator:
             ticket_snapshot_version=state.ticket_snapshot_version,
             appointment_version=state.appointment_version,
             last_assistant_message=state.last_assistant_message,
+            run_status=run_status,
+            interrupt=payload,
+            issue_category=state.issue_category,
+            issue_location=state.issue_location,
+            issue_description=state.issue_description,
+            severity=state.severity,
+            policy_evidence_ids=state.policy_evidence_ids,
+            policy_conflict=state.policy_conflict,
+            policy_sufficiency=state.policy_sufficiency,
+            safety_review_required=state.safety_review_required,
+            task_intent=state.task_intent,
+            missing_fields=state.missing_fields,
+            updated_at=state.current_reference_time,
         )
 
     async def _result(

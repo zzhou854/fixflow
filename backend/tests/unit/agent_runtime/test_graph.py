@@ -995,6 +995,67 @@ async def test_non_owner_cannot_resume_or_read_an_interrupted_thread() -> None:
 
 
 @pytest.mark.asyncio
+async def test_operator_uses_read_only_review_only_for_ticket_linked_thread() -> None:
+    resident_id, property_id, operator_id = uuid4(), uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    orchestrator = _orchestrator(
+        mcp,
+        {
+            "utterance_intent": "NEW_REPAIR",
+            "issue_category": "WATER_LEAK",
+            "issue_location": "厨房水槽下",
+            "issue_description_update": "厨房水槽下漏水",
+            "user_availability_windows": [
+                {"starts_at": "2026-07-21T12:00:00Z", "ends_at": "2026-07-21T18:00:00Z"}
+            ],
+        },
+    )
+    turn = _turn(resident_id, property_id)
+    await orchestrator.start_turn(turn)
+    operator = AgentCallerContext(
+        actor_type=ActorType.OPERATOR,
+        actor_id=operator_id,
+        user_id=operator_id,
+    )
+    before = await orchestrator._stored_state(turn.thread_id)
+    with pytest.raises(ThreadIdentityConflict):
+        await orchestrator.get_state(turn.thread_id, operator, uuid4())
+    reviewed = await orchestrator.get_operator_state(turn.thread_id, operator, uuid4())
+    after = await orchestrator._stored_state(turn.thread_id)
+    assert reviewed is not None and reviewed.active_ticket_id == mcp.ticket_id
+    assert before == after
+    assert [name for name, _ in mcp.calls[-2:]] == [
+        "get_resident_property",
+        "get_ticket_snapshot",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_operator_cannot_review_unlinked_human_review_thread() -> None:
+    resident_id, property_id, operator_id = uuid4(), uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    orchestrator = _orchestrator(
+        mcp,
+        {
+            "utterance_intent": "NEW_REPAIR",
+            "issue_category": "ELECTRICAL",
+            "issue_location": "客厅",
+            "issue_description_update": "插座冒烟",
+            "safety_flags": ["ELECTRICAL_HAZARD"],
+        },
+    )
+    turn = _turn(resident_id, property_id)
+    result = await orchestrator.start_turn(turn)
+    assert result.active_ticket_id is None
+    operator = AgentCallerContext(
+        actor_type=ActorType.OPERATOR,
+        actor_id=operator_id,
+        user_id=operator_id,
+    )
+    assert await orchestrator.get_operator_state(turn.thread_id, operator, uuid4()) is None
+
+
+@pytest.mark.asyncio
 async def test_revoked_property_blocks_next_turn_and_clears_pending_execution() -> None:
     resident_id, property_id = uuid4(), uuid4()
     mcp = FakePropertyOperationsClient(resident_id, property_id)

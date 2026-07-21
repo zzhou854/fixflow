@@ -11,11 +11,10 @@ demo.
 
 ## Current status
 
-Stage A, Task 6, and Task 7 are complete. Task 8 orchestration is at its
-code-review gate:
+Stage A and Tasks 6-8 are complete. Task 9 is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
-- a minimal FastAPI health endpoint;
+- a FastAPI/JWT boundary with role-separated resident and operator APIs;
 - PostgreSQL with pgvector through Docker Compose, validated healthy;
 - frozen domain states and pure transition rules;
 - SQLAlchemy persistence mappings and three reviewable Alembic migrations;
@@ -46,11 +45,15 @@ code-review gate:
 - a production Streamable HTTP MCP client using the shared eight-tool contract;
 - an isolated official PostgreSQL checkpointer and fresh-snapshot recovery;
 - the natural-language create-ticket and book-appointment main flow;
+- authenticated Agent thread and strict Resume APIs with bounded SSE delivery;
+- an idempotent Argon2-backed development seed;
+- a React/TypeScript/Ant Design resident chat and operator workbench;
+- real API-to-Agent-to-MCP-to-PostgreSQL vertical and cross-resident tests;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Online LLM/embedding providers, JWT/API/SSE, frontend, Outbox, Trace UI, full
-unknown-commit reconciliation, and fault injection remain mandatory roadmap
-work, not cancelled scope.
+Online LLM/embedding providers, Outbox, Trace Runtime/UI, full unknown-commit
+reconciliation, fault injection, and evaluation remain mandatory roadmap work,
+not cancelled scope.
 
 ## Prerequisites
 
@@ -68,12 +71,15 @@ uv run ruff format --check .
 uv run mypy
 docker compose up -d postgres
 uv run alembic upgrade head
-uv run uvicorn app.main:app --app-dir backend --reload
+$env:PYTHONPATH = "backend"; uv run python -m app.api.run
 uv run python -m mcp_server
 $env:PYTHONPATH = "backend"; uv run python -m app.agent_runtime.initialize_checkpoints
+uv run python -m app.dev_seed
+uv run uvicorn app.main:app --app-dir backend --reload
+cd frontend && npm ci && npm run dev
 ```
 
-The last command starts the independent `property-operations-mcp` service at
+The MCP command starts the independent `property-operations-mcp` service at
 `http://127.0.0.1:8765/mcp` by default. Configure `MCP_HOST`, `MCP_PORT`, and
 `DATABASE_URL` through the environment. The service uses Streamable HTTP and
 does not run inside the FastAPI process.
@@ -84,6 +90,21 @@ isolated checkpoint database if needed and lets the official LangGraph saver
 create its four internal tables; business Alembic never manages those tables.
 On Windows this command sets the required Selector event-loop policy before the
 event loop starts. Future Agent-host entrypoints use the same explicit setup.
+
+For a full local demonstration, start PostgreSQL, apply business migrations,
+initialise checkpoints, run the idempotent seed, then start MCP, API, and
+frontend in separate terminals. The seed creates `resident_demo` /
+`ResidentDemo!2026` and `operator_demo` / `OperatorDemo!2026`; these are
+fictitious local-only accounts. Put a strong local `FIXFLOW_JWT_SECRET` in the ignored
+`.env`. The UI clearly displays demo-runtime mode.
+
+Browser live updates use authenticated Fetch Streaming with a Bearer header;
+JWTs never enter SSE URLs. HTTP mutation responses and Thread State carry the
+formal result, while bounded in-memory SSE is non-replayable. Task 9 requires
+`Idempotency-Key` on thread creation, messages, Resume, and operator escalation.
+Operator thread review is read-only and limited to threads linked to a
+database-verified ticket. Stage C still owns persistent events, Outbox, Trace,
+replay, and unknown-commit reconciliation.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
@@ -101,6 +122,8 @@ and never maintained manually.
 - [Typed Agent core](docs/AGENT_STATE.md)
 - [Policy RAG](docs/POLICY_RAG.md)
 - [Implementation roadmap and alignment gates](docs/IMPLEMENTATION_ROADMAP.md)
+- [FastAPI and JWT contracts](docs/API.md)
+- [Resident and operator frontend](docs/FRONTEND.md)
 
 ## Week-1 delivery order
 

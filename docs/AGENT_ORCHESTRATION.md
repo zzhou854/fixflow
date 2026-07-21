@@ -8,9 +8,23 @@ server. PostgreSQL business tables remain the source of ticket and appointment
 truth. A checkpoint contains bounded conversation work state only and is never
 written back over a fresher business snapshot.
 
-The current runtime uses a Scripted LLM and deterministic test embedding in its
-tests. Online providers, FastAPI/JWT, SSE, frontend, Trace, Outbox, Harness, and
-Stage C recovery remain deferred.
+The current product runtime uses deterministic demonstration LLM and embedding
+providers. Online providers, Trace, Outbox, Harness, and Stage C recovery remain
+deferred. Task 9 exposes this same orchestrator through authenticated FastAPI
+thread, message, state, strict Resume, and SSE endpoints.
+
+JWT identity becomes the existing trusted caller context; request bodies cannot
+override it. Each thread read, turn, resume, and SSE subscription still passes
+the Task 8 ownership and current property-authority checks. API responses are
+sanitised views and never expose checkpoint blobs, raw MCP results, or pending
+operation hash material. The bounded in-memory SSE channel is notification-only
+and does not change Graph recovery semantics.
+
+For the demo product path, policy queries append deterministic category and
+requested-topic search context before retrieval. Ordinary resident phrasing can
+therefore retrieve responsibility and appointment evidence without polluting
+the persisted issue description or asking the language model to judge policy
+sufficiency.
 
 ## Nodes and deterministic routing
 

@@ -144,3 +144,53 @@ class AvailableSlotReadModel:
     open_ticket_count: int
     rank: int
     slot_granularity_minutes: int
+
+
+@dataclass(frozen=True, slots=True)
+class TicketListItemReadModel:
+    ticket_id: UUID
+    resident_id: UUID
+    resident_username: str
+    property_id: UUID
+    property_label: str
+    issue_category: IssueCategory
+    issue_location: str
+    severity: Severity
+    ticket_status: TicketStatus
+    rework_count: int
+    version: int
+    appointment: AppointmentReadModel | None
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class TicketHistoryReadModel:
+    from_status: TicketStatus | None
+    to_status: TicketStatus
+    action: str
+    actor_type: ActorType
+    reason_code: str | None
+    reason_text: str | None
+    version_after: int
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AppointmentHistoryReadModel:
+    from_status: AppointmentStatus | None
+    to_status: AppointmentStatus
+    actor_type: ActorType
+    reason_code: str | None
+    reason_text: str | None
+    version_after: int
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class TicketDetailReadModel:
+    ticket: TicketListItemReadModel
+    issue_description: str
+    escalated_from_status: TicketStatus | None
+    ticket_history: tuple[TicketHistoryReadModel, ...]
+    appointment_history: tuple[AppointmentHistoryReadModel, ...]
+    latest_worker_event: WorkerEventReadModel | None

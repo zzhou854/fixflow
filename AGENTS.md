@@ -109,7 +109,8 @@ fault injection, or evaluation, stop for scope review.
 Stage A is complete: the domain and persistence model, transactional Application
 services, deterministic scheduling, and the independent MCP server are committed.
 Task 6 typed Agent State and Task 7 auditable policy retrieval are committed.
-The current approved boundary is Task 8: one LangGraph orchestrator, the formal
-MCP client, isolated PostgreSQL checkpoints, Interrupt/Resume, fresh snapshots,
-stable idempotency, and the first natural-language repair/booking flow. Task 8
-does not authorize online providers, JWT/API, Trace, Outbox, frontend, or Stage C.
+The current approved boundary is Task 9: FastAPI/JWT, trusted caller context,
+Agent/Resident/Operator APIs, bounded development SSE, an idempotent development
+seed, and the React resident/operator first product slice. Task 9 does not
+authorize online providers, Trace Runtime, Outbox, fault infrastructure, or
+Stage C.

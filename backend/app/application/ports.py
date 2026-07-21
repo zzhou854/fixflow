@@ -9,11 +9,17 @@ from types import TracebackType
 from typing import Any, Protocol
 from uuid import UUID
 
-from app.application.query_models import ResidentPropertyReadModel, SlotWorkerSource
+from app.application.query_models import (
+    ResidentPropertyReadModel,
+    SlotWorkerSource,
+    TicketDetailReadModel,
+    TicketListItemReadModel,
+)
 from app.domain.enums import (
     ActorType,
     AppointmentStatus,
     IssueCategory,
+    Severity,
     TicketStatus,
     WorkerSkillType,
 )
@@ -164,6 +170,22 @@ class QueryRepository(Protocol):
         search_window_start: datetime,
         search_window_end: datetime,
     ) -> Sequence[SlotWorkerSource]: ...
+    async def list_resident_properties(
+        self, resident_id: UUID
+    ) -> Sequence[ResidentPropertyReadModel]: ...
+    async def list_resident_tickets(
+        self, resident_id: UUID, *, limit: int, offset: int
+    ) -> Sequence[TicketListItemReadModel]: ...
+    async def list_operator_tickets(
+        self,
+        *,
+        ticket_status: TicketStatus | None,
+        issue_category: IssueCategory | None,
+        severity: Severity | None,
+        limit: int,
+        offset: int,
+    ) -> Sequence[TicketListItemReadModel]: ...
+    async def get_ticket_detail(self, ticket_id: UUID) -> TicketDetailReadModel | None: ...
 
 
 class UnitOfWork(Protocol):

@@ -4,8 +4,8 @@
 
 ```mermaid
 flowchart LR
-    Resident["Resident UI - later"] --> API["FastAPI Online API"]
-    Operator["Operator workbench - later"] --> API
+    Resident["Resident React UI"] --> API["FastAPI + JWT API"]
+    Operator["Operator React workbench"] --> API
     API --> Orchestrator["Single typed orchestrator"]
     Orchestrator --> Services["Deterministic application services"]
     Orchestrator --> LLM["Typed interpret/compose core"]
@@ -15,7 +15,7 @@ flowchart LR
     Services --> PostgreSQL[("PostgreSQL + pgvector")]
 ```
 
-The API, future orchestrator, and MCP handlers depend on application-service
+The API, orchestrator, and MCP handlers depend on application-service
 interfaces. Application services own transactions and call domain/repository
 ports. LLM and workflow code never opens ORM transactions.
 
@@ -46,7 +46,28 @@ and stale retrieval results cannot merge into a newer intent. Task 6 adds the st
 `intent_version` invalidation, provider-neutral LLM contract, versioned prompts,
 and independently tested interpret/compose nodes. FastAPI business endpoints,
 online LLM/embedding integration, Trace, Outbox, Harness, full system evaluation,
-and frontend work remain later roadmap stages.
+remain later roadmap stages. Task 9 adds the trusted JWT caller boundary,
+sanitised Agent/Resident/Operator APIs, bounded development SSE, and the first
+React resident and operator surfaces. It does not move business rules into
+routers or the browser.
+
+## Product API boundary
+
+```text
+React -> FastAPI router -> authenticated caller / API service
+      -> AgentOrchestrator or Application query/service -> PostgreSQL
+AgentOrchestrator -> Streamable HTTP MCP -> Application service -> PostgreSQL
+```
+
+JWT establishes actor identity only. Property access is reread from PostgreSQL,
+and a token never grants a permanent property claim. Routers contain neither
+SQLAlchemy queries nor MCP tool calls. The Task 9 SSE bus is bounded,
+single-process, and non-replayable; it is not Trace or a business fact source
+and is intentionally replaced or augmented in Stage C. Browser SSE uses Fetch
+Streaming with a Bearer header. Mutation HTTP responses and the cleansed Thread
+State endpoint are authoritative delivery paths; reconnect reconciles through
+Thread State. Operator thread review is a separate read-only, ticket-linked and
+sanitised projection, never a bypass around Resident ownership.
 
 ## Policy retrieval boundary
 

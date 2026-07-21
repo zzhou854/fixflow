@@ -22,12 +22,16 @@ from app.application.query_models import (
     GetTicketSnapshotQuery,
     ListAvailableSlotsQuery,
     OpenRepairTicketReadModel,
+    QueryActor,
     ResidentPropertyReadModel,
+    TicketDetailReadModel,
+    TicketListItemReadModel,
     TicketSnapshotReadModel,
 )
 from app.application.query_service import FixFlowQueryService
 from app.application.ticket_service import TicketApplicationService
 from app.application.worker_event_service import WorkerEventApplicationService
+from app.domain.enums import IssueCategory, Severity, TicketStatus
 
 
 class FixFlowApplicationService:
@@ -61,6 +65,38 @@ class FixFlowApplicationService:
         self, query: ListAvailableSlotsQuery
     ) -> tuple[AvailableSlotReadModel, ...]:
         return await self._queries.list_available_slots(query)
+
+    async def list_resident_properties(
+        self, actor: QueryActor
+    ) -> tuple[ResidentPropertyReadModel, ...]:
+        return await self._queries.list_resident_properties(actor)
+
+    async def list_resident_tickets(
+        self, actor: QueryActor, *, limit: int, offset: int
+    ) -> tuple[TicketListItemReadModel, ...]:
+        return await self._queries.list_resident_tickets(actor, limit=limit, offset=offset)
+
+    async def list_operator_tickets(
+        self,
+        actor: QueryActor,
+        *,
+        ticket_status: TicketStatus | None,
+        issue_category: IssueCategory | None,
+        severity: Severity | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[TicketListItemReadModel, ...]:
+        return await self._queries.list_operator_tickets(
+            actor,
+            ticket_status=ticket_status,
+            issue_category=issue_category,
+            severity=severity,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def get_ticket_detail(self, actor: QueryActor, ticket_id: UUID) -> TicketDetailReadModel:
+        return await self._queries.get_ticket_detail(actor, ticket_id)
 
     async def create_ticket(self, command: CreateTicketCommand) -> OperationResult:
         return await self._tickets.create_ticket(command)

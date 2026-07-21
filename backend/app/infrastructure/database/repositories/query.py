@@ -2,21 +2,41 @@
 
 from collections import defaultdict
 from datetime import datetime
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.query_models import ResidentPropertyReadModel, SlotWorkerSource, TimeWindow
-from app.domain.enums import AppointmentStatus, TicketStatus, WorkerSkillType
+from app.application.query_models import (
+    AppointmentHistoryReadModel,
+    AppointmentReadModel,
+    ResidentPropertyReadModel,
+    SlotWorkerSource,
+    TicketDetailReadModel,
+    TicketHistoryReadModel,
+    TicketListItemReadModel,
+    TimeWindow,
+    WorkerEventReadModel,
+)
+from app.domain.enums import (
+    AppointmentStatus,
+    IssueCategory,
+    Severity,
+    TicketStatus,
+    WorkerSkillType,
+)
 from app.infrastructure.database.models import (
     Appointment,
+    AppointmentStatusHistory,
     Property,
     RepairTicket,
     ResidentPropertyRelation,
+    TicketStatusHistory,
+    User,
     Worker,
     WorkerAvailability,
+    WorkerEvent,
     WorkerSkill,
 )
 
@@ -63,6 +83,209 @@ class SqlAlchemyQueryRepository:
                     Property.id == property_id, Property.is_active.is_(True)
                 )
             ),
+        )
+
+    async def list_resident_properties(self, resident_id: UUID) -> list[ResidentPropertyReadModel]:
+        rows = list(
+            await self._session.scalars(
+                select(Property)
+                .join(ResidentPropertyRelation)
+                .where(
+                    ResidentPropertyRelation.resident_id == resident_id,
+                    ResidentPropertyRelation.is_active.is_(True),
+                    Property.is_active.is_(True),
+                )
+                .order_by(Property.community_name, Property.building_no, Property.room_no)
+            )
+        )
+        return [
+            ResidentPropertyReadModel(
+                resident_id=resident_id,
+                property_id=row.id,
+                community_name=row.community_name,
+                building_no=row.building_no,
+                unit_no=row.unit_no,
+                room_no=row.room_no,
+                address_text=row.address_text,
+            )
+            for row in rows
+        ]
+
+    async def list_resident_tickets(
+        self, resident_id: UUID, *, limit: int, offset: int
+    ) -> list[TicketListItemReadModel]:
+        return await self._list_tickets(
+            RepairTicket.resident_id == resident_id,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def list_operator_tickets(
+        self,
+        *,
+        ticket_status: TicketStatus | None,
+        issue_category: IssueCategory | None,
+        severity: Severity | None,
+        limit: int,
+        offset: int,
+    ) -> list[TicketListItemReadModel]:
+        filters: list[Any] = []
+        if ticket_status is not None:
+            filters.append(RepairTicket.status == ticket_status)
+        if issue_category is not None:
+            filters.append(RepairTicket.issue_category == issue_category)
+        if severity is not None:
+            filters.append(RepairTicket.severity == severity)
+        return await self._list_tickets(*filters, limit=limit, offset=offset)
+
+    async def _list_tickets(
+        self, *filters: Any, limit: int, offset: int
+    ) -> list[TicketListItemReadModel]:
+        rows = (
+            await self._session.execute(
+                select(RepairTicket, User, Property, Appointment)
+                .join(User, User.id == RepairTicket.resident_id)
+                .join(Property, Property.id == RepairTicket.property_id)
+                .outerjoin(
+                    Appointment,
+                    (Appointment.ticket_id == RepairTicket.id)
+                    & (Appointment.status == AppointmentStatus.BOOKED),
+                )
+                .where(*filters)
+                .order_by(RepairTicket.updated_at.desc(), RepairTicket.id)
+                .limit(limit)
+                .offset(offset)
+            )
+        ).all()
+        return [
+            self._ticket_item(ticket, user, property_, appointment)
+            for ticket, user, property_, appointment in rows
+        ]
+
+    async def get_ticket_detail(self, ticket_id: UUID) -> TicketDetailReadModel | None:
+        base = (
+            await self._session.execute(
+                select(RepairTicket, User, Property, Appointment)
+                .join(User, User.id == RepairTicket.resident_id)
+                .join(Property, Property.id == RepairTicket.property_id)
+                .outerjoin(
+                    Appointment,
+                    (Appointment.ticket_id == RepairTicket.id)
+                    & (Appointment.status == AppointmentStatus.BOOKED),
+                )
+                .where(RepairTicket.id == ticket_id)
+            )
+        ).one_or_none()
+        if base is None:
+            return None
+        ticket, user, property_, active = base
+        latest = active or await self._session.scalar(
+            select(Appointment)
+            .where(Appointment.ticket_id == ticket_id)
+            .order_by(Appointment.created_at.desc())
+            .limit(1)
+        )
+        ticket_history = list(
+            await self._session.scalars(
+                select(TicketStatusHistory)
+                .where(TicketStatusHistory.ticket_id == ticket_id)
+                .order_by(TicketStatusHistory.version_after)
+            )
+        )
+        appointment_history = (
+            list(
+                await self._session.scalars(
+                    select(AppointmentStatusHistory)
+                    .where(AppointmentStatusHistory.appointment_id == latest.id)
+                    .order_by(AppointmentStatusHistory.version_after)
+                )
+            )
+            if latest is not None
+            else []
+        )
+        event = (
+            await self._session.scalar(
+                select(WorkerEvent)
+                .where(WorkerEvent.appointment_id == latest.id)
+                .order_by(WorkerEvent.sequence_no.desc())
+                .limit(1)
+            )
+            if latest is not None
+            else None
+        )
+        return TicketDetailReadModel(
+            ticket=self._ticket_item(ticket, user, property_, active),
+            issue_description=ticket.issue_description,
+            escalated_from_status=ticket.escalated_from_status,
+            ticket_history=tuple(
+                TicketHistoryReadModel(
+                    from_status=row.from_status,
+                    to_status=row.to_status,
+                    action=row.action,
+                    actor_type=row.actor_type,
+                    reason_code=row.reason_code,
+                    reason_text=row.reason_text,
+                    version_after=row.version_after,
+                    created_at=row.created_at,
+                )
+                for row in ticket_history
+            ),
+            appointment_history=tuple(
+                AppointmentHistoryReadModel(
+                    from_status=row.from_status,
+                    to_status=row.to_status,
+                    actor_type=row.actor_type,
+                    reason_code=row.reason_code,
+                    reason_text=row.reason_text,
+                    version_after=row.version_after,
+                    created_at=row.created_at,
+                )
+                for row in appointment_history
+            ),
+            latest_worker_event=(
+                WorkerEventReadModel(
+                    event_id=event.id,
+                    event_type=event.event_type,
+                    sequence_no=event.sequence_no,
+                    subject_worker_id=event.subject_worker_id,
+                )
+                if event is not None
+                else None
+            ),
+        )
+
+    @classmethod
+    def _ticket_item(
+        cls, ticket: RepairTicket, user: User, property_: Property, appointment: Appointment | None
+    ) -> TicketListItemReadModel:
+        return TicketListItemReadModel(
+            ticket_id=ticket.id,
+            resident_id=ticket.resident_id,
+            resident_username=user.username,
+            property_id=ticket.property_id,
+            property_label=property_.address_text,
+            issue_category=ticket.issue_category,
+            issue_location=ticket.issue_location,
+            severity=ticket.severity,
+            ticket_status=ticket.status,
+            rework_count=ticket.rework_count,
+            version=ticket.version,
+            appointment=cls._appointment(appointment),
+            updated_at=ticket.updated_at,
+        )
+
+    @staticmethod
+    def _appointment(row: Appointment | None) -> AppointmentReadModel | None:
+        if row is None or row.scheduled_range.lower is None or row.scheduled_range.upper is None:
+            return None
+        return AppointmentReadModel(
+            appointment_id=row.id,
+            worker_id=row.worker_id,
+            purpose=row.purpose,
+            status=row.status,
+            scheduled_start=row.scheduled_range.lower,
+            scheduled_end=row.scheduled_range.upper,
+            appointment_version=row.version,
         )
 
     async def list_slot_worker_sources(

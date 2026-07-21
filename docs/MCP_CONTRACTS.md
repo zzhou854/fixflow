@@ -15,7 +15,9 @@ not import ORM models or Repository implementations and do not own authorization
 transactions, idempotency, state transitions, or optimistic locking. The server
 currently trusts that its upstream caller supplies an authenticated actor
 identity; the Application layer still checks that identity against database-backed
-business authorization. JWT authentication is deferred to Stage B.
+business authorization. Task 9 JWT authentication terminates at FastAPI and
+produces a trusted caller context; MCP still receives typed actor context from
+the orchestrator and does not parse browser tokens.
 
 Start the process locally with:
 
@@ -173,8 +175,9 @@ shuts down the server.
 Task 8 adds a lifecycle-managed Agent-runtime Streamable HTTP client. It
 discovers exactly these eight tools, validates their request schemas,
 `contract_version`, and structured results, and exposes only typed methods to
-the deterministic Graph. JWT, FastAPI business routes, Outbox, Trace runtime,
-frontend, Harness, and full evaluation remain deferred mandatory roadmap work.
+the deterministic Graph. Task 9 adds JWT/FastAPI and frontend above that client
+without mounting or bypassing MCP. Outbox, Trace runtime, Harness, and full
+evaluation remain deferred mandatory roadmap work.
 
 ## Shared contract ownership
 
