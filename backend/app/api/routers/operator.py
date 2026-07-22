@@ -12,11 +12,66 @@ from app.api.schemas.tickets import (
     TicketListItemResponse,
     TicketPageResponse,
 )
+from app.api.schemas.trace import (
+    AgentRunPageResponse,
+    AgentRunResponse,
+    TraceEventPageResponse,
+)
 from app.application.auth import AuthenticatedIdentity
 from app.application.query_models import QueryActor
 from app.domain.enums import IssueCategory, Severity, TicketStatus
+from app.infrastructure.database.models.observability import TraceSource
 
 router = APIRouter(prefix="/api/v1/operator", tags=["operator"])
+
+
+@router.get("/threads/{thread_id}/runs", response_model=AgentRunPageResponse)
+async def list_thread_runs(
+    thread_id: UUID,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> AgentRunPageResponse:
+    if services.operator_trace is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "执行审计暂不可用。", retryable=True)
+    rows = await services.operator_trace.list_runs(identity, thread_id, limit=limit, offset=offset)
+    if rows is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已关联工单的会话。")
+    return AgentRunPageResponse(items=rows, limit=limit, offset=offset)
+
+
+@router.get("/runs/{run_id}", response_model=AgentRunResponse)
+async def get_run(
+    run_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> AgentRunResponse:
+    if services.operator_trace is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "执行审计暂不可用。", retryable=True)
+    row = await services.operator_trace.get_run(identity, run_id)
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已授权的执行记录。")
+    return row
+
+
+@router.get("/runs/{run_id}/events", response_model=TraceEventPageResponse)
+async def list_run_events(
+    run_id: UUID,
+    source: TraceSource | None = None,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> TraceEventPageResponse:
+    if services.operator_trace is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "执行审计暂不可用。", retryable=True)
+    rows = await services.operator_trace.list_events(
+        identity, run_id, source=source, limit=limit, offset=offset
+    )
+    if rows is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已授权的执行事件。")
+    return TraceEventPageResponse(items=rows, limit=limit, offset=offset)
 
 
 @router.get("/tickets", response_model=TicketPageResponse)
@@ -76,6 +131,8 @@ async def escalate(
     services: ApiServices = Depends(get_services),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
 ) -> OperationResponse:
+    replay_trace_id = uuid4()
+    key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
     result = await services.idempotency.execute(
         caller_id=identity.actor_id,
         scope=f"operator:escalate:{ticket_id}",
@@ -89,6 +146,15 @@ async def escalate(
             reason_text=request.reason_text,
             evidence=request.evidence,
             trace_id=uuid4(),
+        ),
+        on_replay=lambda result: services.operator_actions.record_api_replay(
+            result,
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
+        ),
+        on_conflict=lambda: services.operator_actions.record_api_conflict(
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
         ),
     )
     return OperationResponse.model_validate(result)

@@ -41,6 +41,7 @@ from app.infrastructure.database.models import (
     Appointment,
     AppointmentStatusHistory,
     IdempotencyRecord,
+    OutboxEvent,
     Property,
     RepairTicket,
     ResidentPropertyRelation,
@@ -260,6 +261,115 @@ async def _complete_repair(
         assert result.ok, result
         if event_type is WorkerEventType.STARTED:
             ticket_version = 3
+
+
+@pytest.mark.asyncio
+async def test_ticket_and_outbox_commit_atomically_and_replay_has_no_duplicate_event(
+    application_env: ApplicationEnvironment,
+) -> None:
+    env = application_env
+    command = CreateTicketCommand(
+        metadata=_metadata(env, key=f"outbox-{uuid4().hex}"),
+        resident_id=env.resident_id,
+        property_id=env.property_id,
+        issue_category=IssueCategory.WATER_LEAK,
+        issue_location=f"outbox-{uuid4().hex}",
+        issue_description="transactional outbox acceptance",
+        severity=Severity.MEDIUM,
+    )
+    first = await env.service.create_ticket(command)
+    replay = await env.service.create_ticket(command)
+    assert first.ok and replay.replayed
+    async with env.sessions() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(OutboxEvent)
+                .where(
+                    OutboxEvent.aggregate_id == first.resource_id,
+                    OutboxEvent.event_type == "ticket.created",
+                )
+            )
+            == 1
+        )
+
+
+@pytest.mark.asyncio
+async def test_booking_reschedule_and_escalation_emit_closed_outbox_events(
+    application_env: ApplicationEnvironment,
+) -> None:
+    env = application_env
+    ticket_id = await _create_ticket(env)
+    appointment_id = await _book(env, ticket_id)
+    rescheduled = await env.service.reschedule_appointment(
+        RescheduleAppointmentCommand(
+            metadata=_metadata(env),
+            ticket_id=ticket_id,
+            appointment_id=appointment_id,
+            worker_id=env.worker_ids[0],
+            starts_at=env.slot + timedelta(hours=2),
+            ends_at=env.slot + timedelta(hours=3),
+            expected_ticket_version=2,
+            expected_appointment_version=1,
+        )
+    )
+    assert rescheduled.ok
+    escalated = await env.service.escalate_ticket(
+        EscalateTicketCommand(
+            metadata=_metadata(env, actor_type=ActorType.OPERATOR, actor_id=env.operator_id),
+            ticket_id=ticket_id,
+            expected_ticket_version=3,
+            reason_code="OPERATOR_REVIEW",
+            reason_text="requires controlled review",
+            evidence=("operator-reviewed",),
+        )
+    )
+    assert escalated.ok
+    async with env.sessions() as session:
+        event_types = set(
+            await session.scalars(
+                select(OutboxEvent.event_type).where(
+                    (OutboxEvent.aggregate_id == ticket_id)
+                    | (OutboxEvent.payload["ticket_id"].as_string() == str(ticket_id))
+                )
+            )
+        )
+    assert {
+        "ticket.created",
+        "ticket.status_changed",
+        "appointment.booked",
+        "appointment.rescheduled",
+        "ticket.escalated",
+    } <= event_types
+
+
+@pytest.mark.asyncio
+async def test_rejected_business_mutation_writes_no_outbox_event(
+    application_env: ApplicationEnvironment,
+) -> None:
+    env = application_env
+    trace_id = uuid4()
+    result = await env.service.create_ticket(
+        CreateTicketCommand(
+            metadata=replace(_metadata(env), trace_id=trace_id),
+            resident_id=uuid4(),
+            property_id=env.property_id,
+            issue_category=IssueCategory.WATER_LEAK,
+            issue_location="unauthorized",
+            issue_description="must roll back",
+            severity=Severity.MEDIUM,
+        )
+    )
+    assert not result.ok
+    async with env.sessions() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(OutboxEvent)
+                .where(OutboxEvent.trace_id == trace_id)
+            )
+            == 0
+        )
 
 
 async def _start_repair(env: ApplicationEnvironment, ticket_id: UUID, appointment_id: UUID) -> None:

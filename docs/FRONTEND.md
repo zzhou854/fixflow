@@ -17,8 +17,11 @@ The operator page provides ticket status/category/severity filters, business
 details, ticket and appointment histories, and the latest Worker Event. A known
 Agent thread can be inspected by the Operator Thread API only when its Agent
 State ticket link is revalidated against the database resident/property ticket
-snapshot. The UI never guesses a relation or fabricates policy, workflow, or
-Trace data. Pre-ticket human-review discovery and Trace Runtime remain unavailable.
+snapshot. The UI never guesses a relation or fabricates policy or workflow
+data. Pre-ticket human-review discovery remains unavailable. For an authorized,
+ticket-linked thread the workbench shows a paged, source-filterable persistent
+execution timeline. It labels business histories and Agent Trace as separate
+views and renders a safe summary rather than raw JSON.
 
 ## Security boundary
 

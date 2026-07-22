@@ -50,6 +50,9 @@ allow-list. Wildcard origins are rejected and CORS is not authentication.
 | GET | `/api/v1/operator/tickets` | operator | filtered paged work list |
 | GET | `/api/v1/operator/tickets/{ticket_id}` | operator | histories and latest event |
 | GET | `/api/v1/operator/threads/{thread_id}` | operator | known thread review |
+| GET | `/api/v1/operator/threads/{thread_id}/runs` | operator | paged sanitized runs |
+| GET | `/api/v1/operator/runs/{run_id}` | operator | one authorized run |
+| GET | `/api/v1/operator/runs/{run_id}/events` | operator | paged/filterable trace events |
 | POST | `/api/v1/operator/tickets/{ticket_id}/escalate` | operator | formal escalation service |
 
 The resume variants are `PROVIDE_INFORMATION`, `SELECT_DUPLICATE_TICKET`, and
@@ -65,6 +68,10 @@ single-process replay record keyed by caller, route scope, and key. An identical
 payload replays the same HTTP result; a different payload returns `409
 IDEMPOTENCY_CONFLICT`. This API retry boundary is separate from durable
 Application/Tool idempotency. API replay records do not survive process restart.
+When persistent Trace is available, a replay or same-key conflict may emit a
+runless sanitized API audit event with a new correlation ID, the original Run
+ID where known, and only a SHA-256 key fingerprint. It never starts another
+Graph Run and never persists the raw `Idempotency-Key`.
 
 Operator thread review is a dedicated read-only projection. An active Operator
 may inspect only a thread whose `active_ticket_id` resolves to a real ticket
@@ -93,8 +100,18 @@ terminal events take priority. `assistant_delta` is a
 demonstration chunk, not provider token streaming. SSE is not a business fact
 source: every mutation response already contains the final result. On disconnect
 or reconnect the browser calls Thread State to reconcile. `Last-Event-ID` does
-not replay history, and process restart loses events; persistent delivery is
-deferred to Stage C Outbox/Trace.
+not replay history, and process restart loses SSE events. Persistent Trace is
+separately queryable and does not change these SSE delivery semantics.
+
+## Persistent execution review
+
+Task 10 assigns a server-generated `run_id` to each thread creation, message,
+Resume, and formal operator action. Trace start is committed before Graph
+execution. The operator run/event routes reuse the existing ticket-linked
+thread review boundary; arbitrary identifiers do not grant access. Responses
+contain only the closed, sanitized Trace projection and never expose checkpoint
+state, conversations, prompts, raw tool/provider responses, SQL, or credentials.
+Source filtering and bounded `limit`/`offset` pagination are supported.
 
 ## Errors
 

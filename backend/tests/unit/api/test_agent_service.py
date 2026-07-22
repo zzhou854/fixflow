@@ -14,18 +14,22 @@ from app.agent_runtime.orchestration import AgentOrchestrator
 from app.api.errors import ApiError
 from app.api.schemas.agent import ProvideInformationResumeRequest, SSEEvent
 from app.api.services.agent import AgentApiService
+from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.sse import SSEEventBus
 from app.application.auth import AuthenticatedIdentity
 from app.application.services import FixFlowApplicationService
 from app.domain.enums import ActorType, WorkflowStage
+from app.trace.runtime import TraceRuntime
 
 
 class FakeOrchestrator:
     def __init__(self, result: AgentRunResult) -> None:
         self.result = result
+        self.start_calls = 0
 
     async def start_turn(self, turn: object) -> AgentRunResult:
         del turn
+        self.start_calls += 1
         return self.result
 
     async def resume(self, thread_id: UUID, caller: object, resume: object) -> AgentRunResult:
@@ -48,6 +52,33 @@ class FakeOrchestrator:
             run_status=self.result.run_status,
             interrupt=self.result.interrupt,
         )
+
+
+class FailingTrace:
+    async def start_run(self, command: object) -> None:
+        del command
+        raise RuntimeError("trace unavailable")
+
+
+class FlakyTrace:
+    def __init__(self) -> None:
+        self.start_attempts = 0
+
+    async def start_run(self, command: object) -> None:
+        del command
+        self.start_attempts += 1
+        if self.start_attempts == 1:
+            raise RuntimeError("trace unavailable")
+
+    async def append_event(self, **kwargs: object) -> None:
+        del kwargs
+
+    async def finish_run(self, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    @staticmethod
+    def event_key(*parts: object) -> str:
+        return ":".join(str(part) for part in parts)
 
 
 def _service(result: AgentRunResult, events: SSEEventBus) -> AgentApiService:
@@ -181,3 +212,79 @@ async def test_stale_resume_maps_to_stable_api_conflict() -> None:
         )
     assert raised.value.status_code == 409
     assert raised.value.code == "STALE_RESUME"
+
+
+@pytest.mark.asyncio
+async def test_trace_start_failure_prevents_graph_execution() -> None:
+    result = AgentRunResult(
+        thread_id=uuid4(),
+        trace_id=uuid4(),
+        run_status=RunStatus.COMPLETED,
+        workflow_stage=WorkflowStage.DONE,
+    )
+    orchestrator = FakeOrchestrator(result)
+    trace = cast(TraceRuntime, FailingTrace())
+    service = AgentApiService(
+        cast(AgentOrchestrator, orchestrator),
+        cast(FixFlowApplicationService, object()),
+        SSEEventBus(),
+        trace,
+    )
+    with pytest.raises(ApiError) as raised:
+        await service.send_message(
+            _identity(),
+            thread_id=result.thread_id,
+            message="查询状态",
+            message_id=uuid4(),
+            reference_time=datetime.now(UTC),
+            timezone_name="UTC",
+        )
+    assert raised.value.status_code == 503
+    assert orchestrator.start_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_failed_trace_start_does_not_permanently_reserve_api_idempotency_key() -> None:
+    result = AgentRunResult(
+        thread_id=uuid4(),
+        trace_id=uuid4(),
+        run_status=RunStatus.COMPLETED,
+        workflow_stage=WorkflowStage.DONE,
+    )
+    orchestrator = FakeOrchestrator(result)
+    service = AgentApiService(
+        cast(AgentOrchestrator, orchestrator),
+        cast(FixFlowApplicationService, object()),
+        SSEEventBus(),
+        cast(TraceRuntime, FlakyTrace()),
+    )
+    store = ApiIdempotencyStore()
+    identity = _identity()
+
+    async def execute() -> object:
+        return await service.send_message(
+            identity,
+            thread_id=result.thread_id,
+            message="查询状态",
+            message_id=uuid4(),
+            reference_time=datetime.now(UTC),
+            timezone_name="UTC",
+        )
+
+    with pytest.raises(ApiError) as raised:
+        await store.execute(
+            caller_id=identity.actor_id,
+            scope=f"agent:message:{result.thread_id}",
+            key="retry-after-trace-start-failure",
+            payload={"message": "查询状态"},
+            operation=execute,
+        )
+    assert raised.value.code == "SERVICE_UNAVAILABLE"
+    await store.execute(
+        caller_id=identity.actor_id,
+        scope=f"agent:message:{result.thread_id}",
+        key="retry-after-trace-start-failure",
+        payload={"message": "查询状态"},
+        operation=execute,
+    )
+    assert orchestrator.start_calls == 1

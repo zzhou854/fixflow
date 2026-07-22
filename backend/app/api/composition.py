@@ -12,6 +12,7 @@ from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService
 from app.api.services.operator_review import OperatorThreadReviewService
+from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
 from app.application.auth import AuthService
 from app.application.ports import UnitOfWork
@@ -19,6 +20,8 @@ from app.application.services import FixFlowApplicationService
 from app.config import Settings
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
+from app.trace.runtime import TraceRuntime
+from app.trace.sanitizer import TraceSanitizer
 
 
 @asynccontextmanager
@@ -42,6 +45,13 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
     )
     events = SSEEventBus()
     idempotency = ApiIdempotencyStore()
+    trace = TraceRuntime(
+        sessions,
+        TraceSanitizer(
+            max_payload_bytes=settings.trace_max_payload_bytes,
+            max_string_length=settings.trace_max_string_length,
+        ),
+    )
     try:
         async with open_agent_orchestrator(
             settings,
@@ -49,13 +59,15 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
             embedding_provider=DemoDeterministicEmbeddingProvider(),
             language_model_name="fixflow-demo-scripted-v1",
         ) as orchestrator:
+            operator_review = OperatorThreadReviewService(orchestrator)
             yield ApiServices(
                 auth=auth,
                 application=application,
                 orchestrator=orchestrator,
-                agent=AgentApiService(orchestrator, application, events),
-                operator_actions=OperatorActionService(application),
-                operator_review=OperatorThreadReviewService(orchestrator),
+                agent=AgentApiService(orchestrator, application, events, trace),
+                operator_actions=OperatorActionService(application, trace),
+                operator_review=operator_review,
+                operator_trace=OperatorTraceQueryService(operator_review, trace),
                 idempotency=idempotency,
                 events=events,
                 runtime_mode=settings.runtime_mode,

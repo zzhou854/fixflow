@@ -45,11 +45,14 @@ exactly before vector comparison; evidence IDs survive clean database rebuilds,
 and stale retrieval results cannot merge into a newer intent. Task 6 adds the strict Agent State, deterministic
 `intent_version` invalidation, provider-neutral LLM contract, versioned prompts,
 and independently tested interpret/compose nodes. FastAPI business endpoints,
-online LLM/embedding integration, Trace, Outbox, Harness, full system evaluation,
-remain later roadmap stages. Task 9 adds the trusted JWT caller boundary,
+online LLM/embedding integration, Harness, and full system evaluation remain
+later roadmap stages. Task 9 adds the trusted JWT caller boundary,
 sanitised Agent/Resident/Operator APIs, bounded development SSE, and the first
 React resident and operator surfaces. It does not move business rules into
 routers or the browser.
+Task 10 adds a transactional domain Outbox, fenced leased at-least-once dispatcher,
+persistent sanitized Trace control plane, and ticket-linked operator execution
+timeline without changing the Single Orchestrator or domain state machines.
 
 ## Product API boundary
 
@@ -62,12 +65,19 @@ AgentOrchestrator -> Streamable HTTP MCP -> Application service -> PostgreSQL
 JWT establishes actor identity only. Property access is reread from PostgreSQL,
 and a token never grants a permanent property claim. Routers contain neither
 SQLAlchemy queries nor MCP tool calls. The Task 9 SSE bus is bounded,
-single-process, and non-replayable; it is not Trace or a business fact source
-and is intentionally replaced or augmented in Stage C. Browser SSE uses Fetch
+single-process, and non-replayable; it is not Trace or a business fact source.
+The persistent Trace added in Task 10 is a separate audit query path and does
+not alter SSE delivery. Browser SSE uses Fetch
 Streaming with a Bearer header. Mutation HTTP responses and the cleansed Thread
 State endpoint are authoritative delivery paths; reconnect reconciles through
 Thread State. Operator thread review is a separate read-only, ticket-linked and
 sanitised projection, never a bypass around Resident ownership.
+
+Every Outbox claim has a fresh UUID fencing token. Acknowledgement and retry
+writes are conditional on the active token, so an expired worker cannot alter
+a reclaimed or dispatched row. A terminal Trace lifecycle event and its Run
+status commit together; later DOMAIN/OUTBOX audit evidence is allowed on the
+same Run, while late Agent/MCP/API control events are rejected.
 
 ## Policy retrieval boundary
 
@@ -161,10 +171,13 @@ and revision `20260719_0002` adds Task 4 audit links without rewriting it;
 | `appointment_status_history` | Every accepted transition with actor, Trace, and version data |
 | `worker_events` | Canonical append-only behavior linked to its appointment (and through it the ticket), subject worker, real recording actor, Trace, sequence, and source idempotency key |
 | `idempotency_records` | Unique operation scope/key, request hash, result reference, and status |
+| `agent_runs` | One server-owned message/resume/operator run with trigger, terminal status, actor context, trace identity, and sequence allocator |
+| `agent_trace_events` | Sanitized append-only API/Agent/MCP/domain events with per-run sequence and stable event identity |
+| `outbox_events` | Same-transaction domain events with lease, retry/backoff, dispatch, and dead-letter state |
 
-Future-phase tables such as conversations, checkpoints, policies, Trace,
-Outbox, dead letters, and any additional ticket event stream are documented in
-the project specification and roadmap but are not created yet.
+Official Checkpoint tables remain in the isolated Checkpoint database. Replay,
+fault-harness, evaluation, and any additional ticket event stream remain later
+roadmap work.
 
 ## Concurrency and transaction boundary
 
@@ -175,9 +188,10 @@ the project specification and roadmap but are not created yet.
   ticket. Appointment interval and worker fields are immutable after creation.
 - Idempotency keys have a database unique constraint and are scoped to the
   business operation/actor as defined during week 1.
-- A service commits the business mutation and history in one transaction.
-- In phase 3, externally observed events also write an Outbox record in that
-  transaction.
+- A service commits the business mutation, history, request-idempotency result,
+  and closed domain Outbox events in one transaction.
+- Dispatcher claim transactions are short. Consumers run after the claim
+  commit, and expired leases make crash recovery safe for at-least-once delivery.
 
 Repository ports are use-case focused rather than generic CRUD interfaces.
 Application services acquire request idempotency, authorize the actor, reread

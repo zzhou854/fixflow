@@ -3,6 +3,7 @@
 from dataclasses import asdict, replace
 
 from app.application.errors import AuthorizationFailed, ResourceNotFound
+from app.application.events import AggregateType, DomainEventType, build_domain_event
 from app.application.models import (
     CreateTicketCommand,
     EscalateTicketCommand,
@@ -96,6 +97,23 @@ class TicketApplicationService(TransactionalService):
                 version_after=1,
             )
         )
+        await uow.outbox.add(
+            build_domain_event(
+                event_type=DomainEventType.TICKET_CREATED,
+                aggregate_type=AggregateType.TICKET,
+                aggregate_id=ticket_id,
+                aggregate_version=ticket.version,
+                metadata=metadata,
+                scope="create_ticket",
+                payload={
+                    "status": ticket.status.value,
+                    "issue_category": ticket.issue_category.value,
+                    "severity": ticket.severity.value,
+                    "property_id": str(ticket.property_id),
+                    "resident_id": str(ticket.resident_id),
+                },
+            )
+        )
         return OperationResult(
             ok=True,
             code="TICKET_CREATED",
@@ -177,6 +195,14 @@ class TicketApplicationService(TransactionalService):
                 reason_text=command.explanation,
             )
         )
+        await self._emit_ticket_status_changed(
+            uow,
+            ticket,
+            updated,
+            action.value,
+            command.metadata,
+            scope="review_repair",
+        )
         return OperationResult(
             ok=True,
             code="REPAIR_ACCEPTED" if command.accepted else "REWORK_REQUESTED",
@@ -236,6 +262,29 @@ class TicketApplicationService(TransactionalService):
                 reason_code=command.reason_code,
                 reason_text=command.reason_text,
                 evidence=command.evidence,
+            )
+        )
+        await self._emit_ticket_status_changed(
+            uow,
+            ticket,
+            updated,
+            TicketAction.ESCALATE.value,
+            command.metadata,
+            scope="escalate_ticket",
+        )
+        await uow.outbox.add(
+            build_domain_event(
+                event_type=DomainEventType.TICKET_ESCALATED,
+                aggregate_type=AggregateType.TICKET,
+                aggregate_id=updated.ticket_id,
+                aggregate_version=updated.version,
+                metadata=command.metadata,
+                scope="escalate_ticket",
+                payload={
+                    "from_status": ticket.status.value,
+                    "to_status": updated.status.value,
+                    "reason_code": command.reason_code,
+                },
             )
         )
         return OperationResult(
@@ -320,6 +369,14 @@ class TicketApplicationService(TransactionalService):
                 reason_text=command.reason_text,
                 evidence=command.evidence,
             )
+        )
+        await self._emit_ticket_status_changed(
+            uow,
+            ticket,
+            updated,
+            f"RECOVER_{command.disposition.value}",
+            command.metadata,
+            scope="recover_ticket",
         )
         return OperationResult(
             ok=True,

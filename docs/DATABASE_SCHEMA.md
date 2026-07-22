@@ -28,6 +28,9 @@ and idempotency records. Pure domain objects and transition rules remain under
 | `idempotency_records` | Mutation identity, request hash, execution state, and durable result envelope |
 | `policy_documents` | Versioned synthetic-policy metadata, category/topic, authority, effective interval, source/content identity, and exact embedding profile |
 | `policy_chunks` | Bounded evidence text, explicit search terms, paired decision fields, and fixed `vector(384)` embedding |
+| `agent_runs` | Persistent execution lifecycle, terminal marker, trusted caller context, and per-run sequence allocator |
+| `agent_trace_events` | Sanitized, idempotent control/audit evidence, either associated with one Run or explicitly runless |
+| `outbox_events` | Transactional domain-event delivery evidence with retry state and fenced dispatcher lease |
 
 All core foreign keys explicitly use `ON DELETE RESTRICT`. Users, properties,
 workers, tickets, appointments, histories, worker events, and idempotency rows
@@ -112,6 +115,21 @@ because disablement affects retrieval visibility, not historical integrity.
 Upgrade ensures `vector` and `btree_gist`; downgrade removes only these policy
 tables and indexes and preserves shared extensions.
 
+Revision `20260721_0004` (`add_outbox_and_trace_runtime`) adds exactly
+`agent_runs`, `agent_trace_events`, and `outbox_events`. Runs have a closed
+trigger/status vocabulary, terminal-timestamp invariant, and a terminal-event
+marker that must agree with the final status. A partial unique index permits at
+most one lifecycle terminal Trace Event per Run. Trace events have a unique
+event key; `run_id` and `sequence_number` are paired (both absent for a runless
+event, otherwise a positive unique sequence within that Run). Outbox rows have
+a stable unique event key, positive aggregate version, nonnegative attempts,
+closed delivery state, dispatch index, retry availability, safe failure
+summary, and optional run/thread correlation. A `PROCESSING` row must have
+exactly `claimed_by`, a server-generated UUID `claim_token`, and
+`claim_expires_at`; all three are null in every other state. Downgrade removes
+only these three tables and does not alter domain, policy, or Checkpoint
+storage.
+
 Integration tests create randomly named databases with the prefix
 `fixflow_migration_test_`, use the project PostgreSQL container only as the
 administrative server, and always terminate remaining test connections before
@@ -122,10 +140,10 @@ supersession, idempotency uniqueness, timezone-aware fields, and ORM relationshi
 loading. The normal `fixflow` development database is not migrated or cleared by
 these tests.
 
-## Deferred tables
+## Separate and deferred storage
 
-This revision deliberately does not create conversations, Agent checkpoints,
-Trace runs/events, Outbox/dead-letter records, policy documents/chunks/embeddings,
-or any frontend and evaluation storage. Policy documents/chunks are now supplied
-by revision `20260720_0003`; the remaining deferred tables require separately
-reviewed future migrations.
+Official LangGraph Checkpoint tables remain in the isolated checkpoint
+database and are never managed by business Alembic. Task 10 now supplies Trace
+and Outbox storage; conversations, Replay scenarios, fault-harness records, and
+evaluation storage remain deferred and require separately reviewed migrations
+only if their later design truly needs persistence.

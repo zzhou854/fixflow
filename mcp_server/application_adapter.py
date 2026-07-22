@@ -179,6 +179,9 @@ class MCPApplicationAdapter:
             trace_id=request.trace_id,
             idempotency_key=request.idempotency_key,
             occurred_at=self._clock(),
+            run_id=request.run_id,
+            thread_id=request.thread_id,
+            operation_id=request.operation_id,
         )
 
     @staticmethod

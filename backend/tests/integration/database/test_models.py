@@ -30,6 +30,9 @@ def test_metadata_contains_exact_core_tables() -> None:
         "idempotency_records",
         "policy_documents",
         "policy_chunks",
+        "agent_runs",
+        "agent_trace_events",
+        "outbox_events",
     }
 
 

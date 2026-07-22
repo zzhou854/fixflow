@@ -2,7 +2,7 @@
 
 import asyncio
 import socket
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -24,17 +24,23 @@ from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService
 from app.api.services.operator_review import OperatorThreadReviewService
+from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
 from app.application.auth import AuthService
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
-from app.infrastructure.database.models import PolicyChunk, PolicyDocument, User
+from app.infrastructure.database.models import AgentRun, PolicyChunk, PolicyDocument, User
 from app.infrastructure.database.policy_uow import SqlAlchemyPolicyUnitOfWork
+from app.outbox.consumer import TraceDomainEventProjector
+from app.outbox.dispatcher import OutboxDispatcher
+from app.outbox.repository import SqlAlchemyOutboxDispatchRepository
 from app.policy.corpus import load_policy_corpus
 from app.policy.import_service import PolicyImportService
 from app.policy.retrieval import PolicyRetrievalService
+from app.trace.runtime import TraceRuntime
+from app.trace.sanitizer import TraceSanitizer
 from argon2 import PasswordHasher
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -122,16 +128,22 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     jwt_secret="vertical-test-secret-longer-than-thirty-two-characters",
                     password_hasher=password_hasher,
                 )
+                trace = TraceRuntime(
+                    mcp_env.sessions,
+                    TraceSanitizer(max_payload_bytes=8192, max_string_length=1024),
+                )
+                operator_review = OperatorThreadReviewService(orchestrator)
                 services = ApiServices(
                     auth=auth,
                     application=mcp_env.application,
                     orchestrator=orchestrator,
-                    agent=AgentApiService(orchestrator, mcp_env.application, events),
-                    operator_actions=OperatorActionService(mcp_env.application),
-                    operator_review=OperatorThreadReviewService(orchestrator),
+                    agent=AgentApiService(orchestrator, mcp_env.application, events, trace),
+                    operator_actions=OperatorActionService(mcp_env.application, trace),
+                    operator_review=operator_review,
                     idempotency=ApiIdempotencyStore(),
                     events=events,
                     runtime_mode="demo",
+                    operator_trace=OperatorTraceQueryService(operator_review, trace),
                 )
                 app = create_app(services)
                 async with AsyncClient(
@@ -162,6 +174,21 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     assert started.status_code == 200
                     assert body["interrupt"] is not None, body["policy_status"]
                     assert body["interrupt"]["kind"] == "APPOINTMENT_SLOT_SELECTION"
+                    started_replay = await http.post(
+                        "/api/v1/agent/threads",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Idempotency-Key": "vertical-create-thread",
+                        },
+                        json={
+                            "property_id": str(mcp_env.property_id),
+                            "initial_message": "厨房水槽下漏水，希望后天上午维修",
+                            "reference_time": (mcp_env.slot - timedelta(days=2)).isoformat(),
+                            "timezone_name": "UTC",
+                        },
+                    )
+                    assert started_replay.status_code == 200
+                    assert started_replay.json() == body
                     resumed = await http.post(
                         f"/api/v1/agent/threads/{body['thread_id']}/resume",
                         headers={
@@ -180,6 +207,41 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     assert final["run_status"] == "COMPLETED"
                     assert final["active_ticket"]["ticket_status"] == "SCHEDULED"
                     assert final["active_appointment"]["status"] == "BOOKED"
+                    resumed_replay = await http.post(
+                        f"/api/v1/agent/threads/{body['thread_id']}/resume",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Idempotency-Key": "vertical-resume-thread",
+                        },
+                        json={
+                            "kind": "SELECT_APPOINTMENT_SLOT",
+                            "intent_version": body["interrupt"]["intent_version"],
+                            "candidates_fingerprint": body["interrupt"]["candidates_fingerprint"],
+                            "rank": 1,
+                        },
+                    )
+                    assert resumed_replay.status_code == 200
+                    assert resumed_replay.json() == final
+                    async with mcp_env.sessions() as session:
+                        run_count = await session.scalar(
+                            select(func.count())
+                            .select_from(AgentRun)
+                            .where(AgentRun.thread_id == UUID(body["thread_id"]))
+                        )
+                        assert run_count == 2
+
+                    dispatcher = OutboxDispatcher(
+                        SqlAlchemyOutboxDispatchRepository(mcp_env.sessions),
+                        TraceDomainEventProjector(trace),
+                        worker_id="vertical-dispatcher",
+                        lease_seconds=30,
+                        batch_size=50,
+                        max_attempts=3,
+                        retry_base_seconds=1,
+                        clock=lambda: datetime.now(UTC),
+                    )
+                    assert await dispatcher.dispatch_once() >= 3
+                    assert await dispatcher.dispatch_once() == 0
 
                     other_login = await http.post(
                         "/api/v1/auth/login",
@@ -215,6 +277,29 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                             UUID(final["active_ticket"]["ticket_id"]),
                         )
                         == 1
+                    )
+                    assert (
+                        await connection.fetchval(
+                            "SELECT count(*) FROM agent_runs WHERE thread_id=$1",
+                            UUID(body["thread_id"]),
+                        )
+                        == 2
+                    )
+                    assert (
+                        await connection.fetchval(
+                            "SELECT count(*) FROM outbox_events "
+                            "WHERE thread_id=$1 AND status='DISPATCHED'",
+                            UUID(body["thread_id"]),
+                        )
+                        >= 3
+                    )
+                    assert (
+                        await connection.fetchval(
+                            "SELECT count(*) FROM agent_trace_events "
+                            "WHERE thread_id=$1 AND source='DOMAIN'",
+                            UUID(body["thread_id"]),
+                        )
+                        >= 3
                     )
                     assert (
                         await connection.fetchval(

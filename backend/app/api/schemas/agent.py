@@ -114,6 +114,7 @@ class StructuredIssueResponse(ApiModel):
 class AgentThreadResponse(ApiModel):
     thread_id: UUID
     trace_id: UUID
+    run_id: UUID | None = None
     message_id: UUID | None = None
     workflow_stage: WorkflowStage
     run_status: RunStatus

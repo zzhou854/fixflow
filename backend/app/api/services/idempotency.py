@@ -40,18 +40,21 @@ class ApiIdempotencyStore:
         key: str,
         payload: Mapping[str, object],
         operation: Callable[[], Awaitable[ResultT]],
+        on_replay: Callable[[ResultT], Awaitable[None]] | None = None,
+        on_conflict: Callable[[], Awaitable[None]] | None = None,
     ) -> ResultT:
         normalized_key = key.strip()
         if not normalized_key or len(normalized_key) > 128:
             raise ApiError(422, "VALIDATION_ERROR", "Idempotency-Key 格式不正确。")
-        payload_hash = hashlib.sha256(
-            json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
-        ).hexdigest()
+        payload_hash = self.payload_fingerprint(payload)
         record_key = (caller_id, scope, normalized_key)
+        replay = False
         async with self._lock:
             existing = self._entries.get(record_key)
             if existing is not None:
                 if existing.payload_hash != payload_hash:
+                    if on_conflict is not None:
+                        await self._notify(on_conflict)
                     raise ApiError(
                         409,
                         "IDEMPOTENCY_CONFLICT",
@@ -59,12 +62,16 @@ class ApiIdempotencyStore:
                     )
                 self._entries.move_to_end(record_key)
                 task = existing.task
+                replay = True
             else:
                 self._evict_completed()
                 task = asyncio.ensure_future(operation())
                 self._entries[record_key] = _Execution(payload_hash, task)
         try:
-            return cast(ResultT, await asyncio.shield(task))
+            result = cast(ResultT, await asyncio.shield(task))
+            if replay and on_replay is not None:
+                await self._notify(lambda: on_replay(result))
+            return result
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -82,6 +89,30 @@ class ApiIdempotencyStore:
             if candidate is None:
                 raise ApiError(503, "SERVICE_UNAVAILABLE", "请求去重服务繁忙。", retryable=True)
             self._entries.pop(candidate)
+
+    @staticmethod
+    def key_fingerprint(key: str) -> str:
+        """A safe digest for audit records; raw HTTP keys are never persisted."""
+
+        return hashlib.sha256(key.strip().encode()).hexdigest()
+
+    @staticmethod
+    def payload_fingerprint(payload: Mapping[str, object]) -> str:
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+        ).hexdigest()
+
+    @staticmethod
+    async def _notify(callback: Callable[[], Awaitable[None]]) -> None:
+        """Replay audit is observational and cannot invalidate a cached result."""
+
+        try:
+            await callback()
+        except Exception:
+            # The original mutation has already committed (or was already
+            # cached). Trace failure must not turn a safe replay into a second
+            # business execution.
+            return
 
     async def close(self) -> None:
         async with self._lock:

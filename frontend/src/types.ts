@@ -51,7 +51,7 @@ export interface SlotInterrupt {
 }
 export type Interrupt = NeedInformationInterrupt | DuplicateInterrupt | SlotInterrupt
 export interface AgentThread {
-  thread_id: string; trace_id: string; message_id: string | null; workflow_stage: WorkflowStage
+  thread_id: string; trace_id: string; run_id?: string | null; message_id: string | null; workflow_stage: WorkflowStage
   run_status: 'COMPLETED' | 'INTERRUPTED' | 'NEEDS_HUMAN_REVIEW' | 'FAILED_SAFE'
   assistant_message: string | null; interrupt: Interrupt | null
   active_ticket: Ticket | null; active_appointment: Appointment | null
@@ -66,5 +66,17 @@ export interface OperatorThread {
   policy_sufficiency: string | null; policy_conflict: boolean; policy_evidence_summary: string[]
   missing_fields: string[]; active_ticket_id: string | null; active_appointment_id: string | null
   human_review_required: boolean; updated_at: string | null
+}
+export interface AgentRun {
+  run_id: string; thread_id: string | null; trace_id: string
+  trigger: 'THREAD_CREATED' | 'MESSAGE' | 'RESUME' | 'OPERATOR_ACTION'
+  status: 'RUNNING' | 'INTERRUPTED' | 'COMPLETED' | 'FAILED_SAFE' | 'FAILED'
+  started_at: string; finished_at: string | null; error_code: string | null
+}
+export interface TraceEvent {
+  event_id: string; sequence_number: number | null
+  source: 'API' | 'AGENT' | 'MCP' | 'DOMAIN' | 'OUTBOX'
+  event_type: string; node_name: string | null; operation_id: string | null
+  payload: Record<string, string | number | boolean | null>; occurred_at: string
 }
 export interface ApiErrorBody { code: string; message: string; field_errors: Record<string, string>; trace_id: string; retryable: boolean }

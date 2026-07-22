@@ -15,6 +15,11 @@ from app.application.errors import (
     AuthorizationFailed,
     IdempotencyConflict,
 )
+from app.application.events import (
+    AggregateType,
+    DomainEventType,
+    build_domain_event,
+)
 from app.application.models import MutationMetadata, OperationResult
 from app.application.ports import (
     AppointmentHistoryRecord,
@@ -164,6 +169,32 @@ class TransactionalService:
                 raise AuthorizationFailed("operator_not_authorized")
         else:
             raise AuthorizationFailed("actor_not_allowed")
+
+    @staticmethod
+    async def _emit_ticket_status_changed(
+        uow: UnitOfWork,
+        before: TicketSnapshot,
+        after: TicketSnapshot,
+        action: str,
+        metadata: MutationMetadata,
+        *,
+        scope: str,
+    ) -> None:
+        await uow.outbox.add(
+            build_domain_event(
+                event_type=DomainEventType.TICKET_STATUS_CHANGED,
+                aggregate_type=AggregateType.TICKET,
+                aggregate_id=after.ticket_id,
+                aggregate_version=after.version,
+                metadata=metadata,
+                scope=scope,
+                payload={
+                    "from_status": before.status.value,
+                    "to_status": after.status.value,
+                    "action": action,
+                },
+            )
+        )
 
     @staticmethod
     def _ticket_history(

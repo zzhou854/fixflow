@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     jwt_access_token_minutes: int = 30
     runtime_mode: str = "demo"
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
+    outbox_poll_interval_seconds: float = Field(default=1.0, gt=0)
+    outbox_batch_size: int = Field(default=50, ge=1, le=1000)
+    outbox_lease_seconds: int = Field(default=30, ge=1, le=3600)
+    outbox_max_attempts: int = Field(default=8, ge=1, le=100)
+    outbox_retry_base_seconds: float = Field(default=1.0, gt=0)
+    trace_max_payload_bytes: int = Field(default=8192, ge=128, le=1_048_576)
+    trace_max_string_length: int = Field(default=1024, ge=16, le=65536)
 
 
 @lru_cache

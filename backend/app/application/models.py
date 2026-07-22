@@ -27,6 +27,9 @@ class MutationMetadata:
     trace_id: UUID
     idempotency_key: str
     occurred_at: datetime
+    run_id: UUID | None = None
+    thread_id: UUID | None = None
+    operation_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

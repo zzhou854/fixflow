@@ -39,6 +39,9 @@ class ReadRequest(MCPContractModel):
 
 class MutationRequest(ReadRequest):
     idempotency_key: str = Field(min_length=1, max_length=128)
+    run_id: UUID | None = None
+    thread_id: UUID | None = None
+    operation_id: UUID | None = None
 
 
 class ErrorData(MCPContractModel):

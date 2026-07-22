@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
+from app.agent_runtime.execution_context import bind_execution_context
 from app.agent_runtime.models import (
     AgentCallerContext,
     AgentResume,
@@ -29,6 +30,13 @@ from app.api.services.sse import SSEEventBus
 from app.application.auth import AuthenticatedIdentity
 from app.application.query_models import QueryActor
 from app.application.services import FixFlowApplicationService
+from app.infrastructure.database.models.observability import (
+    AgentRunStatus,
+    AgentRunTrigger,
+    TraceSource,
+)
+from app.trace.models import StartRun, TracePayload
+from app.trace.runtime import TraceRuntime
 
 
 class AgentApiService:
@@ -37,10 +45,12 @@ class AgentApiService:
         orchestrator: AgentOrchestrator,
         application: FixFlowApplicationService,
         events: SSEEventBus,
+        trace: TraceRuntime | None = None,
     ) -> None:
         self._orchestrator = orchestrator
         self._application = application
         self.events = events
+        self._trace = trace
 
     async def create_thread(
         self,
@@ -52,7 +62,7 @@ class AgentApiService:
         timezone_name: str,
     ) -> AgentThreadResponse:
         thread_id, trace_id, message_id = uuid4(), uuid4(), uuid4()
-        result = await self._run_turn(
+        result, run_id = await self._run_turn(
             identity,
             thread_id=thread_id,
             trace_id=trace_id,
@@ -61,7 +71,7 @@ class AgentApiService:
             reference_time=reference_time,
             timezone_name=timezone_name,
         )
-        return await self._response(identity, result, message_id=message_id)
+        return await self._response(identity, result, message_id=message_id, run_id=run_id)
 
     async def send_message(
         self,
@@ -75,7 +85,7 @@ class AgentApiService:
     ) -> AgentThreadResponse:
         stable_message_id = message_id or uuid4()
         trace_id = uuid5(NAMESPACE_URL, f"fixflow:api-message:{thread_id}:{stable_message_id}")
-        result = await self._run_turn(
+        result, run_id = await self._run_turn(
             identity,
             thread_id=thread_id,
             trace_id=trace_id,
@@ -84,17 +94,33 @@ class AgentApiService:
             reference_time=reference_time,
             timezone_name=timezone_name,
         )
-        return await self._response(identity, result, message_id=stable_message_id)
+        return await self._response(identity, result, message_id=stable_message_id, run_id=run_id)
 
     async def resume(
         self, identity: AuthenticatedIdentity, *, thread_id: UUID, request: ResumeRequest
     ) -> AgentThreadResponse:
         trace_id = uuid4()
+        run_id = uuid4()
+        await self._start_trace(
+            identity,
+            run_id=run_id,
+            thread_id=thread_id,
+            trace_id=trace_id,
+            trigger=AgentRunTrigger.RESUME,
+            property_id=None,
+        )
         resume = self._resume(request, trace_id)
         await self.events.publish(thread_id, trace_id, "run_started", {"resume_kind": request.kind})
-        result = await self._orchestrator.resume(thread_id, self._caller(identity), resume)
+        try:
+            with bind_execution_context(run_id, thread_id, trace_id, self._trace):
+                result = await self._orchestrator.resume(thread_id, self._caller(identity), resume)
+        except Exception:
+            await self._finish_trace(run_id, AgentRunStatus.FAILED, error_code="INTERNAL_ERROR")
+            raise
+        await self._finish_trace_for_result(run_id, result)
         self._raise_resume_error(result)
-        return await self._response(identity, result)
+        response = await self._response(identity, result, run_id=run_id)
+        return response
 
     async def get_thread(
         self, identity: AuthenticatedIdentity, *, thread_id: UUID, trace_id: UUID
@@ -114,6 +140,50 @@ class AgentApiService:
         )
         return await self._response(identity, result, state=state, publish=False)
 
+    async def record_api_replay(
+        self,
+        response: AgentThreadResponse,
+        *,
+        trace_id: UUID,
+        idempotency_key_fingerprint: str,
+    ) -> None:
+        if self._trace is None:
+            return
+        await self._trace.append_event(
+            event_key=self._trace.event_key(trace_id, "api_request_replayed"),
+            run_id=None,
+            thread_id=response.thread_id,
+            trace_id=trace_id,
+            source=TraceSource.API,
+            event_type="api_request_replayed",
+            payload=TracePayload(
+                original_run_id=response.run_id,
+                idempotency_key_fingerprint=idempotency_key_fingerprint,
+                replayed=True,
+            ),
+            occurred_at=datetime.now(UTC),
+        )
+
+    async def record_api_conflict(
+        self,
+        *,
+        thread_id: UUID | None,
+        trace_id: UUID,
+        idempotency_key_fingerprint: str,
+    ) -> None:
+        if self._trace is None:
+            return
+        await self._trace.append_event(
+            event_key=self._trace.event_key(trace_id, "api_request_conflict"),
+            run_id=None,
+            thread_id=thread_id,
+            trace_id=trace_id,
+            source=TraceSource.API,
+            event_type="api_request_conflict",
+            payload=TracePayload(idempotency_key_fingerprint=idempotency_key_fingerprint),
+            occurred_at=datetime.now(UTC),
+        )
+
     async def _run_turn(
         self,
         identity: AuthenticatedIdentity,
@@ -124,21 +194,40 @@ class AgentApiService:
         message: str,
         reference_time: datetime,
         timezone_name: str,
-    ) -> AgentRunResult:
-        await self.events.publish(thread_id, trace_id, "run_started", {})
-        return await self._orchestrator.start_turn(
-            AgentTurnInput(
-                thread_id=thread_id,
-                trace_id=trace_id,
-                actor_type=identity.actor_type,
-                actor_id=identity.actor_id,
-                user_id=identity.user_id,
-                property_id=property_id,
-                user_message=message,
-                reference_time=reference_time,
-                timezone_name=timezone_name,
-            )
+    ) -> tuple[AgentRunResult, UUID]:
+        run_id = uuid4()
+        trigger = (
+            AgentRunTrigger.THREAD_CREATED if property_id is not None else AgentRunTrigger.MESSAGE
         )
+        await self._start_trace(
+            identity,
+            run_id=run_id,
+            thread_id=thread_id,
+            trace_id=trace_id,
+            trigger=trigger,
+            property_id=property_id,
+        )
+        await self.events.publish(thread_id, trace_id, "run_started", {})
+        try:
+            with bind_execution_context(run_id, thread_id, trace_id, self._trace):
+                result = await self._orchestrator.start_turn(
+                    AgentTurnInput(
+                        thread_id=thread_id,
+                        trace_id=trace_id,
+                        actor_type=identity.actor_type,
+                        actor_id=identity.actor_id,
+                        user_id=identity.user_id,
+                        property_id=property_id,
+                        user_message=message,
+                        reference_time=reference_time,
+                        timezone_name=timezone_name,
+                    )
+                )
+        except Exception:
+            await self._finish_trace(run_id, AgentRunStatus.FAILED, error_code="INTERNAL_ERROR")
+            raise
+        await self._finish_trace_for_result(run_id, result)
+        return result, run_id
 
     async def _response(
         self,
@@ -148,6 +237,7 @@ class AgentApiService:
         message_id: UUID | None = None,
         state: AgentStateView | None = None,
         publish: bool = True,
+        run_id: UUID | None = None,
     ) -> AgentThreadResponse:
         if state is None and result.run_status is not RunStatus.FAILED_SAFE:
             state = await self._orchestrator.get_state(
@@ -173,6 +263,7 @@ class AgentApiService:
         response = AgentThreadResponse(
             thread_id=result.thread_id,
             trace_id=result.trace_id,
+            run_id=run_id,
             message_id=message_id,
             workflow_stage=result.workflow_stage,
             run_status=result.run_status,
@@ -188,6 +279,71 @@ class AgentApiService:
         if publish:
             await self._publish_result(response)
         return response
+
+    async def _start_trace(
+        self,
+        identity: AuthenticatedIdentity,
+        *,
+        run_id: UUID,
+        thread_id: UUID,
+        trace_id: UUID,
+        trigger: AgentRunTrigger,
+        property_id: UUID | None,
+    ) -> None:
+        if self._trace is None:
+            return
+        now = datetime.now(UTC)
+        try:
+            await self._trace.start_run(
+                StartRun(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    trace_id=trace_id,
+                    trigger=trigger,
+                    actor_type=identity.actor_type.value,
+                    actor_id=identity.actor_id,
+                    user_id=identity.user_id,
+                    property_id=property_id,
+                    started_at=now,
+                )
+            )
+            await self._trace.append_event(
+                event_key=self._trace.event_key(run_id, "api_request_accepted"),
+                run_id=run_id,
+                thread_id=thread_id,
+                trace_id=trace_id,
+                source=TraceSource.API,
+                event_type="api_request_accepted",
+                payload=TracePayload(summary=trigger.value),
+                occurred_at=now,
+            )
+        except Exception as exc:
+            raise ApiError(
+                503,
+                "SERVICE_UNAVAILABLE",
+                "执行审计暂时不可用，业务流程尚未启动。",
+                retryable=True,
+            ) from exc
+
+    async def _finish_trace_for_result(self, run_id: UUID, result: AgentRunResult) -> None:
+        status = AgentRunStatus.COMPLETED
+        if result.interrupt is not None:
+            status = AgentRunStatus.INTERRUPTED
+        elif result.run_status is RunStatus.FAILED_SAFE:
+            status = AgentRunStatus.FAILED_SAFE
+        await self._finish_trace(run_id, status, error_code=result.error_code)
+
+    async def _finish_trace(
+        self, run_id: UUID, status: AgentRunStatus, *, error_code: str | None = None
+    ) -> None:
+        if self._trace is None:
+            return
+        await self._trace.finish_run(
+            run_id,
+            status=status,
+            occurred_at=datetime.now(UTC),
+            error_code=error_code,
+        )
 
     async def _publish_result(self, response: AgentThreadResponse) -> None:
         await self.events.publish(

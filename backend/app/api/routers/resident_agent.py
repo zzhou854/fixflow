@@ -36,6 +36,8 @@ async def create_thread(
             "请先从已授权房屋列表选择房屋。",
         )
     property_id = request.property_id
+    replay_trace_id = uuid4()
+    key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
     return await services.idempotency.execute(
         caller_id=identity.actor_id,
         scope="agent:create-thread",
@@ -48,6 +50,16 @@ async def create_thread(
             reference_time=request.reference_time,
             timezone_name=request.timezone_name,
         ),
+        on_replay=lambda result: services.agent.record_api_replay(
+            result,
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
+        ),
+        on_conflict=lambda: services.agent.record_api_conflict(
+            thread_id=None,
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
+        ),
     )
 
 
@@ -59,6 +71,8 @@ async def send_message(
     services: ApiServices = Depends(get_services),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
 ) -> AgentThreadResponse:
+    replay_trace_id = uuid4()
+    key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
     return await services.idempotency.execute(
         caller_id=identity.actor_id,
         scope=f"agent:message:{thread_id}",
@@ -72,6 +86,16 @@ async def send_message(
             reference_time=request.reference_time,
             timezone_name=request.timezone_name,
         ),
+        on_replay=lambda result: services.agent.record_api_replay(
+            result,
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
+        ),
+        on_conflict=lambda: services.agent.record_api_conflict(
+            thread_id=thread_id,
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
+        ),
     )
 
 
@@ -83,12 +107,24 @@ async def resume(
     services: ApiServices = Depends(get_services),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
 ) -> AgentThreadResponse:
+    replay_trace_id = uuid4()
+    key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
     return await services.idempotency.execute(
         caller_id=identity.actor_id,
         scope=f"agent:resume:{thread_id}",
         key=idempotency_key,
         payload=request.model_dump(mode="json"),
         operation=lambda: services.agent.resume(identity, thread_id=thread_id, request=request),
+        on_replay=lambda result: services.agent.record_api_replay(
+            result,
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
+        ),
+        on_conflict=lambda: services.agent.record_api_conflict(
+            thread_id=thread_id,
+            trace_id=replay_trace_id,
+            idempotency_key_fingerprint=key_fingerprint,
+        ),
     )
 
 

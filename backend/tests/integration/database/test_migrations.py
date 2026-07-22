@@ -21,6 +21,9 @@ EXPECTED_TABLES = {
     "idempotency_records",
     "policy_documents",
     "policy_chunks",
+    "agent_runs",
+    "agent_trace_events",
+    "outbox_events",
 }
 
 
@@ -65,10 +68,11 @@ def test_upgrade_downgrade_upgrade_cycle(empty_database_url: str) -> None:
         ("worker_events", "trace_id", "NO"),
     }
 
-    command.downgrade(config, "20260719_0002")
-    assert {"policy_documents", "policy_chunks"}.isdisjoint(
+    command.downgrade(config, "20260720_0003")
+    assert {"agent_runs", "agent_trace_events", "outbox_events"}.isdisjoint(
         asyncio.run(_public_tables(empty_database_url))
     )
+    assert {"policy_documents", "policy_chunks"} <= asyncio.run(_public_tables(empty_database_url))
     assert asyncio.run(_task4_audit_columns(empty_database_url)) == {
         ("appointment_status_history", "trace_id", "NO"),
         ("worker_events", "trace_id", "NO"),

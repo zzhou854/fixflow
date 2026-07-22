@@ -9,8 +9,8 @@ truth. A checkpoint contains bounded conversation work state only and is never
 written back over a fresher business snapshot.
 
 The current product runtime uses deterministic demonstration LLM and embedding
-providers. Online providers, Trace, Outbox, Harness, and Stage C recovery remain
-deferred. Task 9 exposes this same orchestrator through authenticated FastAPI
+providers. Online providers, the fault Harness, UNKNOWN_COMMIT reconciliation,
+and Replay remain deferred. Task 9 exposes this same orchestrator through authenticated FastAPI
 thread, message, state, strict Resume, and SSE endpoints.
 
 JWT identity becomes the existing trusted caller context; request bodies cannot
@@ -19,6 +19,14 @@ the Task 8 ownership and current property-authority checks. API responses are
 sanitised views and never expose checkpoint blobs, raw MCP results, or pending
 operation hash material. The bounded in-memory SSE channel is notification-only
 and does not change Graph recovery semantics.
+
+Task 10 starts a persistent run before invoking the Graph, binds trusted
+run/thread/trace correlation through async execution context, wraps each fixed
+node with sanitized start/completion/failure events, and instruments MCP calls
+with prepared/completed/failed summaries. Mutation MCP requests carry
+server-generated run/thread/operation correlation to the Application UoW so
+domain Outbox events can be projected back to the same run. These fields are
+never accepted from the browser and do not enter canonical Agent State.
 
 For the demo product path, policy queries append deterministic category and
 requested-topic search context before retrieval. Ordinary resident phrasing can

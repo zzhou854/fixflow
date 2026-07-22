@@ -1,13 +1,16 @@
 """Topology-only builder for FixFlow's single deterministic LangGraph."""
 
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from functools import partial
+from uuid import uuid4
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agent_runtime.context import NodeContext, RuntimeDependencies
+from app.agent_runtime.execution_context import current_execution_context
 from app.agent_runtime.nodes.escalation import escalate, prepare_escalate
 from app.agent_runtime.nodes.interpretation import interpret_message
 from app.agent_runtime.nodes.interrupts import need_information, select_duplicate, select_slot
@@ -42,6 +45,8 @@ from app.agent_runtime.routing import (
     route_resolved_existing,
 )
 from app.agent_runtime.runtime_state import RuntimeGraphState
+from app.infrastructure.database.models.observability import TraceSource
+from app.trace.models import TracePayload
 
 __all__ = ["RuntimeGraphState", "build_agent_graph"]
 
@@ -59,8 +64,82 @@ def build_agent_graph(
     def add_node(
         name: str, node: Callable[[RuntimeGraphState], Awaitable[RuntimeGraphState]]
     ) -> None:
+        async def traced(graph_state: RuntimeGraphState) -> RuntimeGraphState:
+            execution = current_execution_context()
+            invocation_id = uuid4().hex
+            if execution is not None and execution.trace is not None:
+                await execution.trace.append_event(
+                    event_key=execution.trace.event_key(
+                        execution.run_id, "node_started", f"{name}:{invocation_id}"
+                    ),
+                    run_id=execution.run_id,
+                    thread_id=execution.thread_id,
+                    trace_id=execution.trace_id,
+                    source=TraceSource.AGENT,
+                    event_type="node_started",
+                    node_name=name,
+                    payload=TracePayload(node_name=name),
+                    occurred_at=datetime.now(UTC),
+                )
+            try:
+                result = await node(graph_state)
+            except Exception as exc:
+                if execution is not None and execution.trace is not None:
+                    await execution.trace.append_event(
+                        event_key=execution.trace.event_key(
+                            execution.run_id, "node_failed", f"{name}:{invocation_id}"
+                        ),
+                        run_id=execution.run_id,
+                        thread_id=execution.thread_id,
+                        trace_id=execution.trace_id,
+                        source=TraceSource.AGENT,
+                        event_type="node_failed",
+                        node_name=name,
+                        payload=TracePayload(error_code=type(exc).__name__, node_name=name),
+                        occurred_at=datetime.now(UTC),
+                    )
+                raise
+            if execution is not None and execution.trace is not None:
+                await execution.trace.append_event(
+                    event_key=execution.trace.event_key(
+                        execution.run_id, "node_completed", f"{name}:{invocation_id}"
+                    ),
+                    run_id=execution.run_id,
+                    thread_id=execution.thread_id,
+                    trace_id=execution.trace_id,
+                    source=TraceSource.AGENT,
+                    event_type="node_completed",
+                    node_name=name,
+                    payload=TracePayload(node_name=name),
+                    occurred_at=datetime.now(UTC),
+                )
+                semantic_event = {
+                    "resolve_property": "property_authorization_verified",
+                    "interpret": "interpretation_completed",
+                    "retrieve_policy": "policy_retrieval_completed",
+                    "find_duplicates": "duplicate_lookup_completed",
+                    "refresh_snapshot": "snapshot_refreshed",
+                }.get(name)
+                if semantic_event is not None:
+                    await execution.trace.append_event(
+                        event_key=execution.trace.event_key(
+                            execution.run_id,
+                            semantic_event,
+                            invocation_id,
+                        ),
+                        run_id=execution.run_id,
+                        thread_id=execution.thread_id,
+                        trace_id=execution.trace_id,
+                        source=TraceSource.AGENT,
+                        event_type=semantic_event,
+                        node_name=name,
+                        payload=TracePayload(node_name=name),
+                        occurred_at=datetime.now(UTC),
+                    )
+            return result
+
         # LangGraph's overload excludes an otherwise valid async TypedDict callable.
-        graph.add_node(name, node)  # type: ignore[call-overload]
+        graph.add_node(name, traced)  # type: ignore[call-overload]
 
     # The explicit registrations below are the complete, reviewable workflow
     # topology.  Nodes cannot be selected dynamically by a model or policy text.

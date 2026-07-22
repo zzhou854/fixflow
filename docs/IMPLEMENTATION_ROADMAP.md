@@ -208,8 +208,8 @@ is still required. No row may be removed or weakened without explicit user appro
 | Independent MCP server | A | implemented | `mcp_server/`, Task 5 review | Eight Streamable HTTP tools call application services; real MCP SDK client and PostgreSQL tests pass | No |
 | LangGraph orchestrator | B | implemented | `backend/app/agent_runtime`, Task 8 review | Typed graph routes deterministically and resumes after fresh domain snapshots | No |
 | Three-layer task memory | B | implemented | `backend/app/agent_runtime/checkpoint.py`, `backend/app/api`, Task 9 review | Isolated persistent checkpoint, bounded conversation, PostgreSQL truth, and product caller context | No |
-| Business Trace | C | deferred | original project specification | Complete, replayable timeline explains retries and recovery | No |
-| Transactional Outbox | C | deferred | `docs/ARCHITECTURE.md` | Business write and event commit atomically | No |
+| Business Trace | C | partial | `backend/app/trace`, `docs/TRACE_RUNTIME.md`, Task 10 review | Persistent sanitized run/node/MCP/domain timeline and operator query pass; deterministic Replay remains Task 12 | No |
+| Transactional Outbox | C | implemented | `backend/app/outbox`, `docs/OUTBOX.md`, Task 10 review | Business write, histories, idempotency result, and stable event commit atomically; leased retry/dead-letter tests pass | No |
 | `UNKNOWN_COMMIT` recovery | C | deferred | `docs/STATE_MACHINE.md` | Real post-commit timeout is reconciled without duplication | No |
 | Fault injection | C | deferred | original F01-F12 scenarios | Configured faults produce verified recovery behavior | No |
 | Replay | C | deferred | original project specification | Stored Trace/scenario can be deterministically replayed | No |
@@ -217,7 +217,7 @@ is still required. No row may be removed or weakened without explicit user appro
 | ReAct baseline | D | deferred | original project specification | Same-model/tool/data comparison is reproducible | No |
 | Core ablations | D | deferred | this roadmap | Three approved removals produce comparable metrics | No |
 | Resident frontend | B | partial | `frontend/src/pages/ResidentPage.tsx`, Task 9 review | Chat, status, typed interrupts, reschedule/human request work; cancellation and acceptance remain manual | No |
-| Operator workbench | B/C | partial | `frontend/src/pages/OperatorPage.tsx`, Task 9 review | Filters, details, histories, latest event and ticket-linked read-only thread review work; pre-ticket review queue and Trace remain deferred | No |
+| Operator workbench | B/C | partial | `frontend/src/pages/OperatorPage.tsx`, Task 10 review | Filters, histories, ticket-linked thread review, and sanitized execution timeline work; pre-ticket review queue remains deferred | No |
 | Docker Compose delivery | A/D | partial | `docker-compose.yml`, `448f9e2` | PostgreSQL works now; final one-command system remains | No |
 
 ## Deferred but mandatory features
@@ -232,8 +232,8 @@ The following are not implemented yet and are not cancelled:
 - policy RAG;
 - Agent-runtime MCP client integration (the standalone server and transport contract are implemented);
 - LangGraph and a real online LLM provider (the Protocol and Scripted Provider are implemented);
-- business Trace;
-- Outbox and `UNKNOWN_COMMIT` recovery;
+- deterministic Trace Replay;
+- `UNKNOWN_COMMIT` recovery (transactional Outbox is implemented);
 - fault injection, Replay, and the Engineering Harness;
 - resident and operator frontends;
 - evaluation, ReAct baseline, and ablations.

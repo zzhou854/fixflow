@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { DemoBanner } from '../components/DemoBanner'
+import { TraceTimeline } from '../components/TraceTimeline'
 import type { OperatorThread, Ticket, TicketDetail } from '../types'
 
 export function OperatorPage() {
@@ -74,6 +75,7 @@ export function OperatorPage() {
           <Descriptions.Item label="Policy Evidence 摘要">{thread.policy_evidence_summary.join(', ') || '暂无'}</Descriptions.Item>
           <Descriptions.Item label="人工审查">{thread.human_review_required ? '需要' : '否'}</Descriptions.Item>
         </Descriptions>}
+        {thread && token && <TraceTimeline token={token} threadId={thread.thread_id} />}
       </Card>
       <Table rowKey="ticket_id" dataSource={tickets} pagination={false} onRow={(record) => ({ onClick: () => void openTicket(record) })} columns={[
         { title: '工单', dataIndex: 'ticket_id', ellipsis: true },
@@ -100,7 +102,7 @@ export function OperatorPage() {
           <Card size="small" title="工单状态历史"><List dataSource={detail.ticket_history} renderItem={(item) => <List.Item>{item.from_status ?? '创建'} → {item.to_status} · {item.action}</List.Item>} /></Card>
           <Card size="small" title="预约状态历史"><List dataSource={detail.appointment_history} renderItem={(item) => <List.Item>{item.from_status ?? '创建'} → {item.to_status}</List.Item>} /></Card>
           <Alert message="仅可审查 Agent State 中已关联工单且经数据库快照复核的会话；未建工单的人工审查会话首版不进入物业待办。" />
-          <Alert type="info" message="Trace Runtime 尚未启用；状态历史不会冒充 Agent Trace。" />
+          <Alert type="info" message="执行 Trace 请通过上方已关联 Thread 审查；业务状态历史不会冒充 Agent Trace。" />
         </Space>}
       </Drawer>
     </Layout.Content>

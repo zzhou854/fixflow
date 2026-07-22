@@ -184,6 +184,14 @@ class WorkerEventApplicationService(TransactionalService):
                     evidence=command.evidence,
                 )
             )
+            await self._emit_ticket_status_changed(
+                uow,
+                ticket,
+                updated_ticket,
+                self._worker_ticket_action(command, appointment.purpose),
+                command.metadata,
+                scope="record_worker_event",
+            )
         if appointment_changed:
             await self._apply_appointment_effect(
                 uow, command, ticket, appointment, updated_appointment

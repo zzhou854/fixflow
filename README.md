@@ -11,7 +11,7 @@ demo.
 
 ## Current status
 
-Stage A and Tasks 6-8 are complete. Task 9 is at its code-review gate:
+Stage A, Stage B, and Task 9 are complete. Task 10 is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
@@ -49,11 +49,15 @@ Stage A and Tasks 6-8 are complete. Task 9 is at its code-review gate:
 - an idempotent Argon2-backed development seed;
 - a React/TypeScript/Ant Design resident chat and operator workbench;
 - real API-to-Agent-to-MCP-to-PostgreSQL vertical and cross-resident tests;
+- a same-transaction domain Outbox with stable event identities;
+- a leased at-least-once Dispatcher, retry/backoff, and dead-letter state;
+- persistent sanitized Agent/API/MCP/domain Trace runs and events;
+- a ticket-linked operator execution timeline kept separate from business history;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Online LLM/embedding providers, Outbox, Trace Runtime/UI, full unknown-commit
-reconciliation, fault injection, and evaluation remain mandatory roadmap work,
-not cancelled scope.
+Online LLM/embedding providers, full unknown-commit reconciliation, fault
+injection, Replay, and evaluation remain mandatory roadmap work, not cancelled
+scope.
 
 ## Prerequisites
 
@@ -75,6 +79,7 @@ $env:PYTHONPATH = "backend"; uv run python -m app.api.run
 uv run python -m mcp_server
 $env:PYTHONPATH = "backend"; uv run python -m app.agent_runtime.initialize_checkpoints
 uv run python -m app.dev_seed
+uv run python -m app.outbox.run
 uv run uvicorn app.main:app --app-dir backend --reload
 cd frontend && npm ci && npm run dev
 ```
@@ -102,9 +107,9 @@ Browser live updates use authenticated Fetch Streaming with a Bearer header;
 JWTs never enter SSE URLs. HTTP mutation responses and Thread State carry the
 formal result, while bounded in-memory SSE is non-replayable. Task 9 requires
 `Idempotency-Key` on thread creation, messages, Resume, and operator escalation.
-Operator thread review is read-only and limited to threads linked to a
-database-verified ticket. Stage C still owns persistent events, Outbox, Trace,
-replay, and unknown-commit reconciliation.
+Operator thread review and Trace are read-only and limited to threads linked to
+a database-verified ticket. Task 10 supplies persistent Outbox and Trace;
+Replay and unknown-commit reconciliation remain later Stage C work.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
@@ -123,6 +128,8 @@ and never maintained manually.
 - [Policy RAG](docs/POLICY_RAG.md)
 - [Implementation roadmap and alignment gates](docs/IMPLEMENTATION_ROADMAP.md)
 - [FastAPI and JWT contracts](docs/API.md)
+- [Transactional Outbox](docs/OUTBOX.md)
+- [Persistent Trace Runtime](docs/TRACE_RUNTIME.md)
 - [Resident and operator frontend](docs/FRONTEND.md)
 
 ## Week-1 delivery order

@@ -14,6 +14,7 @@ from app.application.errors import (
 from app.application.ports import (
     AppointmentRepository,
     IdempotencyRepository,
+    OutboxRepository,
     QueryRepository,
     TicketRepository,
     WorkerEventRepository,
@@ -21,6 +22,7 @@ from app.application.ports import (
 from app.infrastructure.database.repositories import (
     SqlAlchemyAppointmentRepository,
     SqlAlchemyIdempotencyRepository,
+    SqlAlchemyOutboxRepository,
     SqlAlchemyQueryRepository,
     SqlAlchemyTicketRepository,
     SqlAlchemyWorkerEventRepository,
@@ -106,6 +108,7 @@ class SqlAlchemyUnitOfWork:
         self.appointments: AppointmentRepository = SqlAlchemyAppointmentRepository(self.session)
         self.worker_events: WorkerEventRepository = SqlAlchemyWorkerEventRepository(self.session)
         self.idempotency: IdempotencyRepository = SqlAlchemyIdempotencyRepository(self.session)
+        self.outbox: OutboxRepository = SqlAlchemyOutboxRepository(self.session)
         self.queries: QueryRepository = SqlAlchemyQueryRepository(self.session)
         return self
 

@@ -9,6 +9,7 @@ from types import TracebackType
 from typing import Any, Protocol
 from uuid import UUID
 
+from app.application.events import DomainEvent
 from app.application.query_models import (
     ResidentPropertyReadModel,
     SlotWorkerSource,
@@ -158,6 +159,10 @@ class IdempotencyRepository(Protocol):
     ) -> None: ...
 
 
+class OutboxRepository(Protocol):
+    async def add(self, event: DomainEvent) -> None: ...
+
+
 class QueryRepository(Protocol):
     async def get_property(
         self, resident_id: UUID, property_id: UUID
@@ -193,6 +198,7 @@ class UnitOfWork(Protocol):
     appointments: AppointmentRepository
     worker_events: WorkerEventRepository
     idempotency: IdempotencyRepository
+    outbox: OutboxRepository
     queries: QueryRepository
 
     async def __aenter__(self) -> UnitOfWork: ...

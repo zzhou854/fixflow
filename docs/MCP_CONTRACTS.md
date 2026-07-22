@@ -19,6 +19,13 @@ business authorization. Task 9 JWT authentication terminates at FastAPI and
 produces a trusted caller context; MCP still receives typed actor context from
 the orchestrator and does not parse browser tokens.
 
+Task 10 extends mutation metadata with optional server-owned `run_id`,
+`thread_id`, and `operation_id` correlation. The Agent MCP client supplies them
+from its trusted per-run execution context; the browser cannot submit them.
+They do not change tool semantics or authorization. The adapter passes them to
+the existing Application command so a same-transaction Outbox event can link a
+domain effect to its execution Trace.
+
 Start the process locally with:
 
 ```powershell

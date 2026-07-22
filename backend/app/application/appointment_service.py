@@ -3,6 +3,7 @@
 from dataclasses import asdict, replace
 
 from app.application.errors import AuthorizationFailed, ResourceNotFound
+from app.application.events import AggregateType, DomainEventType, build_domain_event
 from app.application.models import (
     BookAppointmentCommand,
     OperationResult,
@@ -107,6 +108,31 @@ class AppointmentApplicationService(TransactionalService):
                 occurred_at=command.metadata.occurred_at,
             )
         )
+        await self._emit_ticket_status_changed(
+            uow,
+            ticket,
+            updated,
+            "BOOK_APPOINTMENT",
+            command.metadata,
+            scope="book_appointment",
+        )
+        await uow.outbox.add(
+            build_domain_event(
+                event_type=DomainEventType.APPOINTMENT_BOOKED,
+                aggregate_type=AggregateType.APPOINTMENT,
+                aggregate_id=appointment_id,
+                aggregate_version=1,
+                metadata=command.metadata,
+                scope="book_appointment",
+                payload={
+                    "ticket_id": str(ticket.ticket_id),
+                    "worker_id": str(command.worker_id),
+                    "purpose": purpose.value,
+                    "starts_at": command.starts_at.isoformat(),
+                    "ends_at": command.ends_at.isoformat(),
+                },
+            )
+        )
         return OperationResult(
             ok=True,
             code="APPOINTMENT_BOOKED",
@@ -202,6 +228,23 @@ class AppointmentApplicationService(TransactionalService):
                 version_before=0,
                 version_after=1,
                 occurred_at=command.metadata.occurred_at,
+            )
+        )
+        await uow.outbox.add(
+            build_domain_event(
+                event_type=DomainEventType.APPOINTMENT_RESCHEDULED,
+                aggregate_type=AggregateType.APPOINTMENT,
+                aggregate_id=replacement_id,
+                aggregate_version=1,
+                metadata=command.metadata,
+                scope="reschedule_appointment",
+                payload={
+                    "ticket_id": str(ticket.ticket_id),
+                    "previous_appointment_id": str(old.appointment_id),
+                    "worker_id": str(command.worker_id),
+                    "starts_at": command.starts_at.isoformat(),
+                    "ends_at": command.ends_at.isoformat(),
+                },
             )
         )
         return OperationResult(
