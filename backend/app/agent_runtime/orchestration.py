@@ -7,9 +7,9 @@ from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from app.agent.enums import LLMRole, PendingAction
+from app.agent.enums import AgentReconciliationStatus, LLMRole, PendingAction
 from app.agent.state import AgentConversationMessage, AgentState
-from app.agent_runtime.errors import AgentRuntimeError, ThreadIdentityConflict
+from app.agent_runtime.errors import AgentRuntimeError, ThreadIdentityConflict, UnknownCommit
 from app.agent_runtime.mcp.client import PropertyOperationsClient
 from app.agent_runtime.models import (
     AGENT_RESUME_ADAPTER,
@@ -25,9 +25,11 @@ from app.agent_runtime.models import (
 )
 from app.agent_runtime.runtime_state import RuntimeGraphState
 from app.domain.enums import WorkflowStage
+from app.infrastructure.database.models.reconciliation import ReconciliationStatus
 from app.property_operations.contracts.common import ResultCode
 from app.property_operations.contracts.properties import GetResidentPropertyRequest
 from app.property_operations.contracts.tickets import GetTicketSnapshotRequest
+from app.reconciliation.coordinator import UnknownCommitCoordinator
 
 
 class AgentOrchestrator:
@@ -35,9 +37,136 @@ class AgentOrchestrator:
         self,
         graph: CompiledStateGraph[RuntimeGraphState, None, RuntimeGraphState, RuntimeGraphState],
         mcp: PropertyOperationsClient,
+        reconciliation: UnknownCommitCoordinator | None = None,
     ) -> None:
         self._graph = graph
         self._mcp = mcp
+        self._reconciliation = reconciliation
+
+    async def _record_unknown(self, state: AgentState, error: UnknownCommit) -> AgentState:
+        if self._reconciliation is None or not isinstance(error.operation_id, UUID):
+            return state
+        case = await self._reconciliation.create_or_get(state, error.operation_id)
+        blocked = state.model_copy(
+            update={
+                "workflow_stage": WorkflowStage.RECONCILIATION_PENDING,
+                "pending_reconciliation_case_id": case.id,
+                "pending_reconciliation_status": AgentReconciliationStatus(case.status.value),
+                "pending_reconciliation_action": state.pending_action,
+                "last_assistant_message": "系统正在核对本次操作是否已经完成，请勿重复提交。",
+            }
+        )
+        await self._graph.aupdate_state(
+            self._config(state.thread_id), RuntimeGraphState(state_json=blocked.model_dump_json())
+        )
+        return blocked
+
+    async def _refresh_reconciliation(self, state: AgentState) -> AgentState:
+        case_id = state.pending_reconciliation_case_id
+        if case_id is None or self._reconciliation is None:
+            return state
+        case = await self._reconciliation.get(case_id)
+        if case is None:
+            return state
+        if case.status in {ReconciliationStatus.PENDING, ReconciliationStatus.PROCESSING}:
+            return state.model_copy(
+                update={
+                    "workflow_stage": WorkflowStage.RECONCILIATION_PENDING,
+                    "pending_reconciliation_status": AgentReconciliationStatus(case.status.value),
+                }
+            )
+        if case.status is ReconciliationStatus.MANUAL_REVIEW:
+            return state.model_copy(
+                update={
+                    "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                    "pending_reconciliation_status": AgentReconciliationStatus.MANUAL_REVIEW,
+                    "last_assistant_message": "该操作需要物业人工核查。",
+                }
+            )
+        if case.status is ReconciliationStatus.RESOLVED_NOT_COMMITTED:
+            return state.model_copy(
+                update={
+                    "pending_reconciliation_case_id": None,
+                    "pending_reconciliation_status": None,
+                    "pending_reconciliation_action": None,
+                    "last_assistant_message": "上次操作确认未提交，可以继续。",
+                }
+            )
+        safe = case.safe_result or {}
+        resource_id = safe.get("resource_id")
+        if not resource_id:
+            return state.model_copy(
+                update={
+                    "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                    "pending_reconciliation_status": AgentReconciliationStatus.MANUAL_REVIEW,
+                    "last_assistant_message": "该操作需要物业人工核查。",
+                }
+            )
+        reconciled_id = UUID(str(resource_id))
+        ticket_id = (
+            reconciled_id
+            if case.action.value in {"CREATE_TICKET", "ESCALATE_TO_OPERATOR"}
+            else state.active_ticket_id
+        )
+        if ticket_id is None:
+            return state.model_copy(
+                update={
+                    "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                    "pending_reconciliation_status": AgentReconciliationStatus.MANUAL_REVIEW,
+                    "last_assistant_message": "该操作需要物业人工核查。",
+                }
+            )
+        snapshot_response = await self._mcp.get_ticket_snapshot(
+            GetTicketSnapshotRequest(
+                actor_type=state.actor_type,
+                actor_id=state.actor_id,
+                trace_id=uuid5(NAMESPACE_URL, f"fixflow:reconciliation-refresh:{case.id}"),
+                ticket_id=ticket_id,
+            )
+        )
+        snapshot = snapshot_response.data
+        resource_matches = bool(
+            snapshot_response.result_code is ResultCode.FOUND
+            and snapshot is not None
+            and snapshot.ticket_id == ticket_id
+            and snapshot.property_id == state.property_id
+            and snapshot.resident_id == state.user_id
+        )
+        if case.action.value in {"BOOK_APPOINTMENT", "RESCHEDULE_APPOINTMENT"}:
+            resource_matches = bool(
+                resource_matches
+                and snapshot is not None
+                and snapshot.active_appointment is not None
+                and snapshot.active_appointment.appointment_id == reconciled_id
+            )
+        if not resource_matches:
+            return state.model_copy(
+                update={
+                    "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                    "pending_reconciliation_status": AgentReconciliationStatus.MANUAL_REVIEW,
+                    "last_assistant_message": "该操作需要物业人工核查。",
+                }
+            )
+        updates: dict[str, object] = {
+            "pending_operation": None,
+            "pending_action": PendingAction.NONE,
+            "pending_reconciliation_case_id": None,
+            "pending_reconciliation_status": None,
+            "pending_reconciliation_action": None,
+            "snapshot_refresh_required": True,
+        }
+        if case.action.value == "CREATE_TICKET":
+            updates["active_ticket_id"] = reconciled_id
+            updates["workflow_stage"] = WorkflowStage.FINDING_SLOTS
+            updates["last_assistant_message"] = "已核对工单创建结果，可以继续选择预约时间。"
+        elif case.action.value in {"BOOK_APPOINTMENT", "RESCHEDULE_APPOINTMENT"}:
+            updates["active_appointment_id"] = reconciled_id
+            updates["workflow_stage"] = WorkflowStage.DONE
+            updates["last_assistant_message"] = "已核对预约结果，数据库中的预约已生效。"
+        else:
+            updates["workflow_stage"] = WorkflowStage.HUMAN_REVIEW
+            updates["last_assistant_message"] = "已核对人工升级结果，物业将继续处理。"
+        return state.model_copy(update=updates)
 
     @staticmethod
     def _config(thread_id: UUID) -> RunnableConfig:
@@ -144,6 +273,23 @@ class AgentOrchestrator:
             if error:
                 invalidated = await self._invalidate_authorization(existing)
                 return self._failure(turn, invalidated, error)
+            existing = await self._refresh_reconciliation(existing)
+            await self._graph.aupdate_state(
+                self._config(existing.thread_id),
+                RuntimeGraphState(state_json=existing.model_dump_json()),
+            )
+            if (
+                existing.workflow_stage
+                in {WorkflowStage.RECONCILIATION_PENDING, WorkflowStage.HUMAN_REVIEW}
+                and existing.pending_reconciliation_case_id is not None
+            ):
+                return self._failure(
+                    turn,
+                    existing,
+                    "RECONCILIATION_PENDING"
+                    if existing.workflow_stage is WorkflowStage.RECONCILIATION_PENDING
+                    else "MANUAL_REVIEW",
+                )
             saved = await self._graph.aget_state(self._config(turn.thread_id))
             if saved.next:
                 if any(task.interrupts for task in saved.tasks):
@@ -152,6 +298,11 @@ class AgentOrchestrator:
                     retried = await self._graph.ainvoke(
                         None,
                         self._config(turn.thread_id),
+                    )
+                except UnknownCommit as exc:
+                    current = await self._stored_state(turn.thread_id) or existing
+                    return self._failure(
+                        turn, await self._record_unknown(current, exc), "RECONCILIATION_PENDING"
                     )
                 except AgentRuntimeError as exc:
                     current = await self._stored_state(turn.thread_id) or existing
@@ -206,6 +357,11 @@ class AgentOrchestrator:
                 RuntimeGraphState(state_json=state.model_dump_json()),
                 self._config(turn.thread_id),
             )
+        except UnknownCommit as exc:
+            current = await self._stored_state(turn.thread_id) or state
+            return self._failure(
+                turn, await self._record_unknown(current, exc), "RECONCILIATION_PENDING"
+            )
         except AgentRuntimeError as exc:
             current = await self._stored_state(turn.thread_id) or state
             return self._failure(turn, current, exc.code)
@@ -233,11 +389,30 @@ class AgentOrchestrator:
         if error:
             invalidated = await self._invalidate_authorization(state)
             return self._failure_from_ids(thread_id, validated.trace_id, invalidated, error)
+        state = await self._refresh_reconciliation(state)
+        await self._graph.aupdate_state(
+            self._config(thread_id), RuntimeGraphState(state_json=state.model_dump_json())
+        )
+        if state.pending_reconciliation_case_id is not None:
+            code = (
+                "RECONCILIATION_PENDING"
+                if state.workflow_stage is WorkflowStage.RECONCILIATION_PENDING
+                else "MANUAL_REVIEW"
+            )
+            return self._failure_from_ids(thread_id, validated.trace_id, state, code)
         command: Command[object] = Command(resume=validated.model_dump(mode="json"))
         try:
             output = await self._graph.ainvoke(
                 command,
                 self._config(thread_id),
+            )
+        except UnknownCommit as exc:
+            current = await self._stored_state(thread_id) or state
+            return self._failure_from_ids(
+                thread_id,
+                validated.trace_id,
+                await self._record_unknown(current, exc),
+                "RECONCILIATION_PENDING",
             )
         except AgentRuntimeError as exc:
             current = await self._stored_state(thread_id) or state
@@ -258,6 +433,10 @@ class AgentOrchestrator:
         if error:
             await self._invalidate_authorization(state)
             raise ThreadIdentityConflict("caller no longer has property access")
+        state = await self._refresh_reconciliation(state)
+        await self._graph.aupdate_state(
+            self._config(thread_id), RuntimeGraphState(state_json=state.model_dump_json())
+        )
         snapshot = await self._graph.aget_state(self._config(thread_id))
         return self._state_view(state, snapshot)
 
@@ -339,6 +518,9 @@ class AgentOrchestrator:
             task_intent=state.task_intent,
             missing_fields=state.missing_fields,
             updated_at=state.current_reference_time,
+            pending_reconciliation_case_id=state.pending_reconciliation_case_id,
+            pending_reconciliation_status=state.pending_reconciliation_status,
+            pending_reconciliation_action=state.pending_reconciliation_action,
         )
 
     async def _result(
@@ -364,6 +546,9 @@ class AgentOrchestrator:
             active_ticket_id=state.active_ticket_id,
             active_appointment_id=state.active_appointment_id,
             error_code=state.escalation_reason,
+            pending_reconciliation_case_id=state.pending_reconciliation_case_id,
+            pending_reconciliation_status=state.pending_reconciliation_status,
+            pending_reconciliation_action=state.pending_reconciliation_action,
         )
 
     @staticmethod
@@ -383,6 +568,9 @@ class AgentOrchestrator:
             active_ticket_id=state.active_ticket_id,
             active_appointment_id=state.active_appointment_id,
             error_code=code,
+            pending_reconciliation_case_id=state.pending_reconciliation_case_id,
+            pending_reconciliation_status=state.pending_reconciliation_status,
+            pending_reconciliation_action=state.pending_reconciliation_action,
         )
 
     @staticmethod

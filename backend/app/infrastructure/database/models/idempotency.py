@@ -47,6 +47,9 @@ class IdempotencyRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     actor_id: Mapped[str] = mapped_column(String(64), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Stable cross-process mutation identity. Legacy rows remain nullable; every
+    # Task-11-aware mutation supplies it before a request can leave the UoW.
+    operation_id: Mapped[UUID | None] = mapped_column(unique=True, index=True)
     execution_status: Mapped[IdempotencyExecutionStatus] = mapped_column(
         string_enum(IdempotencyExecutionStatus, name="idempotency_execution_status_values"),
         nullable=False,

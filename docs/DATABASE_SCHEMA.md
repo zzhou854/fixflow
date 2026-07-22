@@ -31,6 +31,7 @@ and idempotency records. Pure domain objects and transition rules remain under
 | `agent_runs` | Persistent execution lifecycle, terminal marker, trusted caller context, and per-run sequence allocator |
 | `agent_trace_events` | Sanitized, idempotent control/audit evidence, either associated with one Run or explicitly runless |
 | `outbox_events` | Transactional domain-event delivery evidence with retry state and fenced dispatcher lease |
+| `operation_reconciliation_cases` | UNKNOWN_COMMIT control state, evidence resolution, retry schedule, and fenced lease |
 
 All core foreign keys explicitly use `ON DELETE RESTRICT`. Users, properties,
 workers, tickets, appointments, histories, worker events, and idempotency rows
@@ -141,6 +142,14 @@ loading. The normal `fixflow` development database is not migrated or cleared by
 these tests.
 
 ## Separate and deferred storage
+
+Revision `20260722_0005` adds a nullable unique `operation_id` to legacy
+idempotency rows (new mutations populate it), adds the reconciliation case
+table, and extends the Trace source vocabulary with `RECONCILIATION`. Its
+downgrade removes only these additions and restores the prior Trace check. The
+revision expands `agent_trace_events.source` from `VARCHAR(7)` to `VARCHAR(14)`;
+the downgrade removes reconciliation-only audit rows before restoring the old
+width because revision 0004 cannot represent that source.
 
 Official LangGraph Checkpoint tables remain in the isolated checkpoint
 database and are never managed by business Alembic. Task 10 now supplies Trace

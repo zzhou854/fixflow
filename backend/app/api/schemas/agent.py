@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from app.agent.enums import AgentIntent, IssueField
+from app.agent.enums import AgentIntent, AgentReconciliationStatus, IssueField, PendingAction
 from app.agent_runtime.models import RunStatus
 from app.api.schemas.common import ApiModel
 from app.api.schemas.tickets import AppointmentResponse, TicketListItemResponse
@@ -127,6 +127,14 @@ class AgentThreadResponse(ApiModel):
     safety_review_required: bool
     error_code: str | None = None
     development_mode: Literal[True] = True
+    reconciliation: "ResidentReconciliationResponse | None" = None
+
+
+class ResidentReconciliationResponse(ApiModel):
+    case_id: UUID
+    status: AgentReconciliationStatus
+    action: PendingAction
+    retry_allowed: bool
 
 
 class OperatorThreadResponse(ApiModel):

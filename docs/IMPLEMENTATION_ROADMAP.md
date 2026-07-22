@@ -205,13 +205,13 @@ is still required. No row may be removed or weakened without explicit user appro
 | Resident acceptance and rework | A | implemented | `backend/app/application/ticket_service.py`, Task 4 review | Acceptance closes; concurrent rejection increments once; rejected or cancelled rework booking preserves the same ticket | No |
 | Human escalation | A/B | implemented | `backend/app/application/ticket_service.py`, Task 4 review | Safe operator recovery derives its target and cannot substitute resident acceptance | No |
 | Resident/worker state conflict | C | deferred | original F06 scenario | Automation stops and operator review is required | No |
-| Independent MCP server | A | implemented | `mcp_server/`, Task 5 review | Eight Streamable HTTP tools call application services; real MCP SDK client and PostgreSQL tests pass | No |
+| Independent MCP server | A/C | implemented | `mcp_server/`, Tasks 5 and 11 review | Eight business tools call application services; one trusted read-only outcome tool supports fenced reconciliation | No |
 | LangGraph orchestrator | B | implemented | `backend/app/agent_runtime`, Task 8 review | Typed graph routes deterministically and resumes after fresh domain snapshots | No |
 | Three-layer task memory | B | implemented | `backend/app/agent_runtime/checkpoint.py`, `backend/app/api`, Task 9 review | Isolated persistent checkpoint, bounded conversation, PostgreSQL truth, and product caller context | No |
 | Business Trace | C | partial | `backend/app/trace`, `docs/TRACE_RUNTIME.md`, Task 10 review | Persistent sanitized run/node/MCP/domain timeline and operator query pass; deterministic Replay remains Task 12 | No |
 | Transactional Outbox | C | implemented | `backend/app/outbox`, `docs/OUTBOX.md`, Task 10 review | Business write, histories, idempotency result, and stable event commit atomically; leased retry/dead-letter tests pass | No |
-| `UNKNOWN_COMMIT` recovery | C | deferred | `docs/STATE_MACHINE.md` | Real post-commit timeout is reconciled without duplication | No |
-| Fault injection | C | deferred | original F01-F12 scenarios | Configured faults produce verified recovery behavior | No |
+| `UNKNOWN_COMMIT` recovery | C | implemented | `backend/app/reconciliation`, `docs/RECONCILIATION.md`, Task 11 review | Three Resident Agent mutations plus one Operator-only escalation share one coordinator; real committed, not-committed, and inconsistent vertical cases recover without duplicate mutation | No |
+| Fault injection | C | partial | `backend/app/fault_injection`, `docs/FAULT_INJECTION.md`, Task 11 review | Eight closed delivery/reconciliation fault points are wired and tested; the broader Task 12 scenario harness remains | No |
 | Replay | C | deferred | original project specification | Stored Trace/scenario can be deterministically replayed | No |
 | Evaluation suite | D | deferred | original project specification | Approx. 100 scenarios and frozen deterministic report | No |
 | ReAct baseline | D | deferred | original project specification | Same-model/tool/data comparison is reproducible | No |
@@ -228,14 +228,9 @@ The following are not implemented yet and are not cancelled:
 - resident appointment cancellation and ticket cancellation;
 - ticket progress queries;
 - resident/worker state-conflict handling;
-- conversation checkpoints and runtime memory (`intent_version` core is implemented);
-- policy RAG;
-- Agent-runtime MCP client integration (the standalone server and transport contract are implemented);
-- LangGraph and a real online LLM provider (the Protocol and Scripted Provider are implemented);
+- a real online LLM and online embedding provider;
 - deterministic Trace Replay;
-- `UNKNOWN_COMMIT` recovery (transactional Outbox is implemented);
-- fault injection, Replay, and the Engineering Harness;
-- resident and operator frontends;
+- deterministic Replay and the broader Engineering Scenario Harness;
 - evaluation, ReAct baseline, and ablations.
 
 Tasks that do not implement these items must leave them visible here. Long delay

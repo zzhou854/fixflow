@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 from types import TracebackType
 from typing import Protocol, TypeVar
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
@@ -18,8 +18,15 @@ from app.agent_runtime.errors import (
     MCPTimeout,
     MCPToolNotFound,
     MCPUnavailable,
+    MutationNotSent,
+    UnknownCommit,
 )
 from app.agent_runtime.execution_context import current_execution_context
+from app.agent_runtime.mcp.delivery import (
+    MutationDeliveryClassification,
+    classify_validated_mutation_result,
+)
+from app.fault_injection import FaultInjector, FaultPoint, NoOpFaultInjector
 from app.infrastructure.database.models.observability import TraceSource
 from app.property_operations.contracts.appointments import (
     AvailableSlotsData,
@@ -58,6 +65,7 @@ APPROVED_TOOL_NAMES = frozenset(
         "book_appointment",
         "reschedule_appointment",
         "escalate_to_operator",
+        "get_operation_outcome",
     }
 )
 
@@ -101,12 +109,19 @@ class PropertyOperationsClient(Protocol):
 class StreamableHttpPropertyOperationsClient:
     """One initialized MCP session shared by graph nodes for its runtime lifetime."""
 
-    def __init__(self, url: str, *, timeout_seconds: float = 10.0) -> None:
+    def __init__(
+        self,
+        url: str,
+        *,
+        timeout_seconds: float = 10.0,
+        fault_injector: FaultInjector | None = None,
+    ) -> None:
         self._url = url
         self._timeout_seconds = timeout_seconds
         self._stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
         self._tools: frozenset[str] = frozenset()
+        self._faults = fault_injector or NoOpFaultInjector()
 
     async def __aenter__(self) -> "StreamableHttpPropertyOperationsClient":
         stack = AsyncExitStack()
@@ -161,39 +176,59 @@ class StreamableHttpPropertyOperationsClient:
             raise MCPUnavailable("MCP client has not been started")
         if tool_name not in self._tools:
             raise MCPToolNotFound(f"unapproved or unavailable MCP tool: {tool_name}")
+        operation_id: UUID | None = None
+        dispatched = False
         try:
             outbound = request
             context = current_execution_context()
-            if isinstance(request, MutationRequest) and context is not None:
-                operation_id = uuid5(
+            if isinstance(request, MutationRequest):
+                operation_id = request.operation_id or uuid5(
                     NAMESPACE_URL,
                     f"fixflow:operation:{request.actor_type.value}:{request.actor_id}:"
                     f"{request.idempotency_key}",
                 )
+                runtime_fields = (
+                    {"run_id": context.run_id, "thread_id": context.thread_id}
+                    if context is not None
+                    else {}
+                )
                 outbound = request.model_copy(
                     update={
-                        "run_id": context.run_id,
-                        "thread_id": context.thread_id,
                         "operation_id": operation_id,
+                        **runtime_fields,
                     }
                 )
+                try:
+                    await self._faults.hit(operation_id, FaultPoint.BEFORE_MCP_SEND)
+                except Exception as exc:
+                    raise MutationNotSent("mutation was not sent") from exc
             started = perf_counter()
             await self._trace_call(
                 tool_name,
                 "mcp_call_prepared",
                 TracePayload(tool_name=tool_name),
             )
+            dispatched = True
             async with asyncio.timeout(self._timeout_seconds):
                 result = await self._session.call_tool(
                     tool_name,
                     {"request": outbound.model_dump(mode="json", exclude_none=True)},
                 )
+            if operation_id is not None:
+                await self._faults.hit(operation_id, FaultPoint.AFTER_MCP_SEND)
+                await self._faults.hit(
+                    operation_id, FaultPoint.AFTER_RESPONSE_RECEIVED_BEFORE_VALIDATION
+                )
+        except MutationNotSent:
+            raise
         except TimeoutError as exc:
             await self._trace_call(
                 tool_name,
                 "mcp_call_failed",
                 TracePayload(tool_name=tool_name, error_code="MCP_TIMEOUT", retryable=True),
             )
+            if operation_id is not None and dispatched:
+                raise UnknownCommit(operation_id, tool_name) from exc
             raise MCPTimeout(f"MCP tool {tool_name} timed out") from exc
         except (ConnectionError, OSError) as exc:
             await self._trace_call(
@@ -201,13 +236,21 @@ class StreamableHttpPropertyOperationsClient:
                 "mcp_call_failed",
                 TracePayload(tool_name=tool_name, error_code="MCP_UNAVAILABLE", retryable=True),
             )
+            if operation_id is not None and dispatched:
+                raise UnknownCommit(operation_id, tool_name) from exc
             raise MCPUnavailable(f"MCP tool {tool_name} is unavailable") from exc
+        except Exception as exc:
+            if operation_id is not None and dispatched:
+                raise UnknownCommit(operation_id, tool_name) from exc
+            raise
         if result.isError or result.structuredContent is None:
             await self._trace_call(
                 tool_name,
                 "mcp_call_failed",
                 TracePayload(tool_name=tool_name, error_code="MCP_EMPTY_RESULT"),
             )
+            if operation_id is not None:
+                raise UnknownCommit(operation_id, tool_name)
             raise MCPClientError(f"MCP tool {tool_name} returned no structured result")
         try:
             response = response_model.model_validate(result.structuredContent)
@@ -217,11 +260,38 @@ class StreamableHttpPropertyOperationsClient:
                 "mcp_call_failed",
                 TracePayload(tool_name=tool_name, error_code="MCP_CONTRACT_VIOLATION"),
             )
+            if operation_id is not None:
+                raise UnknownCommit(operation_id, tool_name) from exc
             raise MCPContractViolation(
                 f"MCP tool {tool_name} returned invalid structured content"
             ) from exc
         if response.contract_version != CONTRACT_VERSION:
+            if operation_id is not None:
+                raise UnknownCommit(operation_id, tool_name)
             raise MCPContractViolation(f"MCP tool {tool_name} contract version mismatch")
+        if operation_id is not None:
+            classification = classify_validated_mutation_result(response.result_code)
+            if classification is MutationDeliveryClassification.UNKNOWN_COMMIT:
+                raise UnknownCommit(operation_id, tool_name)
+            if classification is MutationDeliveryClassification.KNOWN_SUCCESS:
+                expected_action = {
+                    "create_repair_ticket": "CREATE_TICKET",
+                    "book_appointment": "BOOK_APPOINTMENT",
+                    "reschedule_appointment": "RESCHEDULE_APPOINTMENT",
+                    "escalate_to_operator": "ESCALATE_TO_OPERATOR",
+                }[tool_name]
+                if (
+                    not isinstance(response.data, MutationResultData)
+                    or response.data.operation_id != operation_id
+                    or response.data.action != expected_action
+                ):
+                    raise UnknownCommit(operation_id, tool_name)
+            try:
+                await self._faults.hit(
+                    operation_id, FaultPoint.AFTER_RESULT_VALIDATED_BEFORE_CHECKPOINT
+                )
+            except Exception as exc:
+                raise UnknownCommit(operation_id, tool_name) from exc
         await self._trace_call(
             tool_name,
             "mcp_call_completed",

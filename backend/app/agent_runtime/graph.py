@@ -11,13 +11,13 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.agent_runtime.context import NodeContext, RuntimeDependencies
 from app.agent_runtime.execution_context import current_execution_context
-from app.agent_runtime.nodes.escalation import escalate, prepare_escalate
 from app.agent_runtime.nodes.interpretation import interpret_message
 from app.agent_runtime.nodes.interrupts import need_information, select_duplicate, select_slot
 from app.agent_runtime.nodes.policy import retrieve_policy
 from app.agent_runtime.nodes.property import resolve_property
 from app.agent_runtime.nodes.response import (
     compose,
+    finish_manual_request,
     finish_policy_review,
     finish_safety,
     finish_unsupported,
@@ -159,12 +159,11 @@ def build_agent_graph(
     add_node("book", partial(book, context))
     add_node("prepare_reschedule", prepare_reschedule)
     add_node("reschedule", partial(reschedule, context))
-    add_node("prepare_escalate", prepare_escalate)
-    add_node("escalate", partial(escalate, context))
     add_node("compose", partial(compose, context))
     add_node("finish", partial(compose, context))
     add_node("finish_safety", finish_safety)
     add_node("finish_policy_review", finish_policy_review)
+    add_node("finish_manual_request", finish_manual_request)
     add_node("finish_unsupported", finish_unsupported)
 
     graph.add_edge(START, "resolve_property")
@@ -184,13 +183,12 @@ def build_agent_graph(
     graph.add_edge("book", "refresh_snapshot")
     graph.add_edge("prepare_reschedule", "reschedule")
     graph.add_edge("reschedule", "refresh_snapshot")
-    graph.add_edge("prepare_escalate", "escalate")
-    graph.add_edge("escalate", "refresh_snapshot")
     for terminal in (
         "compose",
         "finish",
         "finish_safety",
         "finish_policy_review",
+        "finish_manual_request",
         "finish_unsupported",
     ):
         graph.add_edge(terminal, END)

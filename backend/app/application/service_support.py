@@ -19,6 +19,7 @@ from app.application.events import (
     AggregateType,
     DomainEventType,
     build_domain_event,
+    operation_id_for,
 )
 from app.application.models import MutationMetadata, OperationResult
 from app.application.ports import (
@@ -115,7 +116,8 @@ class TransactionalService:
         payload: dict[str, object],
         handler: Handler,
     ) -> OperationResult:
-        digest = _request_hash(payload)
+        digest = metadata.request_fingerprint or _request_hash(payload)
+        operation_id = operation_id_for(metadata, scope)
         async with self._uow_factory() as uow:
             try:
                 stored = await uow.idempotency.acquire(
@@ -124,6 +126,7 @@ class TransactionalService:
                     actor_id=metadata.actor_id,
                     idempotency_key=metadata.idempotency_key,
                     request_hash=digest,
+                    operation_id=operation_id,
                 )
                 if stored.request_hash != digest:
                     raise IdempotencyConflict("idempotency_payload_conflict", scope=scope)

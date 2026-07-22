@@ -2,7 +2,7 @@ export type ActorType = 'RESIDENT' | 'OPERATOR'
 export type WorkflowStage =
   | 'INTAKE' | 'NEED_PROPERTY' | 'NEED_INFO' | 'EMERGENCY_REVIEW'
   | 'POLICY_CHECK' | 'DUPLICATE_CHECK' | 'EXISTING_TICKET' | 'CREATING_TICKET'
-  | 'UNKNOWN_COMMIT' | 'FINDING_SLOTS' | 'AWAITING_SLOT_CONFIRMATION'
+  | 'RECONCILIATION_PENDING' | 'FINDING_SLOTS' | 'AWAITING_SLOT_CONFIRMATION'
   | 'BOOKING' | 'MONITORING_APPOINTMENT' | 'RESCHEDULING' | 'STATUS_CONFLICT'
   | 'AWAITING_ACCEPTANCE' | 'PLANNING_REWORK' | 'HUMAN_REVIEW' | 'DONE'
 
@@ -58,6 +58,25 @@ export interface AgentThread {
   policy_status: { sufficiency: string | null; conflict: boolean; evidence_ids: string[] }
   structured_issue: { issue_category: string | null; issue_location: string | null; issue_description: string | null; severity: string | null }
   safety_review_required: boolean; error_code: string | null; development_mode: true
+  reconciliation?: ResidentReconciliation | null
+}
+export type ReconciliationStatus = 'PENDING'|'PROCESSING'|'RESOLVED_COMMITTED'|'RESOLVED_NOT_COMMITTED'|'MANUAL_REVIEW'
+export interface ResidentReconciliation { case_id: string; status: ReconciliationStatus; action: string; retry_allowed: boolean }
+export interface ReconciliationCase {
+  case_id: string; operation_id_short?: string; thread_id_short?: string | null; original_run_id_short?: string
+  operation_type: string; status: ReconciliationStatus; target_entity_type?: string | null
+  target_entity_id: string | null; expected_entity_version?: number | null; attempt_count: number
+  evidence_status: string | null; last_error_code?: string | null; resolution_code: string | null
+  safe_result?: Record<string, unknown> | null; retry_allowed: boolean; created_at: string
+  updated_at: string; resolved_at?: string | null
+}
+export interface OperationResponse {
+  ok: boolean; code: string; resource_type: string | null; resource_id: string | null
+  resource_version: number | null; replayed: boolean
+  reconciliation: null | {
+    case_id: string; action: string; status: ReconciliationStatus
+    retry_allowed: boolean; ticket_id: string
+  }
 }
 export interface OperatorThread {
   thread_id: string; workflow_stage: WorkflowStage
@@ -75,7 +94,7 @@ export interface AgentRun {
 }
 export interface TraceEvent {
   event_id: string; sequence_number: number | null
-  source: 'API' | 'AGENT' | 'MCP' | 'DOMAIN' | 'OUTBOX'
+  source: 'API' | 'AGENT' | 'MCP' | 'DOMAIN' | 'OUTBOX' | 'RECONCILIATION'
   event_type: string; node_name: string | null; operation_id: string | null
   payload: Record<string, string | number | boolean | null>; occurred_at: string
 }

@@ -1,13 +1,16 @@
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, Query
+from fastapi.responses import JSONResponse
 
 from app.api.dependencies import ApiServices, get_services, require_operator
 from app.api.errors import ApiError
 from app.api.schemas.agent import OperatorThreadResponse
+from app.api.schemas.reconciliation import ReconciliationCasePage, ReconciliationCaseResponse
 from app.api.schemas.tickets import (
     EscalateTicketRequest,
     OperationResponse,
+    ReconciliationPendingResponse,
     TicketDetailResponse,
     TicketListItemResponse,
     TicketPageResponse,
@@ -17,12 +20,73 @@ from app.api.schemas.trace import (
     AgentRunResponse,
     TraceEventPageResponse,
 )
+from app.api.services.operator import OperatorEscalationExecution, OperatorMutationNotSent
 from app.application.auth import AuthenticatedIdentity
 from app.application.query_models import QueryActor
 from app.domain.enums import IssueCategory, Severity, TicketStatus
 from app.infrastructure.database.models.observability import TraceSource
+from app.infrastructure.database.models.reconciliation import (
+    ReconciliationAction,
+    ReconciliationStatus,
+)
 
 router = APIRouter(prefix="/api/v1/operator", tags=["operator"])
+
+
+@router.get("/reconciliation/cases", response_model=ReconciliationCasePage)
+async def list_reconciliation_cases(
+    status: ReconciliationStatus | None = None,
+    operation: ReconciliationAction | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> ReconciliationCasePage:
+    if services.operator_reconciliation is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "对账服务暂不可用。", retryable=True)
+    return ReconciliationCasePage(
+        items=await services.operator_reconciliation.list(
+            operator_id=identity.actor_id,
+            status=status,
+            action=operation,
+            limit=limit,
+            offset=offset,
+        ),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/reconciliation/cases/{case_id}", response_model=ReconciliationCaseResponse)
+async def get_reconciliation_case(
+    case_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> ReconciliationCaseResponse:
+    row = (
+        await services.operator_reconciliation.get(case_id, operator_id=identity.actor_id)
+        if services.operator_reconciliation
+        else None
+    )
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", "未找到对账记录。")
+    return row
+
+
+@router.post("/reconciliation/cases/{case_id}/recheck", response_model=ReconciliationCaseResponse)
+async def recheck_reconciliation_case(
+    case_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> ReconciliationCaseResponse:
+    row = (
+        await services.operator_reconciliation.recheck(case_id, operator_id=identity.actor_id)
+        if services.operator_reconciliation
+        else None
+    )
+    if row is None:
+        raise ApiError(409, "RECONCILIATION_NOT_RECHECKABLE", "该对账记录不能重新检查。")
+    return row
 
 
 @router.get("/threads/{thread_id}/runs", response_model=AgentRunPageResponse)
@@ -130,15 +194,14 @@ async def escalate(
     identity: AuthenticatedIdentity = Depends(require_operator),
     services: ApiServices = Depends(get_services),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
-) -> OperationResponse:
+) -> OperationResponse | JSONResponse:
     replay_trace_id = uuid4()
     key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
-    result = await services.idempotency.execute(
-        caller_id=identity.actor_id,
-        scope=f"operator:escalate:{ticket_id}",
-        key=idempotency_key,
-        payload=request.model_dump(mode="json"),
-        operation=lambda: services.operator_actions.escalate(
+    payload = request.model_dump(mode="json")
+    scope = f"operator:escalate:{ticket_id}"
+
+    async def dispatch() -> OperatorEscalationExecution:
+        return await services.operator_actions.escalate(
             operator_id=identity.actor_id,
             ticket_id=ticket_id,
             expected_version=request.expected_version,
@@ -146,15 +209,77 @@ async def escalate(
             reason_text=request.reason_text,
             evidence=request.evidence,
             trace_id=uuid4(),
-        ),
-        on_replay=lambda result: services.operator_actions.record_api_replay(
-            result,
-            trace_id=replay_trace_id,
-            idempotency_key_fingerprint=key_fingerprint,
-        ),
-        on_conflict=lambda: services.operator_actions.record_api_conflict(
-            trace_id=replay_trace_id,
-            idempotency_key_fingerprint=key_fingerprint,
-        ),
-    )
-    return OperationResponse.model_validate(result)
+            idempotency_key=idempotency_key,
+            request_fingerprint=services.idempotency.payload_fingerprint(payload),
+        )
+
+    async def execute_once() -> OperatorEscalationExecution:
+        return await services.idempotency.execute(
+            caller_id=identity.actor_id,
+            scope=scope,
+            key=idempotency_key,
+            payload=payload,
+            operation=dispatch,
+            on_replay=lambda result: services.operator_actions.record_api_replay(
+                result,
+                trace_id=replay_trace_id,
+                idempotency_key_fingerprint=key_fingerprint,
+            ),
+            on_conflict=lambda: services.operator_actions.record_api_conflict(
+                trace_id=replay_trace_id,
+                idempotency_key_fingerprint=key_fingerprint,
+            ),
+        )
+
+    try:
+        execution = await execute_once()
+        execution = await services.operator_actions.refresh_reconciliation(execution)
+        case = execution.reconciliation_case
+        if case is not None and case.status is ReconciliationStatus.RESOLVED_NOT_COMMITTED:
+            released = await services.idempotency.discard_completed(
+                caller_id=identity.actor_id,
+                scope=scope,
+                key=idempotency_key,
+                payload=payload,
+            )
+            if released:
+                execution = await execute_once()
+    except OperatorMutationNotSent as exc:
+        raise ApiError(
+            503,
+            "NOT_SENT",
+            "升级请求尚未发出，可使用原请求重试。",
+            retryable=True,
+        ) from exc
+    if execution.reconciliation_case is not None:
+        case = execution.reconciliation_case
+        response = OperationResponse(
+            ok=False,
+            code="RECONCILIATION_PENDING",
+            resource_type="repair_ticket",
+            resource_id=ticket_id,
+            resource_version=None,
+            replayed=False,
+            reconciliation=ReconciliationPendingResponse(
+                case_id=case.id,
+                action=case.action,
+                status=case.status,
+                retry_allowed=False,
+                ticket_id=ticket_id,
+            ),
+        )
+        return JSONResponse(status_code=202, content=response.model_dump(mode="json"))
+    if execution.operation is None:
+        raise ApiError(500, "INTERNAL_ERROR", "升级结果不可用。", retryable=True)
+    if not execution.operation.ok:
+        status = {
+            "NOT_FOUND": 404,
+            "TICKET_NOT_FOUND": 404,
+            "PERMISSION_DENIED": 403,
+            "OPERATOR_REQUIRED": 403,
+            "VERSION_CONFLICT": 409,
+            "IDEMPOTENCY_CONFLICT": 409,
+            "VALIDATION_ERROR": 422,
+        }.get(execution.operation.code.upper(), 400)
+        raise ApiError(status, execution.operation.code.upper(), "工单升级未通过业务校验。")
+    return OperationResponse.model_validate(execution.operation)

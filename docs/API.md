@@ -125,3 +125,27 @@ On Windows, start the API with `uv run python -m app.api.run` after setting
 `PYTHONPATH=backend`. The entry point applies the Selector event-loop policy
 required by the official asynchronous PostgreSQL checkpointer before Uvicorn
 creates its loop. Calling Uvicorn directly is not the supported Windows path.
+
+## UNKNOWN_COMMIT responses and operator review
+
+Resident thread creation, message, and Resume return HTTP 202 with
+`error_code=RECONCILIATION_PENDING`, `run_status=FAILED_SAFE`, the frozen stage,
+and a minimal reconciliation projection when mutation delivery is uncertain.
+Repeating the same API `Idempotency-Key` returns the first response and does not
+create another Run, operation, or Case.
+
+Operators use `GET /api/v1/operator/reconciliation/cases`, its detail route, and
+`POST .../{case_id}/recheck`. The reviewing account must be an active Operator.
+Resident-action cases retain their frozen resident/property authority evidence;
+Operator escalation cases retain the original Operator identity and the formal
+ticket/property link. Responses omit raw keys,
+payloads, Checkpoint state, SQL, and exceptions. Recheck is PENDING-only and
+never writes a resolution or resends the mutation.
+
+`POST /api/v1/operator/tickets/{ticket_id}/escalate` is the sole escalation
+mutation entry and requires an active Operator JWT. Resident `REQUEST_HUMAN`
+does not call it. Unknown delivery returns HTTP 202 with a minimal Case. While
+the Case is unresolved, committed, or manual, same-key API replay returns the
+cached 202 and never starts another Action Run. A formal same-payload, same-key
+retry is released only after `RESOLVED_NOT_COMMITTED`; committed and inconsistent
+outcomes are never automatically resent.

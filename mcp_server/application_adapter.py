@@ -26,6 +26,7 @@ from app.application.query_models import (
     ResidentPropertyReadModel,
     TicketSnapshotReadModel,
 )
+from app.fault_injection import FaultInjector, FaultPoint, NoOpFaultInjector
 
 from mcp_server.schemas.appointments import (
     AvailableSlotItem,
@@ -164,9 +165,11 @@ class MCPApplicationAdapter:
         application: ApplicationGateway,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        fault_injector: FaultInjector | None = None,
     ) -> None:
         self._application = application
         self._clock = clock
+        self._faults = fault_injector or NoOpFaultInjector()
 
     @staticmethod
     def _actor(request: ReadRequest) -> QueryActor:
@@ -182,6 +185,7 @@ class MCPApplicationAdapter:
             run_id=request.run_id,
             thread_id=request.thread_id,
             operation_id=request.operation_id,
+            request_fingerprint=request.request_fingerprint,
         )
 
     @staticmethod
@@ -199,7 +203,7 @@ class MCPApplicationAdapter:
 
     @staticmethod
     def _mutation_result(
-        result: OperationResult, trace_id: UUID
+        result: OperationResult, trace_id: UUID, operation_id: UUID | None, action: str
     ) -> ToolResponse[MutationResultData]:
         if not result.ok:
             return MCPApplicationAdapter._error(result.code, trace_id)
@@ -216,6 +220,8 @@ class MCPApplicationAdapter:
             result_code=result_code,
             message="The operation completed successfully.",
             data=MutationResultData(
+                operation_id=operation_id,
+                action=action,
                 resource_type=result.resource_type,
                 resource_id=result.resource_id,
                 resource_version=result.resource_version,
@@ -318,9 +324,17 @@ class MCPApplicationAdapter:
                     allow_duplicate=request.allow_duplicate,
                 )
             )
-            return self._mutation_result(result, request.trace_id)
+        except ApplicationError as exc:
+            return self._error(exc.code, request.trace_id)
         except Exception:
             return self._unexpected(request.trace_id)
+        if request.operation_id is not None:
+            await self._faults.hit(
+                request.operation_id, FaultPoint.AFTER_SERVER_COMMIT_BEFORE_RESPONSE
+            )
+        return self._mutation_result(
+            result, request.trace_id, request.operation_id, "CREATE_TICKET"
+        )
 
     async def get_ticket_snapshot(
         self, request: GetTicketSnapshotRequest
@@ -418,9 +432,17 @@ class MCPApplicationAdapter:
                     expected_ticket_version=request.expected_version,
                 )
             )
-            return self._mutation_result(result, request.trace_id)
+        except ApplicationError as exc:
+            return self._error(exc.code, request.trace_id)
         except Exception:
             return self._unexpected(request.trace_id)
+        if request.operation_id is not None:
+            await self._faults.hit(
+                request.operation_id, FaultPoint.AFTER_SERVER_COMMIT_BEFORE_RESPONSE
+            )
+        return self._mutation_result(
+            result, request.trace_id, request.operation_id, "BOOK_APPOINTMENT"
+        )
 
     async def reschedule_appointment(
         self, request: RescheduleAppointmentRequest
@@ -438,9 +460,17 @@ class MCPApplicationAdapter:
                     expected_appointment_version=request.expected_appointment_version,
                 )
             )
-            return self._mutation_result(result, request.trace_id)
+        except ApplicationError as exc:
+            return self._error(exc.code, request.trace_id)
         except Exception:
             return self._unexpected(request.trace_id)
+        if request.operation_id is not None:
+            await self._faults.hit(
+                request.operation_id, FaultPoint.AFTER_SERVER_COMMIT_BEFORE_RESPONSE
+            )
+        return self._mutation_result(
+            result, request.trace_id, request.operation_id, "RESCHEDULE_APPOINTMENT"
+        )
 
     async def escalate_to_operator(
         self, request: EscalateToOperatorRequest
@@ -456,6 +486,14 @@ class MCPApplicationAdapter:
                     evidence=request.evidence,
                 )
             )
-            return self._mutation_result(result, request.trace_id)
+        except ApplicationError as exc:
+            return self._error(exc.code, request.trace_id)
         except Exception:
             return self._unexpected(request.trace_id)
+        if request.operation_id is not None:
+            await self._faults.hit(
+                request.operation_id, FaultPoint.AFTER_SERVER_COMMIT_BEFORE_RESPONSE
+            )
+        return self._mutation_result(
+            result, request.trace_id, request.operation_id, "ESCALATE_TO_OPERATOR"
+        )

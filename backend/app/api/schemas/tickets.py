@@ -13,6 +13,10 @@ from app.domain.enums import (
     TicketStatus,
     WorkerEventType,
 )
+from app.infrastructure.database.models.reconciliation import (
+    ReconciliationAction,
+    ReconciliationStatus,
+)
 
 
 class PropertyResponse(ApiModel):
@@ -107,3 +111,12 @@ class OperationResponse(ApiModel):
     resource_id: UUID | None
     resource_version: int | None
     replayed: bool
+    reconciliation: "ReconciliationPendingResponse | None" = None
+
+
+class ReconciliationPendingResponse(ApiModel):
+    case_id: UUID
+    action: ReconciliationAction
+    status: ReconciliationStatus
+    retry_allowed: bool
+    ticket_id: UUID

@@ -31,7 +31,8 @@ implementations, Unit of Work, deterministic application services, and real
 PostgreSQL transaction/concurrency tests.
 
 Task 5 adds a deterministic candidate-slot Application query and the independent
-`property-operations-mcp` process with eight typed tools, Streamable HTTP, and
+`property-operations-mcp` process with eight typed business tools, one trusted
+read-only operation-outcome tool, Streamable HTTP, and
 real MCP-client transport coverage.
 
 Stage A, Task 6, and Task 7 are committed. Task 8 adds a single typed LangGraph,
@@ -53,6 +54,9 @@ routers or the browser.
 Task 10 adds a transactional domain Outbox, fenced leased at-least-once dispatcher,
 persistent sanitized Trace control plane, and ticket-linked operator execution
 timeline without changing the Single Orchestrator or domain state machines.
+Task 11 adds a separate reconciliation control plane. It uses durable operation,
+idempotency, aggregate, and Outbox evidence; its fenced worker never replays a
+mutation or reads LangGraph Checkpoint.
 
 ## Product API boundary
 

@@ -64,7 +64,7 @@ def _new_repair_state(**updates: object) -> AgentState:
         ({}, "retrieve_policy"),
         ({"task_intent": AgentIntent.QUERY_TICKET_STATUS}, "resolve_existing"),
         ({"task_intent": AgentIntent.RESCHEDULE_APPOINTMENT}, "resolve_existing"),
-        ({"task_intent": AgentIntent.REQUEST_HUMAN}, "resolve_existing"),
+        ({"task_intent": AgentIntent.REQUEST_HUMAN}, "finish_manual_request"),
         ({"task_intent": AgentIntent.CANCEL_TICKET}, "finish_unsupported"),
         ({"task_intent": AgentIntent.ACCEPT_REPAIR}, "finish_unsupported"),
     ],
@@ -113,7 +113,6 @@ def test_duplicate_router_distinguishes_none_one_and_many_candidates() -> None:
     [
         (AgentIntent.NEW_REPAIR, False, None, "list_slots"),
         (AgentIntent.QUERY_TICKET_STATUS, False, None, "compose"),
-        (AgentIntent.REQUEST_HUMAN, False, None, "prepare_escalate"),
         (AgentIntent.NEW_REPAIR, True, None, "prepare_book"),
         (AgentIntent.RESCHEDULE_APPOINTMENT, True, None, "prepare_reschedule"),
         (AgentIntent.NEW_REPAIR, False, "active", "compose"),

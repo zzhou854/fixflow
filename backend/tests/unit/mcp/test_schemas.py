@@ -31,7 +31,7 @@ def _mutation_metadata() -> dict[str, object]:
 
 
 @pytest.mark.asyncio
-async def test_all_eight_tools_publish_closed_input_and_structured_output_schemas() -> None:
+async def test_all_nine_tools_publish_closed_input_and_structured_output_schemas() -> None:
     server = create_server(
         MCPSettings(database_url="postgresql+asyncpg://placeholder:placeholder@localhost/test")
     )
@@ -45,6 +45,7 @@ async def test_all_eight_tools_publish_closed_input_and_structured_output_schema
         "book_appointment",
         "reschedule_appointment",
         "escalate_to_operator",
+        "get_operation_outcome",
     }
     for tool in tools:
         assert tool.inputSchema["required"] == ["request"]

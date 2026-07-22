@@ -103,7 +103,7 @@ def test_workflow_stage_includes_every_approved_value() -> None:
         "DUPLICATE_CHECK",
         "EXISTING_TICKET",
         "CREATING_TICKET",
-        "UNKNOWN_COMMIT",
+        "RECONCILIATION_PENDING",
         "FINDING_SLOTS",
         "AWAITING_SLOT_CONFIRMATION",
         "BOOKING",

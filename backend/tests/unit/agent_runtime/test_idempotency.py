@@ -35,7 +35,6 @@ def _operation(
         PendingAction.CREATE_TICKET,
         PendingAction.BOOK_APPOINTMENT,
         PendingAction.RESCHEDULE_APPOINTMENT,
-        PendingAction.REQUEST_HUMAN_REVIEW,
     ],
 )
 def test_mutation_keys_are_stable_per_logical_operation(action: PendingAction) -> None:

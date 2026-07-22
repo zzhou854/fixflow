@@ -8,7 +8,15 @@ import { api, ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { DemoBanner } from '../components/DemoBanner'
 import { TraceTimeline } from '../components/TraceTimeline'
+import { ReconciliationCases } from '../components/ReconciliationCases'
 import type { OperatorThread, Ticket, TicketDetail } from '../types'
+
+interface EscalationAttempt {
+  ticketId: string
+  idempotencyKey: string
+  caseId: string | null
+  status: string
+}
 
 export function OperatorPage() {
   const { token, user, logout } = useAuth()
@@ -19,6 +27,7 @@ export function OperatorPage() {
   const [status, setStatus] = useState<string>()
   const [category, setCategory] = useState<string>()
   const [severity, setSeverity] = useState<string>()
+  const [escalation, setEscalation] = useState<EscalationAttempt | null>(null)
 
   const load = useCallback(async () => {
     if (!token) return
@@ -47,6 +56,46 @@ export function OperatorPage() {
     catch (reason) { toast.error(reason instanceof ApiError ? reason.body.message : '会话加载失败') }
   }
 
+  async function escalateTicket() {
+    if (!token || !detail) return
+    const ticket = detail.ticket
+    const previous = escalation?.ticketId === ticket.ticket_id ? escalation : null
+    const idempotencyKey = previous?.idempotencyKey ?? crypto.randomUUID()
+    try {
+      const result = await api.operatorEscalate(token, ticket.ticket_id, ticket.version, idempotencyKey)
+      if (result.reconciliation) {
+        setEscalation({
+          ticketId: ticket.ticket_id,
+          idempotencyKey,
+          caseId: result.reconciliation.case_id,
+          status: result.reconciliation.status,
+        })
+        toast.warning('系统正在核对本次升级是否已经提交，请勿重复操作。')
+        return
+      }
+      setEscalation(null)
+      setDetail(await api.operatorTicket(token, ticket.ticket_id))
+      await load()
+      toast.success('工单已进入人工升级状态。')
+    } catch (reason) {
+      toast.error(reason instanceof ApiError ? reason.body.message : '人工升级失败')
+    }
+  }
+
+  async function refreshEscalation() {
+    if (!token || !escalation?.caseId) return
+    try {
+      const current = await api.reconciliationCase(token, escalation.caseId)
+      setEscalation({ ...escalation, status: current.status })
+      if (current.status === 'RESOLVED_COMMITTED' && detail) {
+        setDetail(await api.operatorTicket(token, detail.ticket.ticket_id))
+        await load()
+      }
+    } catch (reason) {
+      toast.error(reason instanceof ApiError ? reason.body.message : '对账状态加载失败')
+    }
+  }
+
   return <Layout className="app-shell">
     <DemoBanner />
     <Layout.Header className="app-header">
@@ -54,6 +103,7 @@ export function OperatorPage() {
       <Space><span>{user?.username}</span><Button icon={<LogoutOutlined />} onClick={logout}>退出</Button></Space>
     </Layout.Header>
     <Layout.Content className="operator-content">
+      {token && <ReconciliationCases token={token} />}
       <Card><Space wrap>
         <Select aria-label="工单状态" allowClear placeholder="工单状态" onChange={setStatus} options={['OPEN','SCHEDULED','IN_PROGRESS','PENDING_ACCEPTANCE','REWORK_REQUIRED','ESCALATED','CANCELLED','CLOSED'].map((value) => ({ value }))} />
         <Select aria-label="故障类别" allowClear placeholder="故障类别" onChange={setCategory} options={['WATER_LEAK','ELECTRICAL','DOOR_LOCK'].map((value) => ({ value }))} />
@@ -99,6 +149,25 @@ export function OperatorPage() {
             <Descriptions.Item label="预约">{detail.ticket.appointment ? `${detail.ticket.appointment.status} · ${new Date(detail.ticket.appointment.scheduled_start).toLocaleString()}` : '暂无'}</Descriptions.Item>
             <Descriptions.Item label="最新 Worker Event">{detail.latest_worker_event?.event_type ?? '暂无'}</Descriptions.Item>
           </Descriptions>
+          {detail.ticket.ticket_status !== 'ESCALATED' && <Card size="small" title="人工升级">
+            <Space direction="vertical">
+              {escalation?.ticketId === detail.ticket.ticket_id && <Alert
+                type={escalation.status === 'MANUAL_REVIEW' ? 'warning' : 'info'}
+                message={`对账状态：${escalation.status}`}
+                description={escalation.status === 'RESOLVED_NOT_COMMITTED'
+                  ? '权威证据确认上次未提交，可使用原请求正式重试。'
+                  : '核对完成前不会自动重复升级。'}
+              />}
+              <Space>
+                <Button
+                  type="primary"
+                  disabled={Boolean(escalation && escalation.ticketId === detail.ticket.ticket_id && escalation.status !== 'RESOLVED_NOT_COMMITTED')}
+                  onClick={() => void escalateTicket()}
+                >{escalation?.status === 'RESOLVED_NOT_COMMITTED' ? '使用原请求重试' : '人工升级'}</Button>
+                {escalation?.caseId && <Button onClick={() => void refreshEscalation()}>刷新对账状态</Button>}
+              </Space>
+            </Space>
+          </Card>}
           <Card size="small" title="工单状态历史"><List dataSource={detail.ticket_history} renderItem={(item) => <List.Item>{item.from_status ?? '创建'} → {item.to_status} · {item.action}</List.Item>} /></Card>
           <Card size="small" title="预约状态历史"><List dataSource={detail.appointment_history} renderItem={(item) => <List.Item>{item.from_status ?? '创建'} → {item.to_status}</List.Item>} /></Card>
           <Alert message="仅可审查 Agent State 中已关联工单且经数据库快照复核的会话；未建工单的人工审查会话首版不进入物业待办。" />

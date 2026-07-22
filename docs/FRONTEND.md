@@ -60,3 +60,18 @@ The current Ant Design production chunk is about 1.06 MB before gzip. It is a
 non-blocking first-release optimisation item; no second UI framework or complex
 bundler plugin is introduced. API, MCP, and frontend still start as documented
 separate processes, so one-command Compose delivery remains partial.
+
+Task 11 adds resident reconciliation states and the operator “失败对账” panel.
+Pending/processing disables mutation-producing controls and asks the resident not
+to resubmit; manual review remains blocked for property staff. A confirmed
+not-committed result returns control to the original Resume path and a committed
+result is rendered only after the API refreshes PostgreSQL snapshots. Operators
+can filter, page, inspect a sanitized detail drawer, refresh, and request a
+PENDING-only read recheck. No UI can mark a result or replay a mutation.
+
+Resident `REQUEST_HUMAN` only displays that property staff must handle the
+request; it never claims that a ticket was escalated. The Operator ticket drawer
+owns the formal escalation control. An HTTP 202 disables that control and shows
+the Case status. `RESOLVED_COMMITTED` refreshes the ticket,
+`RESOLVED_NOT_COMMITTED` re-enables a same-payload retry with the original API
+idempotency key, and `MANUAL_REVIEW` remains blocked without a force button.

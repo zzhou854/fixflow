@@ -11,7 +11,7 @@ demo.
 
 ## Current status
 
-Stage A, Stage B, and Task 9 are complete. Task 10 is at its code-review gate:
+Stage A, Stage B, Tasks 9 and 10 are complete. Task 11 is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
@@ -27,8 +27,8 @@ Stage A, Stage B, and Task 9 are complete. Task 10 is at its code-review gate:
   real PostgreSQL concurrency tests;
 - deterministic 30-minute candidate-slot queries with hard skill, activity,
   service-area, availability, and booking-conflict filters;
-- an independent `property-operations-mcp` process exposing eight typed tools
-  over Streamable HTTP through the existing Application layer;
+- an independent `property-operations-mcp` process exposing eight typed business
+  tools plus the trusted read-only `get_operation_outcome` tool;
 - Pydantic contract, handler, real PostgreSQL tool, and real MCP client transport
   tests;
 - strict JSON-serializable Agent State with separate utterance/task intents,
@@ -42,7 +42,7 @@ Stage A, Stage B, and Task 9 are complete. Task 10 is at its code-review gate:
   retrieval, attributable evidence, conflict and sufficiency decisions;
 - a 21-case frozen policy retrieval evaluation without an LLM judge;
 - a single deterministic LangGraph orchestrator with typed Interrupt/Resume;
-- a production Streamable HTTP MCP client using the shared eight-tool contract;
+- a production Streamable HTTP MCP client using the shared business contracts;
 - an isolated official PostgreSQL checkpointer and fresh-snapshot recovery;
 - the natural-language create-ticket and book-appointment main flow;
 - authenticated Agent thread and strict Resume APIs with bounded SSE delivery;
@@ -53,11 +53,12 @@ Stage A, Stage B, and Task 9 are complete. Task 10 is at its code-review gate:
 - a leased at-least-once Dispatcher, retry/backoff, and dead-letter state;
 - persistent sanitized Agent/API/MCP/domain Trace runs and events;
 - a ticket-linked operator execution timeline kept separate from business history;
+- durable UNKNOWN_COMMIT cases, fenced claims, and authoritative operation evidence;
+- a deterministic test-only fault-injection port;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Online LLM/embedding providers, full unknown-commit reconciliation, fault
-injection, Replay, and evaluation remain mandatory roadmap work, not cancelled
-scope.
+Online LLM/embedding providers, Replay, and evaluation remain mandatory roadmap
+work, not cancelled scope.
 
 ## Prerequisites
 
@@ -108,8 +109,11 @@ JWTs never enter SSE URLs. HTTP mutation responses and Thread State carry the
 formal result, while bounded in-memory SSE is non-replayable. Task 9 requires
 `Idempotency-Key` on thread creation, messages, Resume, and operator escalation.
 Operator thread review and Trace are read-only and limited to threads linked to
-a database-verified ticket. Task 10 supplies persistent Outbox and Trace;
-Replay and unknown-commit reconciliation remain later Stage C work.
+a database-verified ticket. Task 10 supplies persistent Outbox and Trace. Task 11
+adds UNKNOWN_COMMIT reconciliation for three Resident Agent mutations plus one
+Operator-only escalation mutation, fenced workers, safe resident and
+operator projections, and a test-only fault harness. Deterministic Replay remains
+Task 12 work.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.

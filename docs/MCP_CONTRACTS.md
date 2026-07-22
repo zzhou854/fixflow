@@ -171,8 +171,9 @@ container or global mutable session is used.
 
 ## Contract evidence and deferred work
 
-Tests cover generated schemas for all eight tools, adapter forwarding and safe
-error mapping, all eight tools through the production Application layer and real
+Tests cover generated schemas for eight business tools plus the trusted
+`get_operation_outcome` tool, adapter forwarding and safe error mapping, the
+business tools through the production Application layer and real
 PostgreSQL, deterministic slot eligibility/order, authorization and no-partial-
 write failures, idempotency/version/time conflicts, and a real MCP SDK client over
 a random-port Streamable HTTP server. The transport test initializes, lists tools,
@@ -180,11 +181,12 @@ reads schemas, invokes read and mutation tools, receives structured results, and
 shuts down the server.
 
 Task 8 adds a lifecycle-managed Agent-runtime Streamable HTTP client. It
-discovers exactly these eight tools, validates their request schemas,
+discovers exactly these nine tools, validates their request schemas,
 `contract_version`, and structured results, and exposes only typed methods to
 the deterministic Graph. Task 9 adds JWT/FastAPI and frontend above that client
-without mounting or bypassing MCP. Outbox, Trace runtime, Harness, and full
-evaluation remain deferred mandatory roadmap work.
+without mounting or bypassing MCP. Outbox, Trace, and the bounded Task 11 fault
+and reconciliation infrastructure are implemented; Replay and full evaluation
+remain deferred mandatory roadmap work.
 
 ## Shared contract ownership
 

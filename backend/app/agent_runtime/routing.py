@@ -26,9 +26,10 @@ def route_after_interpret(graph_state: RuntimeGraphState) -> str:
     if state.task_intent in {
         AgentIntent.QUERY_TICKET_STATUS,
         AgentIntent.RESCHEDULE_APPOINTMENT,
-        AgentIntent.REQUEST_HUMAN,
     }:
         return "resolve_existing"
+    if state.task_intent is AgentIntent.REQUEST_HUMAN:
+        return "finish_manual_request"
     return "finish_unsupported"
 
 
@@ -66,8 +67,6 @@ def route_after_snapshot(graph_state: RuntimeGraphState) -> str:
         return "compose"
     if state.task_intent is AgentIntent.QUERY_TICKET_STATUS:
         return "compose"
-    if state.task_intent is AgentIntent.REQUEST_HUMAN:
-        return "prepare_escalate"
     return "list_slots"
 
 

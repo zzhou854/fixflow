@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "agent_runs",
     "agent_trace_events",
     "outbox_events",
+    "operation_reconciliation_cases",
 }
 
 
@@ -67,6 +68,14 @@ def test_upgrade_downgrade_upgrade_cycle(empty_database_url: str) -> None:
         ("appointment_status_history", "trace_id", "NO"),
         ("worker_events", "trace_id", "NO"),
     }
+
+    command.downgrade(config, "20260721_0004")
+    assert "operation_reconciliation_cases" not in asyncio.run(_public_tables(empty_database_url))
+    assert {"agent_runs", "agent_trace_events", "outbox_events"} <= asyncio.run(
+        _public_tables(empty_database_url)
+    )
+    command.upgrade(config, "head")
+    assert EXPECTED_TABLES <= asyncio.run(_public_tables(empty_database_url))
 
     command.downgrade(config, "20260720_0003")
     assert {"agent_runs", "agent_trace_events", "outbox_events"}.isdisjoint(

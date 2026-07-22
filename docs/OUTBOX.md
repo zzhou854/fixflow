@@ -57,6 +57,11 @@ message-bus framework and no Redis, Kafka, or Celery dependency is introduced.
 `FIXFLOW_OUTBOX_LEASE_SECONDS`, `FIXFLOW_OUTBOX_MAX_ATTEMPTS`, and
 `FIXFLOW_OUTBOX_RETRY_BASE_SECONDS` are validated by the shared Settings model.
 
-`UNKNOWN_COMMIT` reconciliation, crash-boundary fault injection, and Replay
-remain Task 11/12 work. Outbox provides the durable evidence needed by those
-tasks but does not claim to implement them.
+Task 11 consumes Outbox as one required authoritative commit witness. Delivery
+status alone never proves a business result and the reconciliation worker never
+republishes a mutation. Replay remains Task 12 work.
+
+Each reconciled action has an explicit required event: `ticket.created`,
+`appointment.booked`, `appointment.rescheduled`, or `ticket.escalated`. An
+unrelated/missing event, wrong aggregate version, or conflicting canonical result
+is INCONSISTENT rather than COMMITTED.

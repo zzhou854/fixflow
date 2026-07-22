@@ -1,4 +1,4 @@
-import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperatorThread, Property, Ticket, TicketDetail, TraceEvent } from '../types'
+import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, Ticket, TicketDetail, TraceEvent } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
@@ -29,6 +29,19 @@ export const api = {
   operatorThread: (token: string, threadId: string) => apiRequest<OperatorThread>(`/api/v1/operator/threads/${threadId}`, token),
   operatorRuns: (token: string, threadId: string, query = '') => apiRequest<{ items: AgentRun[] }>(`/api/v1/operator/threads/${threadId}/runs${query}`, token),
   operatorRunEvents: (token: string, runId: string, query = '') => apiRequest<{ items: TraceEvent[] }>(`/api/v1/operator/runs/${runId}/events${query}`, token),
+  reconciliationCases: (token: string, query = '') => apiRequest<{items: ReconciliationCase[]}>(`/api/v1/operator/reconciliation/cases${query}`,token),
+  recheckReconciliation: (token: string, caseId: string) => apiRequest<ReconciliationCase>(`/api/v1/operator/reconciliation/cases/${caseId}/recheck`,token,{method:'POST'}),
+  reconciliationCase: (token: string, caseId: string) => apiRequest<ReconciliationCase>(`/api/v1/operator/reconciliation/cases/${caseId}`, token),
+  operatorEscalate: (token: string, ticketId: string, expectedVersion: number, idempotencyKey: string) => apiRequest<OperationResponse>(`/api/v1/operator/tickets/${ticketId}/escalate`, token, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({
+      expected_version: expectedVersion,
+      reason_code: 'OPERATOR_REVIEW',
+      reason_text: '物业工作台人工升级',
+      evidence: [],
+    }),
+  }),
   getThread: (token: string, threadId: string) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}`, token),
   createThread: (token: string, property_id: string, initial_message: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>('/api/v1/agent/threads', token, {
     method: 'POST',

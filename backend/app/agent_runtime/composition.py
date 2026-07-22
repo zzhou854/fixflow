@@ -17,6 +17,8 @@ from app.config import Settings
 from app.infrastructure.database.policy_uow import SqlAlchemyPolicyUnitOfWork
 from app.policy.ports import EmbeddingProvider, PolicyUnitOfWork
 from app.policy.retrieval import PolicyRetrievalService
+from app.reconciliation.coordinator import UnknownCommitCoordinator
+from app.reconciliation.repository import SqlAlchemyReconciliationRepository
 
 
 @asynccontextmanager
@@ -53,6 +55,10 @@ async def open_agent_orchestrator(
             )
             graph = build_agent_graph(dependencies, checkpointer=checkpointer)
             try:
-                yield AgentOrchestrator(graph, mcp)
+                yield AgentOrchestrator(
+                    graph,
+                    mcp,
+                    UnknownCommitCoordinator(SqlAlchemyReconciliationRepository(sessions)),
+                )
             finally:
                 await engine.dispose()

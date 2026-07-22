@@ -616,6 +616,7 @@ async def test_concurrent_same_idempotency_key_commits_one_business_effect(
         actor_id: UUID,
         idempotency_key: str,
         request_hash: str,
+        operation_id: UUID,
     ) -> StoredIdempotency:
         await barrier.wait(repository._session)
         return await original_acquire(
@@ -625,6 +626,7 @@ async def test_concurrent_same_idempotency_key_commits_one_business_effect(
             actor_id=actor_id,
             idempotency_key=idempotency_key,
             request_hash=request_hash,
+            operation_id=operation_id,
         )
 
     monkeypatch.setattr(SqlAlchemyIdempotencyRepository, "acquire", synchronized_acquire)

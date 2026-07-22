@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
-from app.agent.enums import AgentIntent, IssueField
+from app.agent.enums import AgentIntent, AgentReconciliationStatus, IssueField, PendingAction
 from app.agent.models import AgentModel
 from app.domain.enums import ActorType, IssueCategory, Severity, WorkflowStage
 from app.policy.enums import EvidenceSufficiency
@@ -190,6 +190,9 @@ class AgentStateView(AgentModel):
     task_intent: AgentIntent = AgentIntent.UNKNOWN
     missing_fields: tuple[IssueField, ...] = ()
     updated_at: datetime | None = None
+    pending_reconciliation_case_id: UUID | None = None
+    pending_reconciliation_status: AgentReconciliationStatus | None = None
+    pending_reconciliation_action: PendingAction | None = None
 
 
 class AgentRunResult(AgentModel):
@@ -202,3 +205,6 @@ class AgentRunResult(AgentModel):
     active_ticket_id: UUID | None = None
     active_appointment_id: UUID | None = None
     error_code: str | None = None
+    pending_reconciliation_case_id: UUID | None = None
+    pending_reconciliation_status: AgentReconciliationStatus | None = None
+    pending_reconciliation_action: PendingAction | None = None

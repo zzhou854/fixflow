@@ -22,11 +22,12 @@ from app.api.schemas.agent import (
 )
 from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
-from app.api.services.operator import OperatorActionService
+from app.api.services.operator import OperatorActionService, OperatorEscalationExecution
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.sse import SSEEventBus
 from app.application.auth import AuthenticatedIdentity, AuthService, AuthUser
 from app.application.errors import AuthorizationFailed, PersistenceConflict, ResourceNotFound
+from app.application.models import OperationResult
 from app.application.query_models import QueryActor, ResidentPropertyReadModel
 from app.application.services import FixFlowApplicationService
 from app.domain.enums import ActorType, WorkflowStage
@@ -137,20 +138,36 @@ class FakeOperatorActions:
         self.last_call: dict[str, object] = {}
         self.call_count = 0
         self.error: Exception | None = None
+        self.result: OperationResult | None = None
 
-    async def escalate(self, **kwargs: object) -> dict[str, object]:
+    async def escalate(self, **kwargs: object) -> OperatorEscalationExecution:
         self.last_call = kwargs
         self.call_count += 1
         if self.error is not None:
             raise self.error
-        return {
-            "ok": True,
-            "code": "ESCALATED",
-            "resource_type": "ticket",
-            "resource_id": kwargs["ticket_id"],
-            "resource_version": 2,
-            "replayed": False,
-        }
+        if self.result is not None:
+            return OperatorEscalationExecution(operation=self.result, run_id=uuid4())
+        return OperatorEscalationExecution(
+            operation=OperationResult(
+                ok=True,
+                code="ESCALATED",
+                resource_type="ticket",
+                resource_id=cast(UUID, kwargs["ticket_id"]),
+                resource_version=2,
+            ),
+            run_id=uuid4(),
+        )
+
+    async def record_api_replay(self, *_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def record_api_conflict(self, **_kwargs: object) -> None:
+        return None
+
+    async def refresh_reconciliation(
+        self, result: OperatorEscalationExecution
+    ) -> OperatorEscalationExecution:
+        return result
 
 
 class FakeOperatorReview:
@@ -415,6 +432,26 @@ async def test_operator_escalation_uses_token_identity(api_context: ApiContext) 
 
 
 @pytest.mark.asyncio
+async def test_resident_cannot_call_operator_escalation_api(api_context: ApiContext) -> None:
+    app, auth, *_ = api_context
+    resident = await _token(auth, "resident", "resident-pass")
+    actions = cast(FakeOperatorActions, app.state.services.operator_actions)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/api/v1/operator/tickets/{uuid4()}/escalate",
+            json={
+                "expected_version": 1,
+                "reason_code": "OPERATOR_REVIEW",
+                "reason_text": "resident must not escalate",
+                "evidence": [],
+            },
+            headers=_mutation_headers(resident),
+        )
+    assert response.status_code == 403
+    assert actions.call_count == 0
+
+
+@pytest.mark.asyncio
 async def test_operator_thread_review_is_role_protected_and_sanitized(
     api_context: ApiContext,
 ) -> None:
@@ -463,6 +500,29 @@ async def test_operator_escalation_maps_not_found_and_version_conflict(
             headers=_mutation_headers(operator),
         )
     assert response.status_code == expected_status
+
+
+@pytest.mark.asyncio
+async def test_operator_escalation_maps_known_failure_result_without_case(
+    api_context: ApiContext,
+) -> None:
+    app, auth, *_ = api_context
+    actions = cast(FakeOperatorActions, app.state.services.operator_actions)
+    actions.result = OperationResult(ok=False, code="VERSION_CONFLICT")
+    operator = await _token(auth, "operator", "operator-pass")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/api/v1/operator/tickets/{uuid4()}/escalate",
+            json={
+                "expected_version": 1,
+                "reason_code": "OPERATOR_REVIEW",
+                "reason_text": "version conflict",
+                "evidence": [],
+            },
+            headers=_mutation_headers(operator),
+        )
+    assert response.status_code == 409
+    assert response.json()["code"] == "VERSION_CONFLICT"
 
 
 @pytest.mark.asyncio

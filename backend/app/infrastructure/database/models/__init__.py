@@ -19,6 +19,12 @@ from app.infrastructure.database.models.observability import (
     TraceSource,
 )
 from app.infrastructure.database.models.policy import PolicyChunk, PolicyDocument
+from app.infrastructure.database.models.reconciliation import (
+    EvidenceStatus,
+    OperationReconciliationCase,
+    ReconciliationAction,
+    ReconciliationStatus,
+)
 from app.infrastructure.database.models.ticket import RepairTicket, TicketStatusHistory
 from app.infrastructure.database.models.user import Property, ResidentPropertyRelation, User
 from app.infrastructure.database.models.worker import Worker, WorkerAvailability, WorkerSkill
@@ -34,6 +40,10 @@ __all__ = [
     "IdempotencyRecord",
     "OutboxEvent",
     "OutboxStatus",
+    "OperationReconciliationCase",
+    "ReconciliationAction",
+    "ReconciliationStatus",
+    "EvidenceStatus",
     "Property",
     "PolicyChunk",
     "PolicyDocument",

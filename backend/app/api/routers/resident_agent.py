@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, Request, Response
 from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import ApiServices, get_services, require_resident
@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 @router.post("/threads", response_model=AgentThreadResponse)
 async def create_thread(
     request: CreateThreadRequest,
+    response: Response,
     identity: AuthenticatedIdentity = Depends(require_resident),
     services: ApiServices = Depends(get_services),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
@@ -38,7 +39,7 @@ async def create_thread(
     property_id = request.property_id
     replay_trace_id = uuid4()
     key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
-    return await services.idempotency.execute(
+    result = await services.idempotency.execute(
         caller_id=identity.actor_id,
         scope="agent:create-thread",
         key=idempotency_key,
@@ -61,19 +62,23 @@ async def create_thread(
             idempotency_key_fingerprint=key_fingerprint,
         ),
     )
+    if result.error_code == "RECONCILIATION_PENDING":
+        response.status_code = 202
+    return result
 
 
 @router.post("/threads/{thread_id}/messages", response_model=AgentThreadResponse)
 async def send_message(
     thread_id: UUID,
     request: SendMessageRequest,
+    response: Response,
     identity: AuthenticatedIdentity = Depends(require_resident),
     services: ApiServices = Depends(get_services),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
 ) -> AgentThreadResponse:
     replay_trace_id = uuid4()
     key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
-    return await services.idempotency.execute(
+    result = await services.idempotency.execute(
         caller_id=identity.actor_id,
         scope=f"agent:message:{thread_id}",
         key=idempotency_key,
@@ -97,19 +102,23 @@ async def send_message(
             idempotency_key_fingerprint=key_fingerprint,
         ),
     )
+    if result.error_code == "RECONCILIATION_PENDING":
+        response.status_code = 202
+    return result
 
 
 @router.post("/threads/{thread_id}/resume", response_model=AgentThreadResponse)
 async def resume(
     thread_id: UUID,
     request: ResumeRequest,
+    response: Response,
     identity: AuthenticatedIdentity = Depends(require_resident),
     services: ApiServices = Depends(get_services),
     idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
 ) -> AgentThreadResponse:
     replay_trace_id = uuid4()
     key_fingerprint = services.idempotency.key_fingerprint(idempotency_key)
-    return await services.idempotency.execute(
+    result = await services.idempotency.execute(
         caller_id=identity.actor_id,
         scope=f"agent:resume:{thread_id}",
         key=idempotency_key,
@@ -126,6 +135,9 @@ async def resume(
             idempotency_key_fingerprint=key_fingerprint,
         ),
     )
+    if result.error_code == "RECONCILIATION_PENDING":
+        response.status_code = 202
+    return result
 
 
 @router.get("/threads/{thread_id}", response_model=AgentThreadResponse)

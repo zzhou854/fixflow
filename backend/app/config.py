@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     outbox_lease_seconds: int = Field(default=30, ge=1, le=3600)
     outbox_max_attempts: int = Field(default=8, ge=1, le=100)
     outbox_retry_base_seconds: float = Field(default=1.0, gt=0)
+    reconciliation_poll_interval_seconds: float = Field(default=2.0, gt=0)
+    reconciliation_batch_size: int = Field(default=20, ge=1, le=1000)
+    reconciliation_lease_seconds: int = Field(default=30, ge=1, le=3600)
+    reconciliation_max_attempts: int = Field(default=5, ge=1, le=100)
+    reconciliation_retry_base_seconds: float = Field(default=2.0, gt=0)
     trace_max_payload_bytes: int = Field(default=8192, ge=128, le=1_048_576)
     trace_max_string_length: int = Field(default=1024, ge=16, le=65536)
 

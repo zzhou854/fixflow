@@ -9,8 +9,9 @@ truth. A checkpoint contains bounded conversation work state only and is never
 written back over a fresher business snapshot.
 
 The current product runtime uses deterministic demonstration LLM and embedding
-providers. Online providers, the fault Harness, UNKNOWN_COMMIT reconciliation,
-and Replay remain deferred. Task 9 exposes this same orchestrator through authenticated FastAPI
+providers. Online providers and deterministic Replay remain deferred. Task 11
+adds UNKNOWN_COMMIT reconciliation and test-only fault injection around this
+same orchestrator. Task 9 exposes it through authenticated FastAPI
 thread, message, state, strict Resume, and SSE endpoints.
 
 JWT identity becomes the existing trusted caller context; request bodies cannot
@@ -64,8 +65,12 @@ Routers inspect typed intent, risk, policy sufficiency, current candidates, and
 fresh snapshot facts. LLM output cannot name a node or tool. Policy text cannot
 select a tool. Only approved mutation nodes call mutation methods.
 
-Automated paths are `NEW_REPAIR`, `QUERY_TICKET_STATUS`,
-`RESCHEDULE_APPOINTMENT`, and `REQUEST_HUMAN`. Cancellation and resident
+Automated paths are `NEW_REPAIR`, `QUERY_TICKET_STATUS`, and
+`RESCHEDULE_APPOINTMENT`. `REQUEST_HUMAN` verifies the thread owner and current
+property authorization, stops automation, enters `HUMAN_REVIEW`, and replies
+that property staff must handle the request. It does not call
+`escalate_to_operator`, change a ticket, write `ticket.escalated`, or create an
+escalation reconciliation Case. Cancellation and resident
 acceptance/rejection intents are recognized but routed to `HUMAN_REVIEW`
 because the eight-tool MCP contract does not yet expose those operations.
 
@@ -136,8 +141,10 @@ thread_id + intent_version + action + normalized payload
 It excludes trace ID, current time, retry count, and random IDs. Replaying the
 same logical operation therefore reaches Application idempotency with the same
 key. A tool success whose response is lost is not advertised as success; a
-later replay and fresh snapshot establish the business result. General
-`UNKNOWN_COMMIT` reconciliation remains Stage C work.
+the fenced reconciliation worker and a fresh PostgreSQL snapshot establish the
+business result. Task 11 covers three Resident Agent mutations plus one
+Operator-only escalation mutation; deterministic
+Replay remains Task 12 work.
 
 ## Checkpoint database and lifecycle
 

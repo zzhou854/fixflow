@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from app.agent.enums import LLMRole
+from app.agent.enums import LLMRole, PendingAction
 from app.agent.models import (
     AllowedPolicyEvidence,
     ComposeResponseInput,
@@ -112,6 +112,30 @@ async def finish_policy_review(graph_state: RuntimeGraphState) -> RuntimeGraphSt
                 "last_assistant_message": "政策证据不足或存在冲突，需要人工复核；尚未创建工单。",
                 "escalation_reason": "POLICY_REVIEW_REQUIRED",
             }
+        )
+    )
+
+
+async def finish_manual_request(graph_state: RuntimeGraphState) -> RuntimeGraphState:
+    """Resident requests do not mutate a ticket or create an operator action."""
+
+    state = load_state(graph_state)
+    message = "该请求需要物业工作人员人工处理。"
+    return dump_state(
+        append_message(
+            state.model_copy(
+                update={
+                    "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                    "last_assistant_message": message,
+                    "escalation_reason": "RESIDENT_MANUAL_REQUEST",
+                    "pending_action": PendingAction.NONE,
+                    "pending_operation": None,
+                }
+            ),
+            role=LLMRole.ASSISTANT,
+            content=message,
+            turn_id=state.trace_id,
+            created_at=datetime.now(UTC),
         )
     )
 

@@ -6,7 +6,9 @@ from contextlib import asynccontextmanager
 
 from app.application.ports import UnitOfWork
 from app.application.services import FixFlowApplicationService
+from app.fault_injection import FaultInjector
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
+from app.reconciliation.evidence import SqlAlchemyOperationOutcomeQuery
 from mcp.server.fastmcp import FastMCP
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -14,12 +16,13 @@ from mcp_server.application_adapter import MCPApplicationAdapter
 from mcp_server.config import MCPSettings
 from mcp_server.tools.appointments import register_appointment_tools
 from mcp_server.tools.properties import register_property_tools
+from mcp_server.tools.reconciliation import register_reconciliation_tool
 from mcp_server.tools.tickets import register_ticket_tools
 
 LOGGER = logging.getLogger(__name__)
 
 
-def create_server(settings: MCPSettings) -> FastMCP:
+def create_server(settings: MCPSettings, *, fault_injector: FaultInjector | None = None) -> FastMCP:
     """Build one process-wide engine and the approved Application dependency graph."""
 
     engine = create_async_engine(settings.database_url.get_secret_value())
@@ -29,7 +32,7 @@ def create_server(settings: MCPSettings) -> FastMCP:
         return SqlAlchemyUnitOfWork(sessions)
 
     application = FixFlowApplicationService(uow_factory)
-    adapter = MCPApplicationAdapter(application)
+    adapter = MCPApplicationAdapter(application, fault_injector=fault_injector)
 
     @asynccontextmanager
     async def lifespan(_server: FastMCP) -> AsyncIterator[None]:
@@ -51,6 +54,7 @@ def create_server(settings: MCPSettings) -> FastMCP:
     register_property_tools(server, adapter)
     register_ticket_tools(server, adapter)
     register_appointment_tools(server, adapter)
+    register_reconciliation_tool(server, SqlAlchemyOperationOutcomeQuery(sessions))
     return server
 
 

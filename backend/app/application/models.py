@@ -30,6 +30,7 @@ class MutationMetadata:
     run_id: UUID | None = None
     thread_id: UUID | None = None
     operation_id: UUID | None = None
+    request_fingerprint: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -112,6 +112,7 @@ async def create_ticket(context: NodeContext, graph_state: RuntimeGraphState) ->
             actor_id=state.actor_id,
             trace_id=state.trace_id,
             idempotency_key=op.idempotency_key,
+            request_fingerprint=op.request_fingerprint,
             resident_id=state.user_id,
             property_id=state.property_id,
             issue_category=state.issue_category,

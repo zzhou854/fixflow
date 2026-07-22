@@ -33,6 +33,7 @@ def test_metadata_contains_exact_core_tables() -> None:
         "agent_runs",
         "agent_trace_events",
         "outbox_events",
+        "operation_reconciliation_cases",
     }
 
 

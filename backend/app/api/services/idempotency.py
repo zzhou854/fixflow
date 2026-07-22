@@ -81,6 +81,34 @@ class ApiIdempotencyStore:
                     self._entries.pop(record_key, None)
             raise
 
+    async def discard_completed(
+        self,
+        *,
+        caller_id: UUID,
+        scope: str,
+        key: str,
+        payload: Mapping[str, object],
+    ) -> bool:
+        """Release one completed API replay only after a formal NOT_COMMITTED verdict.
+
+        The caller owns the reconciliation decision. This store only verifies
+        that the exact caller, scope, key, and payload are being released.
+        """
+
+        normalized_key = key.strip()
+        record_key = (caller_id, scope, normalized_key)
+        payload_hash = self.payload_fingerprint(payload)
+        async with self._lock:
+            existing = self._entries.get(record_key)
+            if (
+                existing is None
+                or existing.payload_hash != payload_hash
+                or not existing.task.done()
+            ):
+                return False
+            self._entries.pop(record_key, None)
+            return True
+
     def _evict_completed(self) -> None:
         while len(self._entries) >= self._max_entries:
             candidate = next(

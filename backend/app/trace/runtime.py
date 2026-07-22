@@ -28,7 +28,9 @@ class TraceRuntime:
     _LIFECYCLE_TERMINAL_EVENTS = frozenset(
         {"run_interrupted", "run_completed", "run_failed_safe", "run_failed"}
     )
-    _POST_TERMINAL_AUDIT_SOURCES = frozenset({TraceSource.DOMAIN, TraceSource.OUTBOX})
+    _POST_TERMINAL_AUDIT_SOURCES = frozenset(
+        {TraceSource.DOMAIN, TraceSource.OUTBOX, TraceSource.RECONCILIATION}
+    )
 
     def __init__(
         self,

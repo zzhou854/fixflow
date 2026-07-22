@@ -260,6 +260,25 @@ class AgentApiService:
             issue_description=state.issue_description if state else None,
             severity=state.severity if state else None,
         )
+        from app.api.schemas.agent import ResidentReconciliationResponse
+
+        reconciliation = None
+        case_id = (
+            state.pending_reconciliation_case_id if state else result.pending_reconciliation_case_id
+        )
+        case_status = (
+            state.pending_reconciliation_status if state else result.pending_reconciliation_status
+        )
+        case_action = (
+            state.pending_reconciliation_action if state else result.pending_reconciliation_action
+        )
+        if case_id and case_status and case_action:
+            reconciliation = ResidentReconciliationResponse(
+                case_id=case_id,
+                status=case_status,
+                action=case_action,
+                retry_allowed=False,
+            )
         response = AgentThreadResponse(
             thread_id=result.thread_id,
             trace_id=result.trace_id,
@@ -275,6 +294,7 @@ class AgentApiService:
             structured_issue=structured,
             safety_review_required=state.safety_review_required if state else False,
             error_code=result.error_code,
+            reconciliation=reconciliation,
         )
         if publish:
             await self._publish_result(response)

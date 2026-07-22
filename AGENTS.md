@@ -109,8 +109,7 @@ fault injection, or evaluation, stop for scope review.
 Stage A is complete: the domain and persistence model, transactional Application
 services, deterministic scheduling, and the independent MCP server are committed.
 Task 6 typed Agent State and Task 7 auditable policy retrieval are committed.
-The current approved boundary is Task 9: FastAPI/JWT, trusted caller context,
-Agent/Resident/Operator APIs, bounded development SSE, an idempotent development
-seed, and the React resident/operator first product slice. Task 9 does not
-authorize online providers, Trace Runtime, Outbox, fault infrastructure, or
-Stage C.
+Tasks 9 and 10 are committed. The current approved boundary is Task 11:
+UNKNOWN_COMMIT reconciliation for four formal mutations, authoritative outcome
+evidence, fenced workers, and test-only fault injection. It does not authorize
+online providers, deterministic Replay, Task 12, or a new migration after 0005.

@@ -11,6 +11,7 @@ from app.api.dependencies import ApiServices
 from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService
+from app.api.services.operator_reconciliation import OperatorReconciliationService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
@@ -20,6 +21,8 @@ from app.application.services import FixFlowApplicationService
 from app.config import Settings
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
+from app.reconciliation.coordinator import UnknownCommitCoordinator
+from app.reconciliation.repository import SqlAlchemyReconciliationRepository
 from app.trace.runtime import TraceRuntime
 from app.trace.sanitizer import TraceSanitizer
 
@@ -52,6 +55,7 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
             max_string_length=settings.trace_max_string_length,
         ),
     )
+    reconciliation = UnknownCommitCoordinator(SqlAlchemyReconciliationRepository(sessions))
     try:
         async with open_agent_orchestrator(
             settings,
@@ -65,9 +69,12 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
                 application=application,
                 orchestrator=orchestrator,
                 agent=AgentApiService(orchestrator, application, events, trace),
-                operator_actions=OperatorActionService(application, trace),
+                operator_actions=OperatorActionService(
+                    application, trace, reconciliation=reconciliation
+                ),
                 operator_review=operator_review,
                 operator_trace=OperatorTraceQueryService(operator_review, trace),
+                operator_reconciliation=OperatorReconciliationService(sessions),
                 idempotency=idempotency,
                 events=events,
                 runtime_mode=settings.runtime_mode,

@@ -88,6 +88,7 @@ class StoredIdempotency:
     resource_type: str | None = None
     resource_id: UUID | None = None
     response_payload: dict[str, Any] | None = None
+    operation_id: UUID | None = None
 
 
 class TicketRepository(Protocol):
@@ -145,6 +146,7 @@ class IdempotencyRepository(Protocol):
         actor_id: UUID,
         idempotency_key: str,
         request_hash: str,
+        operation_id: UUID,
     ) -> StoredIdempotency: ...
     async def succeed(
         self,

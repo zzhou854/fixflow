@@ -1,7 +1,7 @@
 """PostgreSQL request-idempotency acquisition and durable success results."""
 
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -27,7 +27,12 @@ class SqlAlchemyIdempotencyRepository:
         actor_id: UUID,
         idempotency_key: str,
         request_hash: str,
+        operation_id: UUID | None = None,
     ) -> StoredIdempotency:
+        operation_id = operation_id or uuid5(
+            NAMESPACE_URL,
+            f"fixflow:operation:{scope}:{actor_type.value}:{actor_id}:{idempotency_key}",
+        )
         statement = (
             insert(IdempotencyRecord)
             .values(
@@ -37,6 +42,7 @@ class SqlAlchemyIdempotencyRepository:
                 actor_id=str(actor_id),
                 idempotency_key=idempotency_key,
                 request_hash=request_hash,
+                operation_id=operation_id,
                 execution_status=IdempotencyExecutionStatus.PENDING,
             )
             .on_conflict_do_nothing(constraint="uq_idempotency_records_operation_actor_key")
@@ -60,6 +66,7 @@ class SqlAlchemyIdempotencyRepository:
             resource_type=row.resource_type,
             resource_id=row.resource_id,
             response_payload=row.response_payload,
+            operation_id=row.operation_id,
         )
 
     async def succeed(

@@ -26,6 +26,7 @@ class ResultCode(StrEnum):
     TIME_CONFLICT = "TIME_CONFLICT"
     OPERATION_IN_PROGRESS = "OPERATION_IN_PROGRESS"
     IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
+    UNSUPPORTED_OPERATION = "UNSUPPORTED_OPERATION"
     UNKNOWN_COMMIT = "UNKNOWN_COMMIT"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -42,6 +43,7 @@ class MutationRequest(ReadRequest):
     run_id: UUID | None = None
     thread_id: UUID | None = None
     operation_id: UUID | None = None
+    request_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class ErrorData(MCPContractModel):
@@ -61,6 +63,11 @@ class ToolResponse[DataT: BaseModel](MCPContractModel):
 
 
 class MutationResultData(MCPContractModel):
+    operation_id: UUID | None = None
+    action: str | None = Field(
+        default=None,
+        pattern=r"^(CREATE_TICKET|BOOK_APPOINTMENT|RESCHEDULE_APPOINTMENT|ESCALATE_TO_OPERATOR)$",
+    )
     resource_type: str
     resource_id: UUID
     resource_version: int | None = Field(default=None, ge=1)

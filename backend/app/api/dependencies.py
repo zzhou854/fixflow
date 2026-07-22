@@ -11,6 +11,7 @@ from app.api.errors import ApiError
 from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService
+from app.api.services.operator_reconciliation import OperatorReconciliationService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
@@ -31,6 +32,7 @@ class ApiServices:
     events: SSEEventBus
     runtime_mode: str
     operator_trace: OperatorTraceQueryService | None = None
+    operator_reconciliation: OperatorReconciliationService | None = None
 
 
 _bearer = HTTPBearer(auto_error=False)

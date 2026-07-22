@@ -68,6 +68,11 @@ the thread-state endpoint remain the formal result, and reconnects still
 reconcile through thread state. Persistent Trace does not turn SSE into a
 business fact source.
 
-Task 10 enables audit visibility and durable domain-event evidence. General
-UNKNOWN_COMMIT reconciliation, the fault harness, and deterministic Replay are
+Task 11 adds the closed `RECONCILIATION` source for runless case evidence; it
+never appends control events to a terminal Run. Deterministic Replay remains
 explicitly deferred.
+
+Case creation, claim, retry, and terminal resolution use stable runless event
+keys. The final Case status and final reconciliation Trace commit in one
+transaction. A lost response after that commit cannot make the terminal Case
+claimable again or create a second resolution Trace.

@@ -47,6 +47,19 @@ class MCPToolResultError(MCPClientError):
         self.code = result_code
 
 
+class MutationNotSent(MCPClientError):
+    code = "NOT_SENT"
+
+
+class UnknownCommit(MCPClientError):
+    code = "UNKNOWN_COMMIT"
+
+    def __init__(self, operation_id: object, action: str) -> None:
+        super().__init__("mutation result is unknown")
+        self.operation_id = operation_id
+        self.action = action
+
+
 class PolicyRetrievalFailed(AgentRuntimeError):
     """Policy retrieval/merge failed; the graph must never assume sufficiency."""
 

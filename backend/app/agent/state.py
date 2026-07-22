@@ -6,7 +6,14 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
-from app.agent.enums import AgentIntent, IssueField, LLMRole, PendingAction, SafetyFlag
+from app.agent.enums import (
+    AgentIntent,
+    AgentReconciliationStatus,
+    IssueField,
+    LLMRole,
+    PendingAction,
+    SafetyFlag,
+)
 from app.agent.models import (
     AgentModel,
     DescriptionText,
@@ -169,6 +176,9 @@ class AgentState(AgentModel):
     appointment_version: int | None = Field(default=None, ge=1)
     last_tool_result: ToolResultSummary | None = None
     pending_operation: PendingOperation | None = None
+    pending_reconciliation_case_id: UUID | None = None
+    pending_reconciliation_status: AgentReconciliationStatus | None = None
+    pending_reconciliation_action: PendingAction | None = None
     conversation_messages: tuple[AgentConversationMessage, ...] = Field(default=(), max_length=100)
     current_user_message: str | None = Field(default=None, min_length=1, max_length=4000)
     current_reference_time: datetime | None = None

@@ -43,6 +43,7 @@ class TraceSource(StrEnum):
     MCP = "MCP"
     DOMAIN = "DOMAIN"
     OUTBOX = "OUTBOX"
+    RECONCILIATION = "RECONCILIATION"
 
 
 class OutboxStatus(StrEnum):
