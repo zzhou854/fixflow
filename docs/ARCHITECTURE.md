@@ -68,6 +68,11 @@ formal Checkpoint. Operator access reuses ticket-linked Trace authorization.
 Replay results and current PostgreSQL facts are displayed in separate
 projections and cannot modify each other.
 
+Task 14 adds a file-backed evaluation control plane around the existing
+structured `LLMProvider`. Its versioned synthetic corpus, deterministic scorer,
+comparison, and release gate write only ignored local artifacts. They do not
+call MCP, execute mutations, use Checkpoint/Replay, or write persistent Trace.
+
 ## Product API boundary
 
 ```text

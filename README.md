@@ -11,7 +11,7 @@ demo.
 
 ## Current status
 
-Stage A, Stage B, and Tasks 9–11 are committed. Task 12 is at its code-review gate:
+Stage A, Stage B, and Tasks 9–13 are committed. Task 14 is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
@@ -58,11 +58,14 @@ Stage A, Stage B, and Tasks 9–11 are committed. Task 12 is at its code-review 
 - strict, checksummed Replay Bundles and typed external-result tapes;
 - tape-only deterministic execution over the existing Single Orchestrator;
 - an Operator-only, ticket-linked Recovery Console with read-only recommendations;
+- a 120-case versioned synthetic interpretation corpus, deterministic scorer,
+  regression comparison, release policy, resumable Runner, and safe local artifacts;
 - the implementation roadmap and mandatory task-alignment gates.
 
 GLM-5.1 structured interpretation is available behind explicit configuration.
-Online embedding, online free-text generation, and Stage D evaluation remain
-mandatory roadmap work, not cancelled scope. Replay verifies control-plane determinism;
+Live GLM qualification, online embedding, online free-text generation, the ReAct
+baseline, and Stage D ablations remain mandatory roadmap work, not cancelled scope.
+Replay verifies control-plane determinism;
 it is not Event Sourcing, database time travel, or automatic repair.
 
 ## Prerequisites
@@ -88,6 +91,28 @@ uv run python -m app.dev_seed
 uv run python -m app.outbox.run
 uv run uvicorn app.main:app --app-dir backend --reload
 cd frontend && npm ci && npm run dev
+```
+
+Evaluation runs locally and writes only to ignored `.artifacts/evaluations/`:
+
+```powershell
+$env:PYTHONPATH = "backend"
+uv run python -m app.llm.evaluation.cli validate-dataset
+uv run python -m app.llm.evaluation.cli run --provider scripted --output .artifacts/evaluations/scripted-smoke
+uv run python -m app.llm.evaluation.cli run --provider fake-glm --output .artifacts/evaluations/fake-glm-smoke
+uv run python -m app.llm.evaluation.cli compare --baseline <summary.json> --candidate <summary.json> --output <comparison.json>
+uv run python -m app.llm.evaluation.cli gate --report <summary.json>
+```
+
+`fake-glm` exercises the production GLM adapter, strict parser, and invariant
+validation against an in-process fake transport. It uses neither a key nor the
+network and is not eligible as a model baseline.
+
+Online evaluation requires both `--allow-network` and `--acknowledge-cost`,
+may incur model fees, and reads the API key only from secret Settings:
+
+```powershell
+uv run python -m app.llm.evaluation.cli run --provider glm --allow-network --acknowledge-cost --output .artifacts/evaluations/glm-run
 ```
 
 The MCP command starts the independent `property-operations-mcp` service at
@@ -145,6 +170,8 @@ and never maintained manually.
 - [Recovery Console](docs/RECOVERY_CONSOLE.md)
 - [Structured LLM Provider](docs/LLM_PROVIDER.md)
 - [Prompt Library](docs/PROMPT_LIBRARY.md)
+- [Model Evaluation](docs/MODEL_EVALUATION.md)
+- [Model Release Gate](docs/MODEL_RELEASE_GATE.md)
 
 ## Week-1 delivery order
 

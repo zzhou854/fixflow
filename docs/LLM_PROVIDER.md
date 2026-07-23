@@ -59,6 +59,8 @@ prompt identity. It never calls GLM, even when the live runtime uses GLM.
 Existing Task-12 schema-version-1 Bundles without optional metadata remain
 readable.
 
-No live smoke test is part of the default suite. A future explicit smoke command
-must require a separately supplied key and must not print prompts, responses, or
-credentials.
+Task 14 adds a local evaluation Runner around this same Provider Port. It does
+not import the SDK or implement a second retry layer. Scripted and Fake Zai runs
+are network-free. Live evaluation requires explicit network and cost flags plus
+the existing secret Settings before this adapter is constructed; it never prints
+prompts, responses, or credentials. No live qualification is part of Task 14.

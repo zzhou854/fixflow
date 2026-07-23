@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evaluation-report-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_schema_version", "manifest", "metrics", "gate_result"],
+  "properties": {
+    "report_schema_version": {"const": "evaluation-report-v1"},
+    "manifest": {"type": "object"},
+    "metrics": {"type": "object"},
+    "gate_result": {"type": ["object", "null"]}
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evaluation-policy-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy_id", "policy_version", "policy_schema_version", "applicable_scorer_id", "absolute_rules", "relative_rules", "policy_hash"],
+  "properties": {
+    "policy_id": {"const": "resident_interpretation_gate"},
+    "policy_version": {"type": "string"},
+    "policy_schema_version": {"const": "evaluation-policy-v1"},
+    "applicable_scorer_id": {"const": "resident_interpretation_scorer"},
+    "absolute_rules": {"type": "array", "minItems": 1},
+    "relative_rules": {"type": "array", "minItems": 1},
+    "policy_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

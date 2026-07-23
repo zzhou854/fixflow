@@ -31,3 +31,8 @@ Any semantic prompt, Schema, or example change requires a new immutable semantic
 version and contract tests. Version names such as `latest`, `current`, or `final`
 are prohibited. Existing versions remain available while Replay evidence refers
 to them.
+
+Task 14 freezes version `1.0.0` and its Hash while evaluating it. The synthetic
+Golden Dataset is a separate Git asset and may not copy Few-shot inputs exactly.
+Discovering a quality weakness creates a future Prompt Candidate; neither the
+Prompt nor Golden labels are silently changed to make a run pass.
