@@ -61,6 +61,14 @@ Its safe summary hash is
 This rules out concurrency and request bursts as the current cause and is
 consistent with an account-level quota or upstream service limit.
 
+A later third-turn blocker audit sent exactly one additional request through
+the same production Adapter. Run `1f14ef11-3368-4152-ac07-a4424045361f`
+again returned terminal `RATE_LIMITED`, without `Retry-After`. Its safe summary
+hash is
+`7399ae3e95916a3d32e89d0c5f83f71ecbeece98dda628007b5f6aca298a08e8`.
+The same external condition has therefore persisted across three consecutive
+Goal turns and across 20, 5, and 1 request-per-minute strategies.
+
 Safe evidence hashes:
 
 - development summary:
@@ -77,6 +85,6 @@ Outbox, Checkpoint, Replay, business Trace or business database write occurred.
 No credential, raw SDK response, HTTP header, full Prompt or full input is
 retained in this report.
 
-This is currently an upstream quota/rate-limit blocker, not
+This is a confirmed `PROVIDER_QUOTA_BLOCKER`, not
 `GLM-5.1_MODEL_CAPABILITY_BLOCKER`. Prompt iteration and formal requalification
 must resume only after a conservative Probe completes successfully.
