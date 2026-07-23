@@ -11,7 +11,8 @@ demo.
 
 ## Current status
 
-Stage A, Stage B, and Tasks 9–13 are committed. Task 14 is at its code-review gate:
+Stage A, Stage B, and Tasks 9–14 are committed. Task 15 completed a clean,
+real-API GLM-5.1 qualification run and is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
@@ -62,9 +63,13 @@ Stage A, Stage B, and Tasks 9–13 are committed. Task 14 is at its code-review 
   regression comparison, release policy, resumable Runner, and safe local artifacts;
 - the implementation roadmap and mandatory task-alignment gates.
 
-GLM-5.1 structured interpretation is available behind explicit configuration.
-Live GLM qualification, online embedding, online free-text generation, the ReAct
-baseline, and Stage D ablations remain mandatory roadmap work, not cancelled scope.
+GLM-5.1 structured interpretation is available behind explicit configuration,
+but the first live qualification result is `NOT_QUALIFIED`. The current
+qualified model candidate is **None**; no Baseline or Release Candidate was
+published, and the default runtime remains Scripted. See
+`docs/GLM_5_1_QUALIFICATION_REPORT.md`. A future requalification, online
+embedding, online free-text generation, the ReAct baseline, and Stage D
+ablations remain mandatory roadmap work, not cancelled scope.
 Replay verifies control-plane determinism;
 it is not Event Sourcing, database time travel, or automatic repair.
 

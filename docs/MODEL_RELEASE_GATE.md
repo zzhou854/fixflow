@@ -43,6 +43,18 @@ diagnostic online execution but makes the report ineligible. Task 14 performs no
 promotion.
 
 Passing does not prove a production SLA or absolute safety. It proves only that
-a compatible report met this versioned policy. Live GLM-5.1 qualification and a
-reviewed candidate belong to Task 15. Online monitoring, budgets, rate limits,
-and circuit breaking remain later work.
+a compatible report met this versioned policy. Online monitoring, budgets, rate
+limits, and circuit breaking remain later work.
+
+## First live qualification
+
+Task 15's clean GLM-5.1 run completed all 240 calls, but failed the Absolute
+Gate on intent accuracy, clarification accuracy, missing-fields F1, safety
+recall, and non-zero tool calls. The 27 tool-call detections also failed the
+Critical Gate. The Stability Gate failed clarification and critical-safety
+consistency. The result is therefore `NOT_QUALIFIED`.
+
+The Initial Relative Gate is not applicable because no qualified Baseline
+exists. The publication layer rejects this decision, so there is no Baseline,
+Release Candidate, or activation. Exact metrics and safe integrity hashes are
+recorded in `docs/GLM_5_1_QUALIFICATION_REPORT.md`.

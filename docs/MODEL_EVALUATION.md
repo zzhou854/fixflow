@@ -3,7 +3,8 @@
 ## Scope and identity
 
 Task 14 adds local release infrastructure for the structured resident
-interpretation boundary. It does not qualify GLM-5.1 for production, generate
+interpretation boundary. Task 15 uses that infrastructure for qualification; it
+does not generate
 resident-facing prose, evaluate embeddings/RAG, call MCP, execute a business
 mutation, or write the business, Checkpoint, Replay, Outbox, reconciliation, or
 Trace stores.
@@ -145,5 +146,16 @@ failed, 2 invalid Dataset/Policy/configuration/arguments, 3 Runner/artifact
 failure, 4 incomplete/corrupt run, 5 incompatible reports, and 6 online safety
 conditions not met.
 
-Task 14 creates no live GLM baseline and makes no production qualification
-claim.
+Task 14 creates no live GLM Baseline and makes no production qualification
+claim. Task 15's first clean live GLM-5.1 qualification completed 240 calls but
+returned `NOT_QUALIFIED` under the frozen policy. The safe report is
+`docs/GLM_5_1_QUALIFICATION_REPORT.md`; no Baseline or Release Candidate was
+published.
+
+`qualification.py` verifies a completed artifact set and its frozen Git,
+Dataset, Prompt, Schema, Scorer, Policy, Provider, SDK, endpoint, repeat,
+concurrency, and online-authorization identity. It then recomputes the absolute,
+Critical, and stability decision without network or Provider access.
+`baseline.py` provides atomic, checksummed publication contracts, but rejects
+every non-qualified decision. These modules are release evidence
+infrastructure, not alternate evaluation, Provider, or activation paths.

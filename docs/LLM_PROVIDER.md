@@ -63,4 +63,11 @@ Task 14 adds a local evaluation Runner around this same Provider Port. It does
 not import the SDK or implement a second retry layer. Scripted and Fake Zai runs
 are network-free. Live evaluation requires explicit network and cost flags plus
 the existing secret Settings before this adapter is constructed; it never prints
-prompts, responses, or credentials. No live qualification is part of Task 14.
+prompts, responses, or credentials.
+
+Task 15 performed the first clean, sequential live qualification through this
+same adapter. All 240 evaluation calls completed without Provider or
+output-validation errors, but the frozen quality and stability gates failed.
+The result is `NOT_QUALIFIED`; no Baseline, Release Candidate, or runtime
+activation was produced. The default Provider remains Scripted. Safe evidence
+is recorded in `docs/GLM_5_1_QUALIFICATION_REPORT.md`.
