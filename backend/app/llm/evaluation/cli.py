@@ -277,6 +277,7 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
                 output=output / "raw-probe",
                 fingerprint=fingerprint,
                 scheduler_configuration=_scheduler_configuration(args),
+                fail_fast=True,
             )
         )
         probe_results = probe_outcome.results
@@ -450,6 +451,7 @@ def _development_request(
     output: Path,
     fingerprint: str,
     scheduler_configuration: EvaluationSchedulerConfiguration,
+    fail_fast: bool = False,
 ) -> EvaluationRunRequest:
     return EvaluationRunRequest(
         dataset=dataset,
@@ -465,6 +467,7 @@ def _development_request(
         run_purpose=EvaluationRunPurpose.PROMPT_DEVELOPMENT,
         development_source_fingerprint=fingerprint,
         scheduler_configuration=scheduler_configuration,
+        fail_fast=fail_fast,
     )
 
 
