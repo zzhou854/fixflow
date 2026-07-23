@@ -33,15 +33,17 @@ class InterpretMessageNode:
         model: str,
         input_limits: InterpretationInputLimits | None = None,
         prompt_registry: PromptRegistry | None = None,
+        prompt_version: str | None = None,
     ) -> None:
         self._provider = provider
         self._model = model
         self._input_limits = input_limits or InterpretationInputLimits()
         self._prompt_registry = prompt_registry or PromptRegistry()
+        self._prompt_version = prompt_version
         self._invariants = InterpretationInvariantValidator()
 
     async def __call__(self, node_input: InterpretMessageInput) -> InterpretationNodeResult:
-        prompt = self._prompt_registry.resident_interpretation()
+        prompt = self._prompt_registry.resident_interpretation(self._prompt_version)
         sanitized = build_sanitized_interpretation_input(node_input, self._input_limits)
         config = LLMRequestConfig(
             model=self._model,
@@ -51,8 +53,16 @@ class InterpretMessageNode:
             max_output_tokens=1400,
         )
         schema_json = json.dumps(prompt.output_schema, ensure_ascii=False, sort_keys=True)
+        compact_examples = prompt.prompt_version == "2.0.0"
         examples_json = json.dumps(
-            [example.model_dump(mode="json") for example in prompt.examples],
+            [
+                example.model_dump(
+                    mode="json",
+                    exclude_none=compact_examples,
+                    exclude_defaults=compact_examples,
+                )
+                for example in prompt.examples
+            ],
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -130,6 +140,7 @@ class InterpretMessageNode:
                 output_tokens=raw.output_tokens,
                 total_tokens=raw.total_tokens,
                 thinking_mode=raw.thinking_mode,
+                transport_tool_call_count=raw.transport_tool_call_count,
                 json_decoded=raw.json_decoded,
                 schema_validated=raw.schema_validated,
                 invariants_validated=raw.invariants_validated,

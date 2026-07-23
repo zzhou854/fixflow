@@ -1,8 +1,15 @@
+from pathlib import Path
+
 import pytest
 from app.config import Settings
 from pydantic import ValidationError
 
 BASE = {"database_url": "postgresql+asyncpg://u:p@localhost/db"}
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
 
 
 def test_scripted_provider_does_not_require_key() -> None:

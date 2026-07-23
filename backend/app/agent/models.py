@@ -153,6 +153,7 @@ class StructuredLLMResult(AgentModel):
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
     thinking_mode: str | None = Field(default=None, max_length=20)
+    transport_tool_call_count: int = Field(default=0, ge=0)
     json_decoded: bool = True
     schema_validated: bool = True
     invariants_validated: bool = True
@@ -181,6 +182,7 @@ class NodeMetadata(AgentModel):
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
     thinking_mode: str | None = Field(default=None, max_length=20)
+    transport_tool_call_count: int = Field(default=0, ge=0)
     json_decoded: bool = True
     schema_validated: bool = True
     invariants_validated: bool = True

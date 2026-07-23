@@ -58,3 +58,17 @@ The Initial Relative Gate is not applicable because no qualified Baseline
 exists. The publication layer rejects this decision, so there is no Baseline,
 Release Candidate, or activation. Exact metrics and safe integrity hashes are
 recorded in `docs/GLM_5_1_QUALIFICATION_REPORT.md`.
+
+## Prompt v2 development gate
+
+Task 16 does not alter Policy `1.0.0` or Scorer v1 history. Scorer v2 applies
+the same absolute quality thresholds and replaces the ambiguous combined tool
+finding with three mandatory zero-count boundaries: transport tool calls,
+tool-call-like free text, and forbidden action directives. Development runs are
+never baseline-, qualification-, or release-candidate-eligible, even when all
+metrics pass.
+
+Prompt v2 passed the structural Smoke Gate but failed the first full
+development repeat because 87 rate-limited calls reduced completion to 27.50%.
+Status is `NOT_READY`; Stability was not evaluated. No formal requalification,
+Baseline, Candidate or activation followed.

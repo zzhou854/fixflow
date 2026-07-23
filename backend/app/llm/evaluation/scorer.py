@@ -98,6 +98,7 @@ def score_failure(
     error_code: str,
     invalid_output: bool,
     attempt_count: int = 1,
+    provider_retry_after_seconds: float | None = None,
 ) -> EvaluationCaseResult:
     return EvaluationCaseResult(
         case_id=case.case_id,
@@ -119,6 +120,7 @@ def score_failure(
         latency_ms=latency_ms,
         attempt_count=attempt_count,
         provider_error_code=error_code,
+        provider_retry_after_seconds=provider_retry_after_seconds,
         case_passed=False,
         critical_failure_codes=(),
     )

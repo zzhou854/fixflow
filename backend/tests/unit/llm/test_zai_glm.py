@@ -19,11 +19,16 @@ from app.llm.providers.zai_glm import (
 from app.llm.validation.parser import StructuredInterpretationParser
 
 
-def _response(content: str, *, request_id: str = "req-1") -> object:
+def _response(
+    content: str,
+    *,
+    request_id: str = "req-1",
+    tool_calls: object = None,
+) -> object:
     return SimpleNamespace(
         choices=[
             SimpleNamespace(
-                message=SimpleNamespace(content=content),
+                message=SimpleNamespace(content=content, tool_calls=tool_calls),
                 finish_reason="stop",
             )
         ],
@@ -87,6 +92,23 @@ async def test_adapter_uses_official_json_mode_without_tools_or_streaming() -> N
     assert result.payload["utterance_intent"] == "NEW_REPAIR"
     assert result.request_id == "req-1"
     assert (result.input_tokens, result.output_tokens, result.total_tokens) == (10, 4, 14)
+    assert result.transport_tool_call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_adapter_preserves_transport_tool_call_metadata_for_audit() -> None:
+    def create(**_: object) -> object:
+        return _response(
+            json.dumps({"utterance_intent": "UNKNOWN"}),
+            tool_calls=[SimpleNamespace(id="call-1")],
+        )
+
+    result = await _provider(create).generate_structured(
+        messages=(LLMMessage(role=LLMRole.USER, content="input"),),
+        response_model=InterpretMessageOutput,
+        model_config=_request_config(),
+    )
+    assert result.transport_tool_call_count == 1
 
 
 @pytest.mark.asyncio

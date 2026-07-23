@@ -14,13 +14,16 @@ def build_structured_interpretation_provider(
     settings: Settings,
     *,
     scripted_provider: LLMProvider,
+    prompt_version: str | None = None,
+    provider_max_attempts: int | None = None,
+    provider_max_concurrency: int | None = None,
 ) -> LLMProvider:
     if settings.llm_provider == "scripted":
         return scripted_provider
     if settings.llm_provider != "glm":
         raise ValueError(f"unsupported LLM provider: {settings.llm_provider}")
     assert settings.glm_api_key is not None
-    prompt = PromptRegistry().resident_interpretation()
+    prompt = PromptRegistry().resident_interpretation(prompt_version)
     return ZaiGLMStructuredInterpretationProvider(
         prompt=prompt,
         parser=StructuredInterpretationParser(max_response_bytes=settings.llm_max_response_bytes),
@@ -33,10 +36,10 @@ def build_structured_interpretation_provider(
             max_tokens=settings.glm_max_tokens,
             request_timeout_seconds=settings.glm_request_timeout_seconds,
             total_timeout_seconds=settings.glm_total_timeout_seconds,
-            max_attempts=settings.glm_max_attempts,
+            max_attempts=provider_max_attempts or settings.glm_max_attempts,
             retry_initial_delay_seconds=settings.glm_retry_initial_delay_seconds,
             retry_max_delay_seconds=settings.glm_retry_max_delay_seconds,
-            max_concurrency=settings.glm_max_concurrency,
+            max_concurrency=provider_max_concurrency or settings.glm_max_concurrency,
         ),
         api_key=settings.glm_api_key.get_secret_value(),
     )

@@ -16,6 +16,10 @@ non-empty `FIXFLOW_GLM_API_KEY` and uses `glm-5.1`,
 responses, and no tools. Provider selection is fixed at application startup;
 an online failure never falls back to the Scripted Provider.
 
+The production/default Prompt remains `resident_interpretation@1.0.0`.
+Prompt v2 can be injected only by controlled internal evaluation/DI; no client
+request selects it.
+
 The API key is a `SecretStr`. It is never written to Trace, Replay, logs, prompts,
 or responses. `.env.example` contains an empty placeholder only.
 
@@ -54,6 +58,11 @@ when supplied, finish reason, bounded request ID, and safe error classification.
 It never records user text, conversation content, prompt assets, raw JSON,
 reasoning content, credentials, or SDK response blobs.
 
+The adapter also records only the count of SDK `message.tool_calls` for
+evaluation boundary auditing. It does not retain tool payloads and still sends
+no tool definitions. This transport evidence is distinct from textual output
+classification and from MCP/business execution.
+
 Replay stores the validated interpretation plus optional safe provider and
 prompt identity. It never calls GLM, even when the live runtime uses GLM.
 Existing Task-12 schema-version-1 Bundles without optional metadata remain
@@ -71,3 +80,8 @@ output-validation errors, but the frozen quality and stability gates failed.
 The result is `NOT_QUALIFIED`; no Baseline, Release Candidate, or runtime
 activation was produced. The default Provider remains Scripted. Safe evidence
 is recorded in `docs/GLM_5_1_QUALIFICATION_REPORT.md`.
+
+Task 16's Prompt-v2 development run remained sequential. Its Smoke completed,
+then 87 of 120 first-repeat cases exhausted the existing bounded Provider retry
+on upstream rate limits. The development result is `NOT_READY`; it did not
+switch the runtime Provider or Prompt.

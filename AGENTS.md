@@ -112,9 +112,10 @@ Task 6 typed Agent State and Task 7 auditable policy retrieval are committed.
 Tasks 9–11 are committed. The current approved boundary is Task 12:
 Deterministic Replay, Replay-safe evidence capture, the read-only Operator
 Recovery Console, repeatability verification, and migration `20260723_0006`.
-Task 13 is committed. Task 14 is the current approved boundary: a versioned
-synthetic structured-interpretation corpus, deterministic evaluation Runner,
-regression comparison, and Release Gate infrastructure. It does not authorize
-live GLM qualification, a production baseline, online free-text/embedding
-providers, Response Composer, Event Sourcing, automatic business repair, or
-another migration after 0006.
+Tasks 13-15 are committed. Task 16 Prompt remediation and versioned scorer work
+is implemented but not yet committed. The current approved goal is to make
+online GLM-5.1 evaluation rate-limit aware, iterate versioned interpretation
+Prompts without changing the formal Schema or frozen corpora, complete formal
+requalification, and create a verified Initial Baseline and Release Candidate.
+Production activation remains forbidden: the default Provider stays scripted,
+the model cannot call MCP, and no migration after `20260723_0006` is authorized.

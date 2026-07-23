@@ -49,6 +49,57 @@ def test_cli_has_no_api_key_argument() -> None:
     assert caught.value.code == 2
 
 
+def test_cli_allows_explicit_prompt_v2_only_for_internal_evaluation() -> None:
+    args = build_parser().parse_args(
+        [
+            "run",
+            "--provider",
+            "fake-glm",
+            "--prompt-version",
+            "2.0.0",
+        ]
+    )
+    assert args.prompt_version == "2.0.0"
+
+
+def test_prompt_development_rejects_challenge_before_provider_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.llm.evaluation.cli._provider",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("provider must not be constructed")
+        ),
+    )
+    path = (
+        Path(__file__).resolve().parents[3]
+        / "evals"
+        / "datasets"
+        / "resident_interpretation_challenge_v1.jsonl"
+    )
+    assert (
+        main(
+            [
+                "run",
+                "--provider",
+                "glm",
+                "--dataset",
+                str(path),
+                "--prompt-version",
+                "2.0.0",
+                "--run-purpose",
+                "prompt-development",
+                "--development-source-fingerprint",
+                "f" * 64,
+                "--allow-network",
+                "--acknowledge-cost",
+                "--allow-dirty",
+            ]
+        )
+        == EvaluationExitCode.ONLINE_GUARD_FAILED
+    )
+
+
 def test_unknown_cli_command_is_rejected() -> None:
     with pytest.raises(SystemExit) as caught:
         build_parser().parse_args(["unknown-command"])

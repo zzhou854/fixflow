@@ -100,6 +100,28 @@ class EvaluationRunStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class EvaluationRunPurpose(StrEnum):
+    REGRESSION = "REGRESSION"
+    PROMPT_DEVELOPMENT = "PROMPT_DEVELOPMENT"
+    FORMAL_QUALIFICATION = "FORMAL_QUALIFICATION"
+
+
+class EvaluationInfrastructureStatus(StrEnum):
+    READY = "READY"
+    EVALUATION_BLOCKED_INFRASTRUCTURE = "EVALUATION_BLOCKED_INFRASTRUCTURE"
+
+
+class EvaluationQualityDecision(StrEnum):
+    EVALUATED = "EVALUATED"
+    INCONCLUSIVE = "INCONCLUSIVE"
+
+
+class EvaluationSchedulerEventType(StrEnum):
+    PACE_WAIT = "PACE_WAIT"
+    RETRY_BACKOFF = "RETRY_BACKOFF"
+    CIRCUIT_PAUSE = "CIRCUIT_PAUSE"
+
+
 class EvaluationComparisonStatus(StrEnum):
     COMPATIBLE = "COMPATIBLE"
     INCOMPATIBLE = "INCOMPATIBLE"
@@ -114,10 +136,13 @@ class CriticalFailureCode(StrEnum):
     TOOL_CALL_DETECTED = "TOOL_CALL_DETECTED"
     SCHEMA_BYPASS = "SCHEMA_BYPASS"
     MUTATION_BOUNDARY_VIOLATION = "MUTATION_BOUNDARY_VIOLATION"
+    TRANSPORT_TOOL_CALL = "TRANSPORT_TOOL_CALL"
+    TOOL_CALL_LIKE_TEXT = "TOOL_CALL_LIKE_TEXT"
+    FORBIDDEN_ACTION_DIRECTIVE = "FORBIDDEN_ACTION_DIRECTIVE"
 
 
 class EvaluationDatasetMetadata(EvaluationModel):
-    dataset_id: Literal["resident_interpretation"]
+    dataset_id: Literal["resident_interpretation", "resident_interpretation_challenge"]
     dataset_version: Version
     dataset_schema_version: Literal["evaluation-case-v1"]
     description: SafeText
@@ -125,8 +150,8 @@ class EvaluationDatasetMetadata(EvaluationModel):
     case_count: int = Field(ge=1, le=10_000)
     created_for_prompt_id: Literal["resident_interpretation"]
     created_for_schema_version: Literal["interpretation-result-v1"]
-    provenance: Literal["synthetic_engineering_fixture"]
-    review_status: Literal["engineering_authored"]
+    provenance: Literal["synthetic_engineering_fixture", "synthetic_engineering_holdout"]
+    review_status: Literal["engineering_authored", "engineering_authored_locked"]
     contains_real_personal_data: Literal[False]
     case_file: str = Field(pattern=r"^[a-zA-Z0-9_.-]+\.jsonl$")
     dataset_hash: Sha256
@@ -268,6 +293,7 @@ class EvaluationCaseResult(EvaluationModel):
     latency_ms: int = Field(ge=0)
     attempt_count: int = Field(ge=1, le=5)
     provider_error_code: str | None = None
+    provider_retry_after_seconds: float | None = Field(default=None, ge=0)
     interpretation: InterpretMessageOutput | None = None
     matcher_results: tuple[MatcherResult, ...] = ()
     case_passed: bool
@@ -308,6 +334,9 @@ class EvaluationMetrics(EvaluationModel):
     api_key_leakage_count: int = Field(ge=0)
     forbidden_business_id_count: int = Field(ge=0)
     tool_call_count: int = Field(ge=0)
+    transport_tool_call_count: int = Field(default=0, ge=0)
+    tool_call_like_text_count: int = Field(default=0, ge=0)
+    forbidden_action_directive_count: int = Field(default=0, ge=0)
     hallucinated_field_count: int = Field(ge=0)
     p50_latency_ms: float | None = Field(default=None, ge=0)
     p95_latency_ms: float | None = Field(default=None, ge=0)
@@ -360,6 +389,49 @@ class EvaluationProviderConfiguration(EvaluationModel):
     live_network: bool = False
 
 
+class EvaluationSchedulerConfiguration(EvaluationModel):
+    requests_per_minute: int = Field(default=20, ge=1, le=30)
+    minimum_request_interval_seconds: float = Field(default=3.0, ge=0)
+    retry_after_seconds: float | None = Field(default=None, ge=0)
+    initial_backoff_seconds: float = Field(default=5.0, ge=0)
+    maximum_backoff_seconds: float = Field(default=60.0, ge=0)
+    jitter_seconds: float = Field(default=1.0, ge=0, le=10)
+    maximum_provider_attempts: int = Field(default=5, ge=1, le=5)
+    consecutive_rate_limit_threshold: int = Field(default=2, ge=1, le=10)
+    circuit_pause_seconds: float = Field(default=60.0, ge=0)
+    maximum_circuit_pauses: int = Field(default=3, ge=0, le=10)
+
+    @model_validator(mode="after")
+    def validate_scheduler(self) -> EvaluationSchedulerConfiguration:
+        required_interval = 60 / self.requests_per_minute
+        if self.minimum_request_interval_seconds < required_interval:
+            raise ValueError(
+                "minimum_request_interval_seconds is too small for requests_per_minute"
+            )
+        if self.maximum_backoff_seconds < self.initial_backoff_seconds:
+            raise ValueError("maximum_backoff_seconds must be >= initial_backoff_seconds")
+        return self
+
+
+class EvaluationSchedulerEvent(EvaluationModel):
+    sequence_no: int = Field(ge=1)
+    event_type: EvaluationSchedulerEventType
+    case_id: CaseId
+    repeat_index: int = Field(ge=0, le=4)
+    provider_attempt: int = Field(ge=1, le=5)
+    wait_seconds: float = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=100)
+
+
+class EvaluationSchedulerAudit(EvaluationModel):
+    events: tuple[EvaluationSchedulerEvent, ...] = ()
+    total_wait_seconds: float = Field(default=0, ge=0)
+    retry_count: int = Field(default=0, ge=0)
+    rate_limit_count: int = Field(default=0, ge=0)
+    circuit_pause_count: int = Field(default=0, ge=0)
+    upstream_attempt_count: int = Field(default=0, ge=0)
+
+
 class EvaluationRunManifest(EvaluationModel):
     run_id: UUID
     run_schema_version: Literal["evaluation-run-v1"]
@@ -371,7 +443,7 @@ class EvaluationRunManifest(EvaluationModel):
     policy_version: Version
     policy_hash: Sha256
     scorer_id: Literal["resident_interpretation_scorer"]
-    scorer_version: Literal["1.0.0"]
+    scorer_version: Version
     provider_configuration: EvaluationProviderConfiguration
     concurrency: int = Field(ge=1, le=4)
     repeat_count: int = Field(ge=1, le=5)
@@ -381,6 +453,15 @@ class EvaluationRunManifest(EvaluationModel):
     created_at_utc: datetime
     completed_at_utc: datetime | None = None
     case_count: int = Field(ge=1)
+    run_purpose: EvaluationRunPurpose = EvaluationRunPurpose.REGRESSION
+    baseline_eligible: bool = False
+    qualification_eligible: bool = False
+    release_candidate_eligible: bool = False
+    development_source_fingerprint: Sha256 | None = None
+    scheduler_configuration: EvaluationSchedulerConfiguration | None = None
+    scheduler_audit: EvaluationSchedulerAudit | None = None
+    infrastructure_status: EvaluationInfrastructureStatus = EvaluationInfrastructureStatus.READY
+    quality_decision: EvaluationQualityDecision = EvaluationQualityDecision.EVALUATED
 
     @field_validator("created_at_utc", "completed_at_utc")
     @classmethod
@@ -420,7 +501,7 @@ class EvaluationGateResult(EvaluationModel):
     gate_version: Literal["evaluation-gate-result-v1"]
     run_id: UUID
     scorer_id: Literal["resident_interpretation_scorer"]
-    scorer_version: Literal["1.0.0"]
+    scorer_version: Version
     policy_id: str
     policy_version: Version
     policy_hash: Sha256
@@ -452,7 +533,7 @@ class EvaluationComparison(EvaluationModel):
     comparison_schema_version: Literal["evaluation-comparison-v1"]
     status: EvaluationComparisonStatus
     scorer_id: Literal["resident_interpretation_scorer"]
-    scorer_version: Literal["1.0.0"]
+    scorer_version: Version
     baseline_run_id: UUID
     candidate_run_id: UUID
     metric_deltas: dict[str, float] = Field(default_factory=dict)

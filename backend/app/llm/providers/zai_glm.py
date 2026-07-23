@@ -206,6 +206,12 @@ class ZaiGLMStructuredInterpretationProvider:
             )
         choice = choices[0]
         message = getattr(choice, "message", None)
+        tool_calls = getattr(message, "tool_calls", None)
+        transport_tool_call_count = (
+            len(tool_calls)
+            if isinstance(tool_calls, (list, tuple))
+            else int(tool_calls is not None)
+        )
         interpretation = self._parser.parse(
             getattr(message, "content", None),
             provider=self.provider_name,
@@ -231,6 +237,7 @@ class ZaiGLMStructuredInterpretationProvider:
             output_tokens=output_tokens,
             total_tokens=total_tokens,
             thinking_mode=self._config.thinking_mode,
+            transport_tool_call_count=transport_tool_call_count,
         )
 
     async def generate_response(

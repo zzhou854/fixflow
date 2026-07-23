@@ -72,6 +72,19 @@ class EvaluationArtifactStore:
             raise ArtifactError("case results contain duplicate identities")
         return tuple(results)
 
+    def archive_resume_failures(
+        self,
+        results: tuple[EvaluationCaseResult, ...],
+    ) -> None:
+        """Preserve superseded infrastructure failures before a safe resume."""
+
+        if not results:
+            return
+        path = self.run_directory / "resume-infrastructure-history.jsonl"
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        content = existing + "".join(result.model_dump_json() + "\n" for result in results)
+        self._atomic_text(path.name, content)
+
     def finalize(
         self,
         report: EvaluationReport,
@@ -115,6 +128,9 @@ class EvaluationArtifactStore:
         self._atomic_text("failures.jsonl", failure_content)
         self._atomic_text("gate-result.json", gate.model_dump_json(indent=2) + "\n")
         names = tuple(name for name in ARTIFACT_FILES if name != "artifact-index.json")
+        resume_history = self.run_directory / "resume-infrastructure-history.jsonl"
+        if resume_history.exists():
+            names = (*names, resume_history.name)
         hashes = {
             name: sha256_text((self.run_directory / name).read_text(encoding="utf-8"))
             for name in names

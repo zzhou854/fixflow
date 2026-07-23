@@ -11,8 +11,9 @@ demo.
 
 ## Current status
 
-Stage A, Stage B, and Tasks 9–14 are committed. Task 15 completed a clean,
-real-API GLM-5.1 qualification run and is at its code-review gate:
+Stage A, Stage B, and Tasks 9–15 are committed. Task 16 has implemented Prompt
+v2 remediation and completed its development evaluation at the code-review
+gate:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
@@ -67,7 +68,12 @@ GLM-5.1 structured interpretation is available behind explicit configuration,
 but the first live qualification result is `NOT_QUALIFIED`. The current
 qualified model candidate is **None**; no Baseline or Release Candidate was
 published, and the default runtime remains Scripted. See
-`docs/GLM_5_1_QUALIFICATION_REPORT.md`. A future requalification, online
+`docs/GLM_5_1_QUALIFICATION_REPORT.md`. Prompt v2's historical development run
+is `EVALUATION_BLOCKED_INFRASTRUCTURE`, with quality `INCONCLUSIVE`, because the
+first 120-case repeat suffered 87 terminal rate-limit
+failures; the locked Challenge Corpus was not called. See
+`docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md`. A future remediation or
+requalification, online
 embedding, online free-text generation, the ReAct baseline, and Stage D
 ablations remain mandatory roadmap work, not cancelled scope.
 Replay verifies control-plane determinism;
@@ -177,6 +183,7 @@ and never maintained manually.
 - [Prompt Library](docs/PROMPT_LIBRARY.md)
 - [Model Evaluation](docs/MODEL_EVALUATION.md)
 - [Model Release Gate](docs/MODEL_RELEASE_GATE.md)
+- [GLM-5.1 Prompt v2 remediation](docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md)
 
 ## Week-1 delivery order
 

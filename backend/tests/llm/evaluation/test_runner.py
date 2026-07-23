@@ -518,6 +518,50 @@ async def test_provider_failure_is_not_retried_by_runner_and_next_case_runs(
 
 
 @pytest.mark.asyncio
+async def test_resume_retries_only_archived_infrastructure_failure(
+    tmp_path: Path,
+    release_dataset: EvaluationDataset,
+    gate_policy: object,
+) -> None:
+    dataset = _dataset(release_dataset)
+    output = tmp_path / "resume-infrastructure"
+    failure = LLMProviderError(
+        LLMProviderErrorCode.RATE_LIMITED,
+        provider="fake",
+        model="model",
+        retryable=False,
+        attempt_count=1,
+    )
+    first = ScriptedLLMProvider(structured=[failure])
+    initial = await EvaluationRunner().run(
+        EvaluationRunRequest(
+            dataset=dataset,
+            policy=gate_policy,  # type: ignore[arg-type]
+            provider=first,
+            provider_configuration=provider_configuration(),
+            output_directory=output,
+        )
+    )
+    assert initial.report.manifest.quality_decision == "INCONCLUSIVE"
+
+    resumed_provider = ScriptedLLMProvider(structured=[_payload(dataset.cases[0])])
+    resumed = await EvaluationRunner().run(
+        EvaluationRunRequest(
+            dataset=dataset,
+            policy=gate_policy,  # type: ignore[arg-type]
+            provider=resumed_provider,
+            provider_configuration=provider_configuration(),
+            output_directory=output,
+            resume=True,
+        )
+    )
+
+    assert resumed.results[0].interpretation is not None
+    history = (output / "resume-infrastructure-history.jsonl").read_text(encoding="utf-8")
+    assert '"provider_error_code":"RATE_LIMITED"' in history
+
+
+@pytest.mark.asyncio
 async def test_concurrency_preserves_dataset_order(
     tmp_path: Path,
     release_dataset: EvaluationDataset,

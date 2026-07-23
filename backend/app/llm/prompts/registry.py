@@ -36,28 +36,42 @@ EXAMPLE_ADAPTER = TypeAdapter(tuple[PromptExample, ...])
 
 class PromptRegistry:
     PROMPT_ID = "resident_interpretation"
-    PROMPT_VERSION = "1.0.0"
+    DEFAULT_PROMPT_VERSION = "1.0.0"
     SCHEMA_VERSION = "interpretation-result-v1"
+    SUPPORTED_VERSIONS = ("1.0.0", "2.0.0")
 
     def __init__(self, root: Path | None = None) -> None:
         self._root = root or Path(__file__).parent / self.PROMPT_ID
-        self._definition: PromptDefinition | None = None
+        self._definitions: dict[str, PromptDefinition] = {}
 
-    def resident_interpretation(self) -> PromptDefinition:
-        if self._definition is not None:
-            return self._definition
-        system = (self._root / "system_v1.md").read_text(encoding="utf-8")
+    def resident_interpretation(
+        self,
+        version: str | None = None,
+    ) -> PromptDefinition:
+        selected = version or self.DEFAULT_PROMPT_VERSION
+        if selected not in self.SUPPORTED_VERSIONS:
+            raise ValueError(f"unsupported resident interpretation prompt version: {selected}")
+        if selected in self._definitions:
+            return self._definitions[selected]
+        asset_version = selected.split(".", maxsplit=1)[0]
+        system = (self._root / f"system_v{asset_version}.md").read_text(encoding="utf-8")
         schema = json.loads((self._root / "output_schema_v1.json").read_text(encoding="utf-8"))
-        examples_raw = json.loads((self._root / "examples_v1.json").read_text(encoding="utf-8"))
+        examples_raw = json.loads(
+            (self._root / f"examples_v{asset_version}.json").read_text(encoding="utf-8")
+        )
         if not isinstance(schema, dict):
             raise ValueError("prompt output schema must be an object")
         examples = EXAMPLE_ADAPTER.validate_python(examples_raw)
-        if not 12 <= len(examples) <= 20:
-            raise ValueError("resident interpretation prompt must contain 12 to 20 examples")
+        minimum, maximum = (12, 20) if selected == "1.0.0" else (20, 24)
+        if not minimum <= len(examples) <= maximum:
+            raise ValueError(
+                f"resident interpretation prompt {selected} must contain "
+                f"{minimum} to {maximum} examples"
+            )
         canonical = json.dumps(
             {
                 "prompt_id": self.PROMPT_ID,
-                "prompt_version": self.PROMPT_VERSION,
+                "prompt_version": selected,
                 "schema_version": self.SCHEMA_VERSION,
                 "system_template": system,
                 "output_schema": schema,
@@ -67,13 +81,14 @@ class PromptRegistry:
             sort_keys=True,
             separators=(",", ":"),
         )
-        self._definition = PromptDefinition(
+        definition = PromptDefinition(
             prompt_id=self.PROMPT_ID,
-            prompt_version=self.PROMPT_VERSION,
+            prompt_version=selected,
             schema_version=self.SCHEMA_VERSION,
             system_template=system,
             output_schema=schema,
             examples=examples,
             prompt_hash=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         )
-        return self._definition
+        self._definitions[selected] = definition
+        return definition

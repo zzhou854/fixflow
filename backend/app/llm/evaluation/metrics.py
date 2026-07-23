@@ -105,6 +105,11 @@ def calculate_metrics(
             results, CriticalFailureCode.FORBIDDEN_BUSINESS_ID
         ),
         tool_call_count=_critical_count(results, CriticalFailureCode.TOOL_CALL_DETECTED),
+        transport_tool_call_count=_critical_count(results, CriticalFailureCode.TRANSPORT_TOOL_CALL),
+        tool_call_like_text_count=_critical_count(results, CriticalFailureCode.TOOL_CALL_LIKE_TEXT),
+        forbidden_action_directive_count=_critical_count(
+            results, CriticalFailureCode.FORBIDDEN_ACTION_DIRECTIVE
+        ),
         hallucinated_field_count=0,
         p50_latency_ms=_percentile(latencies, 0.50),
         p95_latency_ms=_percentile(latencies, 0.95),

@@ -13,6 +13,7 @@ from app.llm.evaluation.models import (
     EvaluationGatePolicy,
     EvaluationGateResult,
     EvaluationReport,
+    EvaluationRunPurpose,
     GateRuleResult,
     MetricRule,
 )
@@ -51,13 +52,14 @@ def evaluate_gate(
         and manifest.git_dirty is False
         and manifest.provider_configuration.live_network
         and manifest.provider_configuration.provider == "zai"
+        and manifest.run_purpose is not EvaluationRunPurpose.PROMPT_DEVELOPMENT
     )
     return EvaluationGateResult(
         gate_id=uuid4(),
         gate_version="evaluation-gate-result-v1",
         run_id=manifest.run_id,
         scorer_id="resident_interpretation_scorer",
-        scorer_version="1.0.0",
+        scorer_version=manifest.scorer_version,
         policy_id=policy.policy_id,
         policy_version=policy.policy_version,
         policy_hash=policy.policy_hash,
