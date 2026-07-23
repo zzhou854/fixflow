@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Protocol, runtime_checkable
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -15,6 +16,7 @@ from app.agent_runtime.mcp.client import StreamableHttpPropertyOperationsClient
 from app.agent_runtime.orchestration import AgentOrchestrator
 from app.config import Settings
 from app.infrastructure.database.policy_uow import SqlAlchemyPolicyUnitOfWork
+from app.llm.sanitizer import InterpretationInputLimits
 from app.policy.ports import EmbeddingProvider, PolicyUnitOfWork
 from app.policy.retrieval import PolicyRetrievalService
 from app.reconciliation.coordinator import UnknownCommitCoordinator
@@ -26,11 +28,17 @@ from app.replay.recording import (
 )
 
 
+@runtime_checkable
+class AsyncClosableProvider(Protocol):
+    async def close(self) -> None: ...
+
+
 @asynccontextmanager
 async def open_agent_orchestrator(
     settings: Settings,
     *,
-    llm_provider: LLMProvider,
+    interpretation_provider: LLMProvider,
+    response_provider: LLMProvider,
     embedding_provider: EmbeddingProvider,
     language_model_name: str,
 ) -> AsyncIterator[AgentOrchestrator]:
@@ -56,9 +64,17 @@ async def open_agent_orchestrator(
             dependencies = RuntimeDependencies(
                 mcp=recording_mcp,
                 interpret=RecordingInterpretationNode(
-                    InterpretMessageNode(llm_provider, model=language_model_name)
+                    InterpretMessageNode(
+                        interpretation_provider,
+                        model=language_model_name,
+                        input_limits=InterpretationInputLimits(
+                            max_input_characters=settings.llm_max_input_characters,
+                            max_context_messages=settings.llm_max_context_messages,
+                            max_message_characters=settings.llm_max_message_characters,
+                        ),
+                    )
                 ),
-                compose=ComposeResponseNode(llm_provider, model=language_model_name),
+                compose=ComposeResponseNode(response_provider, model=language_model_name),
                 retrieve_policy=RecordingPolicyService(policy.retrieve),
             )
             graph = build_agent_graph(dependencies, checkpointer=checkpointer)
@@ -70,3 +86,5 @@ async def open_agent_orchestrator(
                 )
             finally:
                 await engine.dispose()
+                if isinstance(interpretation_provider, AsyncClosableProvider):
+                    await interpretation_provider.close()

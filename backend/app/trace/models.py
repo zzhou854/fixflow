@@ -50,6 +50,23 @@ class TracePayload(BaseModel):
     previous_appointment_id: UUID | None = None
     original_run_id: UUID | None = None
     idempotency_key_fingerprint: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    prompt_id: str | None = None
+    prompt_version: str | None = None
+    prompt_hash: str | None = None
+    schema_version: str | None = None
+    input_hash: str | None = None
+    input_character_count: int | None = Field(default=None, ge=0)
+    context_message_count: int | None = Field(default=None, ge=0)
+    thinking_mode: str | None = None
+    attempt_count: int | None = Field(default=None, ge=1)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    finish_reason: str | None = None
+    provider_request_id: str | None = None
+    success: bool | None = None
 
 
 class StartRun(BaseModel):

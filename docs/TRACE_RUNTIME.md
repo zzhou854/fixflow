@@ -52,6 +52,13 @@ Trace never stores full conversation messages, checkpoint blobs, chain of
 thought, ORM representations, raw provider/MCP responses, SQL, or exception
 stacks.
 
+Task 13 adds `llm_interpretation_started`, `llm_interpretation_retried`,
+`llm_interpretation_succeeded`, and `llm_interpretation_failed`. Their closed
+payload contains only safe provider/prompt identity, input fingerprint, attempts,
+latency, optional token usage, finish/request identifiers, and safe error
+classification. Prompt text, examples, model JSON, reasoning content, user text,
+credentials, and SDK response blobs remain prohibited.
+
 ## Operator review
 
 The operator APIs list runs for a thread and sanitized events for a run. They

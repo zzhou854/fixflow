@@ -22,6 +22,7 @@ from app.application.services import FixFlowApplicationService
 from app.config import Settings
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
+from app.llm.factory import build_structured_interpretation_provider
 from app.reconciliation.coordinator import UnknownCommitCoordinator
 from app.reconciliation.repository import SqlAlchemyReconciliationRepository
 from app.replay.capture import ReplayCaptureService
@@ -73,11 +74,19 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
         graph_schema_version=settings.graph_schema_version,
     )
     try:
+        scripted_llm = DemoScriptedLLMProvider()
+        interpretation_provider = build_structured_interpretation_provider(
+            settings,
+            scripted_provider=scripted_llm,
+        )
         async with open_agent_orchestrator(
             settings,
-            llm_provider=DemoScriptedLLMProvider(),
+            interpretation_provider=interpretation_provider,
+            response_provider=scripted_llm,
             embedding_provider=DemoDeterministicEmbeddingProvider(),
-            language_model_name="fixflow-demo-scripted-v1",
+            language_model_name=(
+                settings.glm_model if settings.llm_provider == "glm" else "fixflow-demo-scripted-v1"
+            ),
         ) as orchestrator:
             operator_review = OperatorThreadReviewService(orchestrator)
             operator_trace = OperatorTraceQueryService(operator_review, trace)

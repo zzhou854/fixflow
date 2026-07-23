@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InterpretMessageOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["utterance_intent"],
+  "properties": {
+    "utterance_intent": {
+      "enum": ["NEW_REPAIR", "PROVIDE_INFORMATION", "QUERY_TICKET_STATUS", "SELECT_APPOINTMENT_SLOT", "RESCHEDULE_APPOINTMENT", "CANCEL_APPOINTMENT", "CANCEL_TICKET", "ACCEPT_REPAIR", "REJECT_REPAIR", "REQUEST_HUMAN", "UNKNOWN"]
+    },
+    "issue_category": {"anyOf": [{"enum": ["WATER_LEAK", "ELECTRICAL", "DOOR_LOCK"]}, {"type": "null"}]},
+    "issue_location": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 255}, {"type": "null"}]},
+    "issue_description_update": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 4000}, {"type": "null"}]},
+    "safety_flags": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {"enum": ["IMMEDIATE_DANGER", "ACTIVE_FLOODING", "ELECTRICAL_HAZARD", "LOCKOUT_RISK", "OTHER_REVIEW_REQUIRED"]}
+    },
+    "user_availability_windows": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["starts_at", "ends_at"],
+        "properties": {
+          "starts_at": {"type": "string", "format": "date-time"},
+          "ends_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "user_correction": {"type": "boolean"},
+    "acceptance_decision": {"anyOf": [{"enum": ["ACCEPT", "REJECT", "UNCLEAR"]}, {"type": "null"}]},
+    "requested_human": {"type": "boolean"},
+    "explicit_property_reference": {"anyOf": [{"type": "string", "format": "uuid"}, {"type": "null"}]},
+    "model_suggested_missing_fields": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {"enum": ["PROPERTY", "ISSUE_CATEGORY", "ISSUE_LOCATION", "ISSUE_DESCRIPTION", "SEVERITY", "AVAILABILITY"]}
+    }
+  }
+}

@@ -60,8 +60,9 @@ Stage A, Stage B, and Tasks 9–11 are committed. Task 12 is at its code-review 
 - an Operator-only, ticket-linked Recovery Console with read-only recommendations;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Online LLM/embedding providers and the Stage D evaluation remain mandatory
-roadmap work, not cancelled scope. Replay verifies control-plane determinism;
+GLM-5.1 structured interpretation is available behind explicit configuration.
+Online embedding, online free-text generation, and Stage D evaluation remain
+mandatory roadmap work, not cancelled scope. Replay verifies control-plane determinism;
 it is not Event Sourcing, database time travel, or automatic repair.
 
 ## Prerequisites
@@ -142,6 +143,8 @@ and never maintained manually.
 - [Resident and operator frontend](docs/FRONTEND.md)
 - [Deterministic Replay](docs/REPLAY.md)
 - [Recovery Console](docs/RECOVERY_CONSOLE.md)
+- [Structured LLM Provider](docs/LLM_PROVIDER.md)
+- [Prompt Library](docs/PROMPT_LIBRARY.md)
 
 ## Week-1 delivery order
 

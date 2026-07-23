@@ -104,3 +104,7 @@ Recovery recommendations are deterministic and read-only:
 `MANUAL_REVIEW_REQUIRED`, `REPLAY_EVIDENCE_INCOMPLETE`, and
 `REPLAY_DIVERGED_REVIEW_REQUIRED`. A recommendation never applies a Replay
 result, modifies a Checkpoint, resends a mutation, or changes business state.
+Task 13 may add optional provider/model/prompt/hash/Schema/thinking metadata to
+an Interpretation Tape step. Old schema-version-1 steps without these fields
+remain valid. Recorded Interpretation remains the only Replay source; configuring
+the production runtime for GLM never causes Replay to initialize or call GLM.

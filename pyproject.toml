@@ -21,6 +21,7 @@ dependencies = [
     "structlog>=25.4,<26",
     "tzdata>=2025.2",
     "uvicorn[standard]>=0.35,<1",
+    "zai-sdk>=0.2.3,<0.3",
 ]
 
 [dependency-groups]

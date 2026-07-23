@@ -33,11 +33,18 @@ class NodeEnteredStep(StepPayload):
 
 class InterpretationResultStep(StepPayload):
     kind: Literal[ReplayStepKind.INTERPRETATION_RESULT] = ReplayStepKind.INTERPRETATION_RESULT
-    provider_type: Literal["SCRIPTED"]
+    provider_type: Literal["SCRIPTED", "GLM"]
     schema_version: int = Field(ge=1)
     result: InterpretationNodeResult
     validation_status: Literal["VALIDATED"] = "VALIDATED"
     input_content_hash: Sha256
+    provider: str | None = Field(default=None, max_length=100)
+    model: str | None = Field(default=None, max_length=100)
+    prompt_id: str | None = Field(default=None, max_length=100)
+    prompt_version: str | None = Field(default=None, max_length=100)
+    prompt_hash: Sha256 | None = None
+    interpretation_schema_version: str | None = Field(default=None, max_length=100)
+    thinking_mode: str | None = Field(default=None, max_length=20)
 
 
 class PropertyAuthorizationResultStep(StepPayload):

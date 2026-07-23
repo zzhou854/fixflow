@@ -2,6 +2,12 @@
 
 ## Runtime boundary
 
+Task 13 does not change public request or response contracts. The server may
+select GLM-5.1 for structured interpretation at startup, but clients cannot
+override provider, model, base URL, key, timeout, retry policy, or prompt
+version. Final HTTP state remains authoritative even if an interpretation call
+fails and SSE remains only a delivery aid.
+
 Task 9 exposes the existing deterministic system through FastAPI. The supported
 call path is:
 

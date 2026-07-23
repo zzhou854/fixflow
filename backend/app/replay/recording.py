@@ -69,10 +69,17 @@ class RecordingInterpretationNode:
         await _capture(
             "interpretation",
             InterpretationResultStep(
-                provider_type="SCRIPTED",
+                provider_type=("GLM" if result.metadata.provider == "zai" else "SCRIPTED"),
                 schema_version=1,
                 result=result,
                 input_content_hash=content_hash,
+                provider=result.metadata.provider,
+                model=result.metadata.model,
+                prompt_id=result.metadata.prompt_name,
+                prompt_version=result.metadata.prompt_version,
+                prompt_hash=result.metadata.prompt_hash,
+                interpretation_schema_version=result.metadata.schema_version,
+                thinking_mode=result.metadata.thinking_mode,
             ),
             content_hash,
         )

@@ -8,8 +8,9 @@ server. PostgreSQL business tables remain the source of ticket and appointment
 truth. A checkpoint contains bounded conversation work state only and is never
 written back over a fresher business snapshot.
 
-The current product runtime uses deterministic demonstration LLM and embedding
-providers; online providers remain deferred. Task 11 adds UNKNOWN_COMMIT
+The default product runtime uses deterministic demonstration providers. Task 13
+optionally replaces only the structured interpretation boundary with GLM-5.1;
+compose and embedding remain deterministic. Task 11 adds UNKNOWN_COMMIT
 reconciliation and test-only fault injection around this same orchestrator.
 Task 12 adds tape-only deterministic Replay. Task 9 exposes the product through authenticated FastAPI
 thread, message, state, strict Resume, and SSE endpoints.

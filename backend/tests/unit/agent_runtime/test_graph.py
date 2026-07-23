@@ -331,6 +331,29 @@ async def test_missing_property_fails_before_any_tool_or_model_call() -> None:
 
 
 @pytest.mark.asyncio
+async def test_interpretation_provider_failure_stops_before_business_mutation() -> None:
+    resident_id, property_id = uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    llm = ScriptedLLMProvider(
+        structured=(TimeoutError("provider unavailable"),),
+        text=("不得使用的回复",),
+    )
+    graph = build_agent_graph(
+        RuntimeDependencies(
+            mcp=mcp,
+            interpret=InterpretMessageNode(llm, model="glm-5.1"),
+            compose=ComposeResponseNode(llm, model="scripted"),
+            retrieve_policy=_policy_result,
+        ),
+        checkpointer=InMemorySaver(),
+    )
+    result = await AgentOrchestrator(graph, mcp).start_turn(_turn(resident_id, property_id))
+    assert result.run_status is RunStatus.FAILED_SAFE
+    assert result.error_code == "LANGUAGE_INTERPRETATION_FAILED"
+    assert [name for name, _ in mcp.calls] == ["get_resident_property"]
+
+
+@pytest.mark.asyncio
 async def test_new_repair_interrupt_resume_books_once_with_system_duration() -> None:
     resident_id, property_id = uuid4(), uuid4()
     mcp = FakePropertyOperationsClient(resident_id, property_id)

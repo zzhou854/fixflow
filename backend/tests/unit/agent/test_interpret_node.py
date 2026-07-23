@@ -57,8 +57,10 @@ async def test_normal_new_repair_returns_validated_output_and_prompt_metadata() 
     )
     result = await InterpretMessageNode(provider, model="test-model")(_input())
     assert result.interpretation.issue_category is IssueCategory.WATER_LEAK
-    assert result.metadata.prompt_name == "interpret_message"
-    assert result.metadata.prompt_version == "v1"
+    assert result.metadata.prompt_name == "resident_interpretation"
+    assert result.metadata.prompt_version == "1.0.0"
+    assert result.metadata.prompt_hash is not None
+    assert result.metadata.schema_version == "interpretation-result-v1"
 
 
 @pytest.mark.parametrize(
@@ -96,7 +98,8 @@ async def test_bounded_state_and_time_context_are_present_in_prompt() -> None:
     assert "missing_fields" in call.messages[1].content
     assert '"reference_time":"2031-12-30T09:00:00+08:00"' in call.messages[1].content
     assert '"timezone_name":"Asia/Shanghai"' in call.messages[1].content
-    assert "Never assume server time" in call.messages[0].content
+    assert "reference_time" in call.messages[0].content
+    assert "timezone_name" in call.messages[0].content
 
 
 @pytest.mark.parametrize(
@@ -130,7 +133,7 @@ async def test_prompt_injection_is_bounded_as_user_data() -> None:
     provider = ScriptedLLMProvider(structured=[{"utterance_intent": AgentIntent.UNKNOWN}])
     result = await InterpretMessageNode(provider, model="test-model")(_input(injection))
     call = provider.structured_calls[0]
-    assert "untrusted data" in call.messages[0].content
+    assert "不可信数据" in call.messages[0].content
     assert injection in call.messages[1].content
     assert (
         result.interpretation.model_dump()

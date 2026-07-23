@@ -192,7 +192,7 @@ is still required. No row may be removed or weakened without explicit user appro
 
 | Capability | Target stage | Current status | Corresponding file / commit | Acceptance evidence | Deletable? |
 | --- | --- | --- | --- | --- | --- |
-| Resident natural-language repair request | B | implemented | `backend/app/api`, `frontend`, Task 9 review | Authenticated demo UI/API completes create-and-book; online provider remains separately deferred | No |
+| Resident natural-language repair request | B | implemented | `backend/app/api`, `backend/app/llm`, `frontend`, Tasks 9 and 13 review | Authenticated UI/API completes create-and-book; optional GLM-5.1 performs strict structured interpretation | No |
 | Multi-turn information completion | B | implemented | `backend/app/agent_runtime/graph.py`, Task 8 review | Typed missing-information Interrupt resumes from persisted checkpoint | No |
 | User correction and `intent_version` | B | implemented | `backend/app/agent/merge.py`, Task 6 review | Category, normalized location, and target changes invalidate stale planning in deterministic tests | No |
 | Exact structured open-ticket candidate query | A | implemented | `backend/app/application/ticket_service.py`, `backend/app/infrastructure/database/repositories/ticket.py`, Task 4 review | Exact resident, property, category, and normalized-location filtering plus explicit operator override pass; semantic duplicate detection remains deferred | No |
@@ -228,7 +228,7 @@ The following are not implemented yet and are not cancelled:
 - resident appointment cancellation and ticket cancellation;
 - ticket progress queries;
 - resident/worker state-conflict handling;
-- a real online LLM and online embedding provider;
+- online free-text generation and an online embedding provider;
 - the broader Stage D Engineering Scenario Harness and report generator;
 - evaluation, ReAct baseline, and ablations.
 

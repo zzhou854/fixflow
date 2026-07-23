@@ -4,7 +4,8 @@
 
 Task 6 implements the provider-neutral language core. Task 8 now uses it in the
 single LangGraph orchestrator with checkpoint persistence and an MCP client.
-It still does not provide an online model or a second business-state engine.
+Task 13 adds optional GLM-5.1 structured interpretation without adding a second
+business-state engine. Compose remains the deterministic Scripted implementation.
 PostgreSQL remains the source of truth for tickets and appointments.
 
 ```text
@@ -149,8 +150,8 @@ Errors are transport-neutral: `AgentError`, `LLMProviderUnavailable`,
 database write handle, so invalid output and provider failures cannot partially
 mutate State or business data.
 
-Online provider integration, JWT/API, Trace runtime, frontend, Harness, and
-system-level evaluation remain deferred mandatory work. Task 8 adds bounded
+Online embedding/free-text integration and Stage-D system-level evaluation
+remain deferred mandatory work. Task 8 adds bounded
 conversation messages, cached snapshots, candidate fingerprints, pending
 operations, verified property context, and deterministic service duration.
 

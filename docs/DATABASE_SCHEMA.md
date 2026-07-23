@@ -170,4 +170,8 @@ RUNNING Executions cannot have a completion result; terminal Executions require
 one. Foreign keys use `ON DELETE RESTRICT`, timestamps are timezone-aware, and
 downgrade removes Replay rows/tables before removing `REPLAY` from the Trace
 source check. The isolated LangGraph Checkpoint database contains no Replay
+
+Task 13 adds no business table and no migration. Prompt assets remain
+Git-managed files; provider metadata uses the existing closed Trace and Replay
+projections rather than a prompt or LLM-response table.
 tables.

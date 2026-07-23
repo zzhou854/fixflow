@@ -8,6 +8,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
 from app.agent.enums import AgentReconciliationStatus, LLMRole, PendingAction
+from app.agent.errors import AgentError
 from app.agent.state import AgentConversationMessage, AgentState
 from app.agent_runtime.errors import AgentRuntimeError, ThreadIdentityConflict, UnknownCommit
 from app.agent_runtime.mcp.client import PropertyOperationsClient
@@ -307,6 +308,9 @@ class AgentOrchestrator:
                 except AgentRuntimeError as exc:
                     current = await self._stored_state(turn.thread_id) or existing
                     return self._failure(turn, current, exc.code)
+                except AgentError:
+                    current = await self._stored_state(turn.thread_id) or existing
+                    return self._failure(turn, current, "LANGUAGE_INTERPRETATION_FAILED")
                 return await self._result(
                     turn.thread_id,
                     turn.trace_id,
@@ -365,6 +369,9 @@ class AgentOrchestrator:
         except AgentRuntimeError as exc:
             current = await self._stored_state(turn.thread_id) or state
             return self._failure(turn, current, exc.code)
+        except AgentError:
+            current = await self._stored_state(turn.thread_id) or state
+            return self._failure(turn, current, "LANGUAGE_INTERPRETATION_FAILED")
         return await self._result(turn.thread_id, turn.trace_id, cast(RuntimeGraphState, output))
 
     async def resume(
@@ -417,6 +424,14 @@ class AgentOrchestrator:
         except AgentRuntimeError as exc:
             current = await self._stored_state(thread_id) or state
             return self._failure_from_ids(thread_id, validated.trace_id, current, exc.code)
+        except AgentError:
+            current = await self._stored_state(thread_id) or state
+            return self._failure_from_ids(
+                thread_id,
+                validated.trace_id,
+                current,
+                "LANGUAGE_INTERPRETATION_FAILED",
+            )
         except ValueError:
             return self._failure_from_ids(thread_id, validated.trace_id, state, "RESUME_CONFLICT")
         return await self._result(thread_id, validated.trace_id, cast(RuntimeGraphState, output))

@@ -11,6 +11,7 @@ flowchart LR
     API --> Orchestrator["Single typed orchestrator"]
     Orchestrator --> Services["Deterministic application services"]
     Orchestrator --> LLM["Typed interpret/compose core"]
+    LLM --> GLM["Optional GLM-5.1 structured interpretation"]
     Orchestrator --> MCPClient["Streamable HTTP MCP client"]
     MCPClient --> MCP["property-operations-mcp"]
     MCP --> Services
@@ -270,3 +271,7 @@ JWT authentication belongs to Stage B.
   and covered by domain tests.
 - The core ORM and first business migration are implemented and verified through
   real PostgreSQL upgrade/downgrade and constraint tests.
+Task 13 adds a lifecycle-owned official Z.AI SDK adapter only at the structured
+interpretation port. The synchronous SDK call runs behind a bounded worker-thread
+boundary. Compose remains scripted; Graph routing, authorization, policy,
+mutation, recovery, and Replay remain deterministic.

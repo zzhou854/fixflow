@@ -143,6 +143,19 @@ class StructuredLLMResult(AgentModel):
     model: ShortText
     prompt_name: ShortText
     prompt_version: ShortText
+    prompt_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    schema_version: str | None = Field(default=None, max_length=100)
+    request_id: str | None = Field(default=None, max_length=200)
+    finish_reason: str | None = Field(default=None, max_length=100)
+    latency_ms: int | None = Field(default=None, ge=0)
+    attempt_count: int = Field(default=1, ge=1, le=5)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    thinking_mode: str | None = Field(default=None, max_length=20)
+    json_decoded: bool = True
+    schema_validated: bool = True
+    invariants_validated: bool = True
 
 
 class TextLLMResult(AgentModel):
@@ -158,6 +171,19 @@ class NodeMetadata(AgentModel):
     model: str
     prompt_name: str
     prompt_version: str
+    prompt_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    schema_version: str | None = Field(default=None, max_length=100)
+    request_id: str | None = Field(default=None, max_length=200)
+    finish_reason: str | None = Field(default=None, max_length=100)
+    latency_ms: int | None = Field(default=None, ge=0)
+    attempt_count: int = Field(default=1, ge=1, le=5)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    thinking_mode: str | None = Field(default=None, max_length=20)
+    json_decoded: bool = True
+    schema_validated: bool = True
+    invariants_validated: bool = True
 
 
 class InterpretationNodeResult(AgentModel):

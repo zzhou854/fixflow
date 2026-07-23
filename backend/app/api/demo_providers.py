@@ -37,7 +37,7 @@ class DemoScriptedLLMProvider:
         model_config: LLMRequestConfig,
     ) -> StructuredLLMResult:
         context = self._context(messages[-1].content)
-        message = str(context.get("current_user_message", ""))
+        message = str(context.get("current_message", context.get("current_user_message", "")))
         known = dict(context.get("known_issue_fields", {}))
         summary = dict(context.get("current_state_summary", {}))
         lowered = message.casefold()
