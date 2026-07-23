@@ -122,6 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
     develop.add_argument("--output", type=Path, required=True)
+    develop.add_argument("--probe-only", action="store_true")
     _add_scheduler_arguments(develop)
     compare = commands.add_parser("compare")
     compare.add_argument("--baseline", type=Path, required=True)
@@ -284,6 +285,9 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
         if probe_outcome.report.metrics.completion_rate < 1:
             status = DevelopmentStatus.EVALUATION_BLOCKED_INFRASTRUCTURE
             raise _DevelopmentStop
+        if args.probe_only:
+            status = DevelopmentStatus.NOT_EVALUATED
+            raise _DevelopmentStop
         smoke = _smoke_dataset(regression)
         smoke_outcome = await runner.run(
             _development_request(
@@ -437,6 +441,8 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
     )
     if status is DevelopmentStatus.EVALUATION_BLOCKED_INFRASTRUCTURE:
         return EvaluationExitCode.INFRASTRUCTURE_FAILED
+    if args.probe_only and probe_outcome.report.metrics.completion_rate == 1:
+        return EvaluationExitCode.SUCCESS
     if status is DevelopmentStatus.READY_FOR_REQUALIFICATION:
         return EvaluationExitCode.SUCCESS
     return EvaluationExitCode.GATE_FAILED

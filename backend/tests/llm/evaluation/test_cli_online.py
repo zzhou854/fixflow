@@ -106,6 +106,22 @@ def test_unknown_cli_command_is_rejected() -> None:
     assert caught.value.code == 2
 
 
+def test_prompt_development_supports_probe_only(tmp_path: Path) -> None:
+    args = build_parser().parse_args(
+        [
+            "develop-prompt-v2",
+            "--run-purpose",
+            "prompt-development",
+            "--output",
+            str(tmp_path / "probe"),
+            "--probe-only",
+        ]
+    )
+
+    assert args.probe_only is True
+    assert args.requests_per_minute == 20
+
+
 def test_validate_and_inspect_cli(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["validate-dataset"]) == EvaluationExitCode.SUCCESS
     assert "cases=120" in capsys.readouterr().out
