@@ -12,6 +12,7 @@ from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService
 from app.api.services.operator_reconciliation import OperatorReconciliationService
+from app.api.services.operator_replay import OperatorReplayService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
@@ -23,6 +24,10 @@ from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserReposi
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
 from app.reconciliation.coordinator import UnknownCommitCoordinator
 from app.reconciliation.repository import SqlAlchemyReconciliationRepository
+from app.replay.capture import ReplayCaptureService
+from app.replay.engine import ReplayEngine
+from app.replay.repository import ReplayRepository
+from app.replay.service import ReplayVerificationService
 from app.trace.runtime import TraceRuntime
 from app.trace.sanitizer import TraceSanitizer
 
@@ -56,6 +61,17 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
         ),
     )
     reconciliation = UnknownCommitCoordinator(SqlAlchemyReconciliationRepository(sessions))
+    replay_repository = ReplayRepository(
+        sessions,
+        max_steps=settings.replay_max_steps,
+        max_payload_bytes=settings.replay_max_payload_bytes,
+    )
+    replay_capture = ReplayCaptureService(
+        replay_repository,
+        runtime_revision=settings.runtime_revision,
+        schema_version=settings.replay_bundle_schema_version,
+        graph_schema_version=settings.graph_schema_version,
+    )
     try:
         async with open_agent_orchestrator(
             settings,
@@ -64,17 +80,45 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
             language_model_name="fixflow-demo-scripted-v1",
         ) as orchestrator:
             operator_review = OperatorThreadReviewService(orchestrator)
+            operator_trace = OperatorTraceQueryService(operator_review, trace)
+            replay_verification = ReplayVerificationService(
+                replay_repository,
+                ReplayEngine(
+                    replay_repository,
+                    schema_version=settings.replay_bundle_schema_version,
+                    graph_schema_version=settings.graph_schema_version,
+                ),
+                runtime_revision=settings.runtime_revision,
+                graph_schema_version=settings.graph_schema_version,
+                timeout_seconds=settings.replay_execution_timeout_seconds,
+            )
             yield ApiServices(
                 auth=auth,
                 application=application,
                 orchestrator=orchestrator,
-                agent=AgentApiService(orchestrator, application, events, trace),
+                agent=AgentApiService(
+                    orchestrator,
+                    application,
+                    events,
+                    trace,
+                    replay=replay_capture,
+                ),
                 operator_actions=OperatorActionService(
-                    application, trace, reconciliation=reconciliation
+                    application,
+                    trace,
+                    reconciliation=reconciliation,
+                    replay=replay_capture,
                 ),
                 operator_review=operator_review,
-                operator_trace=OperatorTraceQueryService(operator_review, trace),
+                operator_trace=operator_trace,
                 operator_reconciliation=OperatorReconciliationService(sessions),
+                operator_replay=OperatorReplayService(
+                    replay_repository,
+                    replay_verification,
+                    operator_trace,
+                    trace,
+                    application,
+                ),
                 idempotency=idempotency,
                 events=events,
                 runtime_mode=settings.runtime_mode,

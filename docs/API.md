@@ -149,3 +149,26 @@ the Case is unresolved, committed, or manual, same-key API replay returns the
 cached 202 and never starts another Action Run. A formal same-payload, same-key
 retry is released only after `RESOLVED_NOT_COMMITTED`; committed and inconsistent
 outcomes are never automatically resent.
+
+## Operator deterministic Replay
+
+Task 12 adds an Operator-only, read-only Recovery Console API:
+
+```text
+GET  /api/v1/operator/threads/{thread_id}/replay-runs
+GET  /api/v1/operator/runs/{run_id}/replay
+GET  /api/v1/operator/replay-bundles/{bundle_id}
+POST /api/v1/operator/runs/{run_id}/replay/verify
+GET  /api/v1/operator/replay-executions/{execution_id}
+```
+
+Authorization reuses the ticket-linked Operator Trace boundary. Identifiers
+alone are not capabilities. Operator-action runs additionally prove their
+typed target-ticket link through the Application query service. Residents
+receive 403 and unrelated IDs return 404/403.
+
+Verify requires `Idempotency-Key`; identical Operator/key/request replays the
+same diagnostic Execution and conflicting reuse returns 409. Responses contain
+only schema/revision/integrity metadata, closed statuses, safe mismatch
+summaries, and a read-only recommendation—never raw tape, conversations,
+Checkpoint data, prompts, credentials, SQL, or exception stacks.

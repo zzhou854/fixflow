@@ -27,6 +27,7 @@ from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService
 from app.api.services.operator_reconciliation import OperatorReconciliationService
+from app.api.services.operator_replay import OperatorReplayService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
@@ -68,6 +69,15 @@ from app.reconciliation.coordinator import UnknownCommitCoordinator
 from app.reconciliation.mcp_client import ReconciliationOutcomeMCPClient
 from app.reconciliation.repository import SqlAlchemyReconciliationRepository
 from app.reconciliation.worker import ReconciliationWorker
+from app.replay.capture import ReplayCaptureService
+from app.replay.engine import ReplayEngine
+from app.replay.recording import (
+    RecordingInterpretationNode,
+    RecordingPolicyService,
+    RecordingPropertyOperationsClient,
+)
+from app.replay.repository import ReplayRepository
+from app.replay.service import ReplayVerificationService
 from app.trace.runtime import TraceRuntime
 from app.trace.sanitizer import TraceSanitizer
 from argon2 import PasswordHasher
@@ -272,6 +282,22 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
         return int(listener.getsockname()[1])
+
+
+async def _checkpoint_row_counts(database_url: str) -> tuple[int, ...]:
+    connection = await asyncpg.connect(database_url)
+    try:
+        counts = []
+        for table_name in (
+            "checkpoints",
+            "checkpoint_blobs",
+            "checkpoint_writes",
+            "checkpoint_migrations",
+        ):
+            counts.append(await connection.fetchval(f'SELECT count(*) FROM "{table_name}"'))
+        return tuple(counts)
+    finally:
+        await connection.close()
 
 
 async def _wait_started(server: uvicorn.Server) -> None:
@@ -853,6 +879,11 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
             .where(User.id == mcp_env.other_resident_id)
             .values(password_hash=password_hasher.hash("other-pass"))
         )
+        await session.execute(
+            update(User)
+            .where(User.id == mcp_env.operator_id)
+            .values(password_hash=password_hasher.hash("operator-pass"))
+        )
 
     policy_engine = create_async_engine(mcp_env.database_url)
     policy_sessions = async_sessionmaker(policy_engine, expire_on_commit=False)
@@ -886,16 +917,19 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
         await _wait_started(server)
         async with StreamableHttpPropertyOperationsClient(f"http://127.0.0.1:{port}/mcp") as client:
             async with open_postgres_checkpointer(checkpoint_url) as checkpointer:
+                recording_client = RecordingPropertyOperationsClient(client)
                 graph = build_agent_graph(
                     RuntimeDependencies(
-                        mcp=client,
-                        interpret=InterpretMessageNode(llm, model="scripted"),
+                        mcp=recording_client,
+                        interpret=RecordingInterpretationNode(
+                            InterpretMessageNode(llm, model="scripted")
+                        ),
                         compose=ComposeResponseNode(llm, model="scripted"),
-                        retrieve_policy=retriever.retrieve,
+                        retrieve_policy=RecordingPolicyService(retriever.retrieve),
                     ),
                     checkpointer=checkpointer,
                 )
-                orchestrator = AgentOrchestrator(graph, client)
+                orchestrator = AgentOrchestrator(graph, recording_client)
                 events = SSEEventBus()
                 auth = AuthService(
                     SqlAlchemyAuthUserRepository(mcp_env.sessions),
@@ -907,17 +941,44 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     TraceSanitizer(max_payload_bytes=8192, max_string_length=1024),
                 )
                 operator_review = OperatorThreadReviewService(orchestrator)
+                replay_repository = ReplayRepository(mcp_env.sessions)
+                replay_capture = ReplayCaptureService(
+                    replay_repository, runtime_revision="vertical-test"
+                )
+                operator_trace = OperatorTraceQueryService(operator_review, trace)
+                replay_verification = ReplayVerificationService(
+                    replay_repository,
+                    ReplayEngine(replay_repository),
+                    runtime_revision="vertical-test",
+                    graph_schema_version=1,
+                    timeout_seconds=15,
+                )
                 services = ApiServices(
                     auth=auth,
                     application=mcp_env.application,
                     orchestrator=orchestrator,
-                    agent=AgentApiService(orchestrator, mcp_env.application, events, trace),
-                    operator_actions=OperatorActionService(mcp_env.application, trace),
+                    agent=AgentApiService(
+                        orchestrator,
+                        mcp_env.application,
+                        events,
+                        trace,
+                        replay=replay_capture,
+                    ),
+                    operator_actions=OperatorActionService(
+                        mcp_env.application, trace, replay=replay_capture
+                    ),
                     operator_review=operator_review,
                     idempotency=ApiIdempotencyStore(),
                     events=events,
                     runtime_mode="demo",
-                    operator_trace=OperatorTraceQueryService(operator_review, trace),
+                    operator_trace=operator_trace,
+                    operator_replay=OperatorReplayService(
+                        replay_repository,
+                        replay_verification,
+                        operator_trace,
+                        trace,
+                        mcp_env.application,
+                    ),
                 )
                 app = create_app(services)
                 async with AsyncClient(
@@ -996,6 +1057,61 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     )
                     assert resumed_replay.status_code == 200
                     assert resumed_replay.json() == final
+                    operator_login = await http.post(
+                        "/api/v1/auth/login",
+                        json={
+                            "username": f"mcp-operator-{mcp_env.operator_id}",
+                            "password": "operator-pass",
+                        },
+                    )
+                    operator_token = operator_login.json()["access_token"]
+                    replay_runs = await http.get(
+                        f"/api/v1/operator/threads/{body['thread_id']}/replay-runs",
+                        headers={"Authorization": f"Bearer {operator_token}"},
+                    )
+                    assert replay_runs.status_code == 200, replay_runs.text
+                    replay_items = replay_runs.json()["items"]
+                    assert len(replay_items) == 2
+                    assert {item["bundle_status"] for item in replay_items} == {"READY"}
+                    facts_before_replay = {}
+                    async with mcp_env.sessions() as session:
+                        for model in (
+                            RepairTicket,
+                            Appointment,
+                            OutboxEvent,
+                            OperationReconciliationCase,
+                        ):
+                            facts_before_replay[model.__tablename__] = await session.scalar(
+                                select(func.count()).select_from(model)
+                            )
+                    checkpoint_rows_before_replay = await _checkpoint_row_counts(checkpoint_url)
+                    replay_results = []
+                    for item in replay_items:
+                        verified = await http.post(
+                            f"/api/v1/operator/runs/{item['run_id']}/replay/verify",
+                            headers={
+                                "Authorization": f"Bearer {operator_token}",
+                                "Idempotency-Key": f"vertical-replay-{item['run_id']}",
+                            },
+                        )
+                        assert verified.status_code == 200, verified.text
+                        replay_results.append(verified.json())
+                    assert {item["status"] for item in replay_results} == {"PASSED"}, replay_results
+                    async with mcp_env.sessions() as session:
+                        for model in (
+                            RepairTicket,
+                            Appointment,
+                            OutboxEvent,
+                            OperationReconciliationCase,
+                        ):
+                            assert (
+                                await session.scalar(select(func.count()).select_from(model))
+                                == facts_before_replay[model.__tablename__]
+                            )
+                    assert (
+                        await _checkpoint_row_counts(checkpoint_url)
+                        == checkpoint_rows_before_replay
+                    )
                     async with mcp_env.sessions() as session:
                         run_count = await session.scalar(
                             select(func.count())

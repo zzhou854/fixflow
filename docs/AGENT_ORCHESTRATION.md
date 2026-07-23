@@ -9,9 +9,9 @@ truth. A checkpoint contains bounded conversation work state only and is never
 written back over a fresher business snapshot.
 
 The current product runtime uses deterministic demonstration LLM and embedding
-providers. Online providers and deterministic Replay remain deferred. Task 11
-adds UNKNOWN_COMMIT reconciliation and test-only fault injection around this
-same orchestrator. Task 9 exposes it through authenticated FastAPI
+providers; online providers remain deferred. Task 11 adds UNKNOWN_COMMIT
+reconciliation and test-only fault injection around this same orchestrator.
+Task 12 adds tape-only deterministic Replay. Task 9 exposes the product through authenticated FastAPI
 thread, message, state, strict Resume, and SSE endpoints.
 
 JWT identity becomes the existing trusted caller context; request bodies cannot
@@ -143,8 +143,8 @@ same logical operation therefore reaches Application idempotency with the same
 key. A tool success whose response is lost is not advertised as success; a
 the fenced reconciliation worker and a fresh PostgreSQL snapshot establish the
 business result. Task 11 covers three Resident Agent mutations plus one
-Operator-only escalation mutation; deterministic
-Replay remains Task 12 work.
+Operator-only escalation mutation. Task 12 can verify those recorded control
+decisions without redispatching them.
 
 ## Checkpoint database and lifecycle
 
@@ -172,3 +172,18 @@ On Windows, psycopg asynchronous connections require a Selector event loop.
 `initialize_checkpoints` configures it before `asyncio.run`; every future Agent
 host entrypoint must call the same narrowly scoped function before creating its
 event loop. No library module changes the global policy at import time.
+
+## Deterministic Replay
+
+Task 12 reuses `build_agent_graph`; it does not define a second workflow.
+The production execution context optionally carries a focused
+`ReplayCapturePort`. Graph wrappers record node entry and router decisions,
+while recording adapters capture validated interpretation, policy, MCP read,
+and mutation-delivery results.
+
+Verification restores only `ReplaySafeAgentState`, uses the Bundle reference
+time, consumes existing-thread authorization from tape, and runs the same
+topology with recorded dependencies and an in-memory saver. Resume is primed
+inside that disposable saver before the recorded strict Resume union is
+applied. Formal PostgreSQL Checkpoint tables and current domain state are not
+read or written. See `docs/REPLAY.md`.

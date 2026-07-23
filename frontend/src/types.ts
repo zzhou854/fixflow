@@ -94,8 +94,39 @@ export interface AgentRun {
 }
 export interface TraceEvent {
   event_id: string; sequence_number: number | null
-  source: 'API' | 'AGENT' | 'MCP' | 'DOMAIN' | 'OUTBOX' | 'RECONCILIATION'
+  source: 'API' | 'AGENT' | 'MCP' | 'DOMAIN' | 'OUTBOX' | 'RECONCILIATION' | 'REPLAY'
   event_type: string; node_name: string | null; operation_id: string | null
   payload: Record<string, string | number | boolean | null>; occurred_at: string
+}
+export type ReplayBundleStatus = 'CAPTURING'|'READY'|'INCOMPLETE'|'INVALID'|'UNAVAILABLE'
+export type ReplayExecutionStatus = 'RUNNING'|'PASSED'|'DIVERGED'|'INCOMPLETE'|'UNSUPPORTED_SCHEMA'|'FAILED_SAFE'
+export interface ReplayMismatch {
+  mismatch_type: string; step_key: string | null
+  expected_summary: string | null; actual_summary: string | null
+}
+export interface ReplayExecution {
+  execution_id: string; bundle_id: string; status: ReplayExecutionStatus
+  runtime_revision: string; graph_schema_version: number; started_at: string
+  completed_at: string | null; actual_route_fingerprint: string | null
+  actual_state_fingerprint: string | null; mismatches: ReplayMismatch[]
+  recommendation: string | null; error_code: string | null
+}
+export interface ReplayBundle {
+  bundle_id: string; original_run_id: string; status: ReplayBundleStatus
+  schema_version: number; graph_schema_version: number; runtime_revision: string
+  artifact_integrity: string; expected_route_fingerprint: string | null
+  expected_state_fingerprint: string | null; step_count: number
+  capture_error_code: string | null; captured_at: string; finalized_at: string | null
+  latest_execution: ReplayExecution | null
+}
+export interface ReplayRun {
+  run_id: string; thread_id: string | null; trigger_type: AgentRun['trigger']
+  original_run_status: AgentRun['status']; replayability: ReplayBundleStatus
+  bundle_id: string | null; bundle_status: ReplayBundleStatus
+  latest_replay_status: ReplayExecutionStatus | null; started_at: string
+}
+export interface ReplayRunDetail {
+  run: ReplayRun; bundle: ReplayBundle | null
+  current_business_state: Record<string, string | number | boolean | null> | null
 }
 export interface ApiErrorBody { code: string; message: string; field_errors: Record<string, string>; trace_id: string; retryable: boolean }

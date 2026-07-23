@@ -20,9 +20,16 @@ from app.api.schemas.agent import (
     PolicyStatusResponse,
     StructuredIssueResponse,
 )
+from app.api.schemas.replay import (
+    ReplayBundleResponse,
+    ReplayExecutionResponse,
+    ReplayRunDetailResponse,
+    ReplayRunItemResponse,
+)
 from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService, OperatorEscalationExecution
+from app.api.services.operator_replay import OperatorReplayService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.sse import SSEEventBus
 from app.application.auth import AuthenticatedIdentity, AuthService, AuthUser
@@ -31,6 +38,15 @@ from app.application.models import OperationResult
 from app.application.query_models import QueryActor, ResidentPropertyReadModel
 from app.application.services import FixFlowApplicationService
 from app.domain.enums import ActorType, WorkflowStage
+from app.infrastructure.database.models.observability import (
+    AgentRunStatus,
+    AgentRunTrigger,
+)
+from app.replay.enums import (
+    RecoveryRecommendation,
+    ReplayBundleStatus,
+    ReplayExecutionStatus,
+)
 from argon2 import PasswordHasher
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
@@ -192,6 +208,114 @@ class FakeOperatorReview:
             human_review_required=True,
             updated_at=datetime.now(UTC),
         )
+
+
+class FakeOperatorReplay:
+    def __init__(self) -> None:
+        self.run_id, self.thread_id, self.bundle_id, self.execution_id = (
+            uuid4(),
+            uuid4(),
+            uuid4(),
+            uuid4(),
+        )
+        self.last_identity: AuthenticatedIdentity | None = None
+        self.last_idempotency_key: str | None = None
+
+    def execution(self) -> ReplayExecutionResponse:
+        now = datetime.now(UTC)
+        return ReplayExecutionResponse(
+            execution_id=self.execution_id,
+            bundle_id=self.bundle_id,
+            status=ReplayExecutionStatus.PASSED,
+            runtime_revision="test",
+            graph_schema_version=1,
+            started_at=now,
+            completed_at=now,
+            actual_route_fingerprint="a" * 64,
+            actual_state_fingerprint="b" * 64,
+            mismatches=(),
+            recommendation=RecoveryRecommendation.NO_ACTION_REQUIRED,
+            error_code=None,
+        )
+
+    def bundle(self) -> ReplayBundleResponse:
+        now = datetime.now(UTC)
+        return ReplayBundleResponse(
+            bundle_id=self.bundle_id,
+            original_run_id=self.run_id,
+            status=ReplayBundleStatus.READY,
+            schema_version=1,
+            graph_schema_version=1,
+            runtime_revision="test",
+            artifact_integrity="CHECKSUM_PRESENT",
+            expected_route_fingerprint="a" * 64,
+            expected_state_fingerprint="b" * 64,
+            step_count=8,
+            capture_error_code=None,
+            captured_at=now,
+            finalized_at=now,
+            latest_execution=self.execution(),
+        )
+
+    def run(self) -> ReplayRunItemResponse:
+        return ReplayRunItemResponse(
+            run_id=self.run_id,
+            thread_id=self.thread_id,
+            trigger_type=AgentRunTrigger.MESSAGE,
+            original_run_status=AgentRunStatus.COMPLETED,
+            replayability=ReplayBundleStatus.READY,
+            bundle_id=self.bundle_id,
+            bundle_status=ReplayBundleStatus.READY,
+            latest_replay_status=ReplayExecutionStatus.PASSED,
+            started_at=datetime.now(UTC),
+        )
+
+    async def list_for_thread(
+        self,
+        identity: AuthenticatedIdentity,
+        thread_id: UUID,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[ReplayRunItemResponse, ...] | None:
+        del limit, offset
+        self.last_identity = identity
+        return (self.run(),) if thread_id == self.thread_id else None
+
+    async def get_run(
+        self, identity: AuthenticatedIdentity, run_id: UUID
+    ) -> ReplayRunDetailResponse | None:
+        self.last_identity = identity
+        if run_id != self.run_id:
+            return None
+        return ReplayRunDetailResponse(
+            run=self.run(),
+            bundle=self.bundle(),
+            current_business_state={"ticket_status": "CLOSED"},
+        )
+
+    async def get_bundle(
+        self, identity: AuthenticatedIdentity, bundle_id: UUID
+    ) -> ReplayBundleResponse | None:
+        self.last_identity = identity
+        return self.bundle() if bundle_id == self.bundle_id else None
+
+    async def verify(
+        self,
+        identity: AuthenticatedIdentity,
+        run_id: UUID,
+        *,
+        idempotency_key: str,
+    ) -> ReplayExecutionResponse | None:
+        self.last_identity = identity
+        self.last_idempotency_key = idempotency_key
+        return self.execution() if run_id == self.run_id else None
+
+    async def get_execution(
+        self, identity: AuthenticatedIdentity, execution_id: UUID
+    ) -> ReplayExecutionResponse | None:
+        self.last_identity = identity
+        return self.execution() if execution_id == self.execution_id else None
 
 
 ApiContext = tuple[
@@ -764,3 +888,76 @@ async def test_sse_heartbeat_is_safe_and_stream_close_removes_subscriber(
     assert "event: heartbeat" in str(chunk)
     await iterator.aclose()
     assert await app.state.services.events.subscriber_count(thread_id) == 0
+
+
+@pytest.mark.asyncio
+async def test_operator_replay_endpoints_use_authorized_safe_service(
+    api_context: ApiContext,
+) -> None:
+    app, auth, *_ = api_context
+    replay = FakeOperatorReplay()
+    app.state.services = replace(
+        app.state.services,
+        operator_replay=cast(OperatorReplayService, replay),
+    )
+    token = await _token(auth, "operator", "operator-pass")
+    headers = {"Authorization": f"Bearer {token}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        listing = await client.get(
+            f"/api/v1/operator/threads/{replay.thread_id}/replay-runs",
+            headers=headers,
+        )
+        detail = await client.get(f"/api/v1/operator/runs/{replay.run_id}/replay", headers=headers)
+        bundle = await client.get(
+            f"/api/v1/operator/replay-bundles/{replay.bundle_id}",
+            headers=headers,
+        )
+        verified = await client.post(
+            f"/api/v1/operator/runs/{replay.run_id}/replay/verify",
+            headers={**headers, "Idempotency-Key": "stable-replay-key"},
+        )
+        execution = await client.get(
+            f"/api/v1/operator/replay-executions/{replay.execution_id}",
+            headers=headers,
+        )
+    assert [
+        response.status_code for response in (listing, detail, bundle, verified, execution)
+    ] == [200, 200, 200, 200, 200]
+    assert replay.last_identity is not None
+    assert replay.last_identity.actor_type is ActorType.OPERATOR
+    assert replay.last_idempotency_key == "stable-replay-key"
+    serialized = str(detail.json()).casefold()
+    assert "conversation_messages" not in serialized
+    assert "pending_operation" not in serialized
+    assert "checkpoint" not in serialized
+    assert "database_url" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_replay_endpoints_deny_resident_and_unknown_ids(
+    api_context: ApiContext,
+) -> None:
+    app, auth, *_ = api_context
+    replay = FakeOperatorReplay()
+    app.state.services = replace(
+        app.state.services,
+        operator_replay=cast(OperatorReplayService, replay),
+    )
+    resident = await _token(auth, "resident", "resident-pass")
+    operator = await _token(auth, "operator", "operator-pass")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        denied = await client.get(
+            f"/api/v1/operator/runs/{replay.run_id}/replay",
+            headers={"Authorization": f"Bearer {resident}"},
+        )
+        unknown_bundle = await client.get(
+            f"/api/v1/operator/replay-bundles/{uuid4()}",
+            headers={"Authorization": f"Bearer {operator}"},
+        )
+        unknown_execution = await client.get(
+            f"/api/v1/operator/replay-executions/{uuid4()}",
+            headers={"Authorization": f"Bearer {operator}"},
+        )
+    assert denied.status_code == 403
+    assert unknown_bundle.status_code == 404
+    assert unknown_execution.status_code == 404

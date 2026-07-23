@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContext'
 import { DemoBanner } from '../components/DemoBanner'
 import { TraceTimeline } from '../components/TraceTimeline'
 import { ReconciliationCases } from '../components/ReconciliationCases'
+import { RecoveryConsole } from '../components/RecoveryConsole'
 import type { OperatorThread, Ticket, TicketDetail } from '../types'
 
 interface EscalationAttempt {
@@ -126,6 +127,7 @@ export function OperatorPage() {
           <Descriptions.Item label="人工审查">{thread.human_review_required ? '需要' : '否'}</Descriptions.Item>
         </Descriptions>}
         {thread && token && <TraceTimeline token={token} threadId={thread.thread_id} />}
+        {thread && token && <RecoveryConsole token={token} threadId={thread.thread_id} />}
       </Card>
       <Table rowKey="ticket_id" dataSource={tickets} pagination={false} onRow={(record) => ({ onClick: () => void openTicket(record) })} columns={[
         { title: '工单', dataIndex: 'ticket_id', ellipsis: true },

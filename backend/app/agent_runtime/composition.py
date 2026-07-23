@@ -19,6 +19,11 @@ from app.policy.ports import EmbeddingProvider, PolicyUnitOfWork
 from app.policy.retrieval import PolicyRetrievalService
 from app.reconciliation.coordinator import UnknownCommitCoordinator
 from app.reconciliation.repository import SqlAlchemyReconciliationRepository
+from app.replay.recording import (
+    RecordingInterpretationNode,
+    RecordingPolicyService,
+    RecordingPropertyOperationsClient,
+)
 
 
 @asynccontextmanager
@@ -44,20 +49,23 @@ async def open_agent_orchestrator(
         embedding_provider=embedding_provider,
     )
     async with StreamableHttpPropertyOperationsClient(settings.property_operations_mcp_url) as mcp:
+        recording_mcp = RecordingPropertyOperationsClient(mcp)
         async with open_postgres_checkpointer(
             settings.checkpoint_database_url.get_secret_value()
         ) as checkpointer:
             dependencies = RuntimeDependencies(
-                mcp=mcp,
-                interpret=InterpretMessageNode(llm_provider, model=language_model_name),
+                mcp=recording_mcp,
+                interpret=RecordingInterpretationNode(
+                    InterpretMessageNode(llm_provider, model=language_model_name)
+                ),
                 compose=ComposeResponseNode(llm_provider, model=language_model_name),
-                retrieve_policy=policy.retrieve,
+                retrieve_policy=RecordingPolicyService(policy.retrieve),
             )
             graph = build_agent_graph(dependencies, checkpointer=checkpointer)
             try:
                 yield AgentOrchestrator(
                     graph,
-                    mcp,
+                    recording_mcp,
                     UnknownCommitCoordinator(SqlAlchemyReconciliationRepository(sessions)),
                 )
             finally:

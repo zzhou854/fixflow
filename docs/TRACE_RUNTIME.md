@@ -69,10 +69,18 @@ reconcile through thread state. Persistent Trace does not turn SSE into a
 business fact source.
 
 Task 11 adds the closed `RECONCILIATION` source for runless case evidence; it
-never appends control events to a terminal Run. Deterministic Replay remains
-explicitly deferred.
+never appends control events to a terminal Run.
 
 Case creation, claim, retry, and terminal resolution use stable runless event
 keys. The final Case status and final reconciliation Trace commit in one
 transaction. A lost response after that commit cannot make the terminal Case
 claimable again or create a second resolution Trace.
+
+Task 12 adds the closed `REPLAY` source. Bundle capture emits runless
+`replay_bundle_started`, `replay_bundle_ready`,
+`replay_bundle_incomplete`, and `replay_capture_failed` evidence.
+Verification emits `replay_requested`, `replay_started`, and exactly one
+terminal Replay status event. The terminal Replay Execution row and terminal
+Trace event share a transaction. These diagnostic events reference the
+original Run ID in sanitized payload metadata but are never appended to the
+terminal original Run.

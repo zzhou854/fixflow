@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
+from app.agent.enums import LLMRole
 from app.agent_runtime.execution_context import bind_execution_context
 from app.agent_runtime.models import (
     AgentCallerContext,
@@ -35,6 +36,20 @@ from app.infrastructure.database.models.observability import (
     AgentRunTrigger,
     TraceSource,
 )
+from app.replay.capture import (
+    NoOpReplayCapture,
+    ReplayCapturePort,
+    ReplayCaptureService,
+    message_hash,
+)
+from app.replay.models import (
+    MessageReplayInput,
+    ProvideInformationReplayInput,
+    ReplayMessageMetadata,
+    SelectDuplicateReplayInput,
+    SelectSlotReplayInput,
+    ThreadCreatedReplayInput,
+)
 from app.trace.models import StartRun, TracePayload
 from app.trace.runtime import TraceRuntime
 
@@ -46,11 +61,13 @@ class AgentApiService:
         application: FixFlowApplicationService,
         events: SSEEventBus,
         trace: TraceRuntime | None = None,
+        replay: ReplayCaptureService | None = None,
     ) -> None:
         self._orchestrator = orchestrator
         self._application = application
         self.events = events
         self._trace = trace
+        self._replay = replay
 
     async def create_thread(
         self,
@@ -70,6 +87,7 @@ class AgentApiService:
             message=message,
             reference_time=reference_time,
             timezone_name=timezone_name,
+            message_id=message_id,
         )
         return await self._response(identity, result, message_id=message_id, run_id=run_id)
 
@@ -93,6 +111,7 @@ class AgentApiService:
             message=message,
             reference_time=reference_time,
             timezone_name=timezone_name,
+            message_id=stable_message_id,
         )
         return await self._response(identity, result, message_id=stable_message_id, run_id=run_id)
 
@@ -110,13 +129,21 @@ class AgentApiService:
             property_id=None,
         )
         resume = self._resume(request, trace_id)
+        capture = await self._start_replay_capture(
+            run_id=run_id,
+            thread_id=thread_id,
+            trace_id=trace_id,
+            trigger=AgentRunTrigger.RESUME,
+            input_envelope=self._resume_replay_input(request, trace_id),
+        )
         await self.events.publish(thread_id, trace_id, "run_started", {"resume_kind": request.kind})
         try:
-            with bind_execution_context(run_id, thread_id, trace_id, self._trace):
+            with bind_execution_context(run_id, thread_id, trace_id, self._trace, capture):
                 result = await self._orchestrator.resume(thread_id, self._caller(identity), resume)
         except Exception:
             await self._finish_trace(run_id, AgentRunStatus.FAILED, error_code="INTERNAL_ERROR")
             raise
+        await capture.finalize(result)
         await self._finish_trace_for_result(run_id, result)
         self._raise_resume_error(result)
         response = await self._response(identity, result, run_id=run_id)
@@ -194,6 +221,7 @@ class AgentApiService:
         message: str,
         reference_time: datetime,
         timezone_name: str,
+        message_id: UUID,
     ) -> tuple[AgentRunResult, UUID]:
         run_id = uuid4()
         trigger = (
@@ -208,8 +236,36 @@ class AgentApiService:
             property_id=property_id,
         )
         await self.events.publish(thread_id, trace_id, "run_started", {})
+        metadata = ReplayMessageMetadata(
+            message_id=message_id,
+            content_hash=message_hash(message),
+            content_length=len(message),
+            language="zh-CN",
+            message_role=LLMRole.USER,
+        )
+        input_envelope = (
+            ThreadCreatedReplayInput(
+                property_id=property_id,
+                message=metadata,
+                reference_time=reference_time,
+                timezone_name=timezone_name,
+            )
+            if property_id is not None
+            else MessageReplayInput(
+                message=metadata,
+                reference_time=reference_time,
+                timezone_name=timezone_name,
+            )
+        )
+        capture = await self._start_replay_capture(
+            run_id=run_id,
+            thread_id=thread_id,
+            trace_id=trace_id,
+            trigger=trigger,
+            input_envelope=input_envelope,
+        )
         try:
-            with bind_execution_context(run_id, thread_id, trace_id, self._trace):
+            with bind_execution_context(run_id, thread_id, trace_id, self._trace, capture):
                 result = await self._orchestrator.start_turn(
                     AgentTurnInput(
                         thread_id=thread_id,
@@ -226,8 +282,56 @@ class AgentApiService:
         except Exception:
             await self._finish_trace(run_id, AgentRunStatus.FAILED, error_code="INTERNAL_ERROR")
             raise
+        await capture.finalize(result)
         await self._finish_trace_for_result(run_id, result)
         return result, run_id
+
+    async def _start_replay_capture(
+        self,
+        *,
+        run_id: UUID,
+        thread_id: UUID,
+        trace_id: UUID,
+        trigger: AgentRunTrigger,
+        input_envelope: object,
+    ) -> ReplayCapturePort:
+        if self._replay is None:
+            return NoOpReplayCapture()
+        return await self._replay.start(
+            original_run_id=run_id,
+            thread_id=thread_id,
+            original_trace_id=trace_id,
+            trigger_type=trigger,
+            input_envelope=input_envelope,  # type: ignore[arg-type]
+        )
+
+    @staticmethod
+    def _resume_replay_input(request: ResumeRequest, trace_id: UUID) -> object:
+        if request.kind == "PROVIDE_INFORMATION":
+            message = ReplayMessageMetadata(
+                message_id=uuid5(NAMESPACE_URL, f"fixflow:replay-resume-message:{trace_id}"),
+                content_hash=message_hash(request.user_message),
+                content_length=len(request.user_message),
+                language="zh-CN",
+                message_role=LLMRole.USER,
+            )
+            return ProvideInformationReplayInput(
+                intent_version=request.intent_version,
+                message=message,
+                reference_time=request.reference_time,
+                timezone_name=request.timezone_name,
+            )
+        if request.kind == "SELECT_DUPLICATE_TICKET":
+            return SelectDuplicateReplayInput(
+                intent_version=request.intent_version,
+                candidate_fingerprint=request.candidates_fingerprint,
+                ticket_id=request.ticket_id,
+            )
+        return SelectSlotReplayInput(
+            intent_version=request.intent_version,
+            candidate_fingerprint=request.candidates_fingerprint,
+            rank=request.rank,
+        )
 
     async def _response(
         self,

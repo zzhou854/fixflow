@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     reconciliation_retry_base_seconds: float = Field(default=2.0, gt=0)
     trace_max_payload_bytes: int = Field(default=8192, ge=128, le=1_048_576)
     trace_max_string_length: int = Field(default=1024, ge=16, le=65536)
+    runtime_revision: str = Field(default="development", min_length=1, max_length=128)
+    replay_bundle_schema_version: int = Field(default=1, ge=1, le=100)
+    graph_schema_version: int = Field(default=1, ge=1, le=100)
+    replay_max_steps: int = Field(default=500, ge=10, le=5000)
+    replay_max_payload_bytes: int = Field(default=262_144, ge=4096, le=4_194_304)
+    replay_execution_timeout_seconds: float = Field(default=15.0, gt=0, le=300)
 
 
 @lru_cache

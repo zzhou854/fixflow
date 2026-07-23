@@ -11,7 +11,7 @@ demo.
 
 ## Current status
 
-Stage A, Stage B, Tasks 9 and 10 are complete. Task 11 is at its code-review gate:
+Stage A, Stage B, and Tasks 9–11 are committed. Task 12 is at its code-review gate:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
@@ -55,10 +55,14 @@ Stage A, Stage B, Tasks 9 and 10 are complete. Task 11 is at its code-review gat
 - a ticket-linked operator execution timeline kept separate from business history;
 - durable UNKNOWN_COMMIT cases, fenced claims, and authoritative operation evidence;
 - a deterministic test-only fault-injection port;
+- strict, checksummed Replay Bundles and typed external-result tapes;
+- tape-only deterministic execution over the existing Single Orchestrator;
+- an Operator-only, ticket-linked Recovery Console with read-only recommendations;
 - the implementation roadmap and mandatory task-alignment gates.
 
-Online LLM/embedding providers, Replay, and evaluation remain mandatory roadmap
-work, not cancelled scope.
+Online LLM/embedding providers and the Stage D evaluation remain mandatory
+roadmap work, not cancelled scope. Replay verifies control-plane determinism;
+it is not Event Sourcing, database time travel, or automatic repair.
 
 ## Prerequisites
 
@@ -112,8 +116,9 @@ Operator thread review and Trace are read-only and limited to threads linked to
 a database-verified ticket. Task 10 supplies persistent Outbox and Trace. Task 11
 adds UNKNOWN_COMMIT reconciliation for three Resident Agent mutations plus one
 Operator-only escalation mutation, fenced workers, safe resident and
-operator projections, and a test-only fault harness. Deterministic Replay remains
-Task 12 work.
+operator projections, and a test-only fault harness. Task 12 adds isolated
+deterministic Replay and the read-only Recovery Console; it never reissues
+business mutations or writes the formal Checkpoint.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
@@ -135,6 +140,8 @@ and never maintained manually.
 - [Transactional Outbox](docs/OUTBOX.md)
 - [Persistent Trace Runtime](docs/TRACE_RUNTIME.md)
 - [Resident and operator frontend](docs/FRONTEND.md)
+- [Deterministic Replay](docs/REPLAY.md)
+- [Recovery Console](docs/RECOVERY_CONSOLE.md)
 
 ## Week-1 delivery order
 

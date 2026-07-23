@@ -208,16 +208,16 @@ is still required. No row may be removed or weakened without explicit user appro
 | Independent MCP server | A/C | implemented | `mcp_server/`, Tasks 5 and 11 review | Eight business tools call application services; one trusted read-only outcome tool supports fenced reconciliation | No |
 | LangGraph orchestrator | B | implemented | `backend/app/agent_runtime`, Task 8 review | Typed graph routes deterministically and resumes after fresh domain snapshots | No |
 | Three-layer task memory | B | implemented | `backend/app/agent_runtime/checkpoint.py`, `backend/app/api`, Task 9 review | Isolated persistent checkpoint, bounded conversation, PostgreSQL truth, and product caller context | No |
-| Business Trace | C | partial | `backend/app/trace`, `docs/TRACE_RUNTIME.md`, Task 10 review | Persistent sanitized run/node/MCP/domain timeline and operator query pass; deterministic Replay remains Task 12 | No |
+| Business Trace | C | implemented | `backend/app/trace`, `docs/TRACE_RUNTIME.md`, Tasks 10–12 review | Persistent sanitized run/node/MCP/domain/Replay evidence and ticket-linked operator query pass | No |
 | Transactional Outbox | C | implemented | `backend/app/outbox`, `docs/OUTBOX.md`, Task 10 review | Business write, histories, idempotency result, and stable event commit atomically; leased retry/dead-letter tests pass | No |
 | `UNKNOWN_COMMIT` recovery | C | implemented | `backend/app/reconciliation`, `docs/RECONCILIATION.md`, Task 11 review | Three Resident Agent mutations plus one Operator-only escalation share one coordinator; real committed, not-committed, and inconsistent vertical cases recover without duplicate mutation | No |
-| Fault injection | C | partial | `backend/app/fault_injection`, `docs/FAULT_INJECTION.md`, Task 11 review | Eight closed delivery/reconciliation fault points are wired and tested; the broader Task 12 scenario harness remains | No |
-| Replay | C | deferred | original project specification | Stored Trace/scenario can be deterministically replayed | No |
+| Fault injection | C | implemented | `backend/app/fault_injection`, `docs/FAULT_INJECTION.md`, Task 11 review | Eight closed delivery/reconciliation fault points and vertical recovery cases pass | No |
+| Replay | C | implemented | `backend/app/replay`, `docs/REPLAY.md`, Task 12 review | Checksummed typed tape, same Graph topology, zero business side effects, ten-run repeatability, and Recovery Console | No |
 | Evaluation suite | D | deferred | original project specification | Approx. 100 scenarios and frozen deterministic report | No |
 | ReAct baseline | D | deferred | original project specification | Same-model/tool/data comparison is reproducible | No |
 | Core ablations | D | deferred | this roadmap | Three approved removals produce comparable metrics | No |
 | Resident frontend | B | partial | `frontend/src/pages/ResidentPage.tsx`, Task 9 review | Chat, status, typed interrupts, reschedule/human request work; cancellation and acceptance remain manual | No |
-| Operator workbench | B/C | partial | `frontend/src/pages/OperatorPage.tsx`, Task 10 review | Filters, histories, ticket-linked thread review, and sanitized execution timeline work; pre-ticket review queue remains deferred | No |
+| Operator workbench | B/C | partial | `frontend/src/pages/OperatorPage.tsx`, Tasks 10–12 review | Filters, histories, ticket-linked thread/Trace review, and Recovery Console work; pre-ticket review queue remains deferred | No |
 | Docker Compose delivery | A/D | partial | `docker-compose.yml`, `448f9e2` | PostgreSQL works now; final one-command system remains | No |
 
 ## Deferred but mandatory features
@@ -229,8 +229,7 @@ The following are not implemented yet and are not cancelled:
 - ticket progress queries;
 - resident/worker state-conflict handling;
 - a real online LLM and online embedding provider;
-- deterministic Trace Replay;
-- deterministic Replay and the broader Engineering Scenario Harness;
+- the broader Stage D Engineering Scenario Harness and report generator;
 - evaluation, ReAct baseline, and ablations.
 
 Tasks that do not implement these items must leave them visible here. Long delay

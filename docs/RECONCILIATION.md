@@ -25,7 +25,8 @@ synthetic service principal.
 
 Case and API projections never expose the raw idempotency key. Reconciliation
 is not Replay, event sourcing, a Saga framework, or a general distributed
-transaction guarantee; deterministic Replay remains Task 12.
+transaction guarantee. Task 12 implements the separate Replay boundary
+described below.
 
 ## Delivery and recovery contract
 
@@ -70,3 +71,9 @@ controls while pending, processing, or manual review. The operator UI provides
 filters, paging, safe detail, refresh, and read-only recheck without raw payloads.
 Its escalation control is disabled during reconciliation and re-enabled with
 the original API key only after `RESOLVED_NOT_COMMITTED`.
+
+Deterministic Replay is a separate, read-only control-plane verification.
+Replay may reproduce the recorded `UNKNOWN_COMMIT` delivery classification,
+but it never polls operation outcome, claims a Case, resolves a Case, or
+resends the mutation. Recovery recommendations may display the current Case
+status beside Replay evidence without merging it into the historical result.

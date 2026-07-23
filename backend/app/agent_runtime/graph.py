@@ -67,6 +67,8 @@ def build_agent_graph(
         async def traced(graph_state: RuntimeGraphState) -> RuntimeGraphState:
             execution = current_execution_context()
             invocation_id = uuid4().hex
+            if execution is not None and execution.replay_capture is not None:
+                await execution.replay_capture.node_entered(name, graph_state)
             if execution is not None and execution.trace is not None:
                 await execution.trace.append_event(
                     event_key=execution.trace.event_key(
@@ -136,10 +138,24 @@ def build_agent_graph(
                         payload=TracePayload(node_name=name),
                         occurred_at=datetime.now(UTC),
                     )
+            if execution is not None and execution.replay_capture is not None:
+                await execution.replay_capture.node_completed(name, result)
             return result
 
         # LangGraph's overload excludes an otherwise valid async TypedDict callable.
         graph.add_node(name, traced)  # type: ignore[call-overload]
+
+    def traced_route(
+        name: str, router: Callable[[RuntimeGraphState], str]
+    ) -> Callable[[RuntimeGraphState], Awaitable[str]]:
+        async def route(graph_state: RuntimeGraphState) -> str:
+            decision = router(graph_state)
+            execution = current_execution_context()
+            if execution is not None and execution.replay_capture is not None:
+                await execution.replay_capture.route_decision(name, decision, decision, graph_state)
+            return decision
+
+        return route
 
     # The explicit registrations below are the complete, reviewable workflow
     # topology.  Nodes cannot be selected dynamically by a model or policy text.
@@ -167,16 +183,26 @@ def build_agent_graph(
     add_node("finish_unsupported", finish_unsupported)
 
     graph.add_edge(START, "resolve_property")
-    graph.add_conditional_edges("resolve_property", route_after_property)
-    graph.add_conditional_edges("interpret", route_after_interpret)
+    graph.add_conditional_edges(
+        "resolve_property", traced_route("resolve_property", route_after_property)
+    )
+    graph.add_conditional_edges("interpret", traced_route("interpret", route_after_interpret))
     graph.add_edge("need_information", "interpret")
-    graph.add_conditional_edges("retrieve_policy", route_after_policy)
-    graph.add_conditional_edges("find_duplicates", route_duplicates)
+    graph.add_conditional_edges(
+        "retrieve_policy", traced_route("retrieve_policy", route_after_policy)
+    )
+    graph.add_conditional_edges(
+        "find_duplicates", traced_route("find_duplicates", route_duplicates)
+    )
     graph.add_edge("select_duplicate", "refresh_snapshot")
     graph.add_edge("prepare_create", "create_ticket")
     graph.add_edge("create_ticket", "refresh_snapshot")
-    graph.add_conditional_edges("resolve_existing", route_resolved_existing)
-    graph.add_conditional_edges("refresh_snapshot", route_after_snapshot)
+    graph.add_conditional_edges(
+        "resolve_existing", traced_route("resolve_existing", route_resolved_existing)
+    )
+    graph.add_conditional_edges(
+        "refresh_snapshot", traced_route("refresh_snapshot", route_after_snapshot)
+    )
     graph.add_edge("list_slots", "select_slot")
     graph.add_edge("select_slot", "refresh_snapshot")
     graph.add_edge("prepare_book", "book")

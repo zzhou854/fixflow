@@ -25,6 +25,11 @@ from app.infrastructure.database.models.reconciliation import (
     ReconciliationAction,
     ReconciliationStatus,
 )
+from app.infrastructure.database.models.replay import (
+    AgentReplayBundle,
+    AgentReplayExecution,
+    AgentReplayStep,
+)
 from app.infrastructure.database.models.ticket import RepairTicket, TicketStatusHistory
 from app.infrastructure.database.models.user import Property, ResidentPropertyRelation, User
 from app.infrastructure.database.models.worker import Worker, WorkerAvailability, WorkerSkill
@@ -35,6 +40,9 @@ __all__ = [
     "AgentRun",
     "AgentRunStatus",
     "AgentRunTrigger",
+    "AgentReplayBundle",
+    "AgentReplayExecution",
+    "AgentReplayStep",
     "AgentTraceEvent",
     "IdempotencyExecutionStatus",
     "IdempotencyRecord",

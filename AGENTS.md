@@ -109,7 +109,8 @@ fault injection, or evaluation, stop for scope review.
 Stage A is complete: the domain and persistence model, transactional Application
 services, deterministic scheduling, and the independent MCP server are committed.
 Task 6 typed Agent State and Task 7 auditable policy retrieval are committed.
-Tasks 9 and 10 are committed. The current approved boundary is Task 11:
-UNKNOWN_COMMIT reconciliation for four formal mutations, authoritative outcome
-evidence, fenced workers, and test-only fault injection. It does not authorize
-online providers, deterministic Replay, Task 12, or a new migration after 0005.
+Tasks 9–11 are committed. The current approved boundary is Task 12:
+Deterministic Replay, Replay-safe evidence capture, the read-only Operator
+Recovery Console, repeatability verification, and migration `20260723_0006`.
+It does not authorize online providers, Event Sourcing, database time travel,
+automatic business repair, Stage D evaluation, or another migration after 0006.

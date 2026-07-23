@@ -59,7 +59,8 @@ message-bus framework and no Redis, Kafka, or Celery dependency is introduced.
 
 Task 11 consumes Outbox as one required authoritative commit witness. Delivery
 status alone never proves a business result and the reconciliation worker never
-republishes a mutation. Replay remains Task 12 work.
+republishes a mutation. Task 12 Replay can inspect a recorded delivery
+classification but never changes or dispatches Outbox rows.
 
 Each reconciled action has an explicit required event: `ticket.created`,
 `appointment.booked`, `appointment.rescheduled`, or `ticket.escalated`. An

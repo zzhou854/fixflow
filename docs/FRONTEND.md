@@ -75,3 +75,17 @@ owns the formal escalation control. An HTTP 202 disables that control and shows
 the Case status. `RESOLVED_COMMITTED` refreshes the ticket,
 `RESOLVED_NOT_COMMITTED` re-enables a same-payload retry with the original API
 idempotency key, and `MANUAL_REVIEW` remains blocked without a force button.
+
+## Recovery Console
+
+Task 12 embeds an Operator-only Recovery Console beneath an authorized thread
+review. It lists original Runs and replayability, displays Bundle schema and
+checksum metadata, launches the sole safe action “验证确定性重放”, and renders
+PASSED, DIVERGED, INCOMPLETE, UNSUPPORTED_SCHEMA, or FAILED_SAFE with bounded
+mismatch summaries and a deterministic recommendation.
+
+Original Replay evidence and current PostgreSQL business state are separate
+cards. The browser never receives raw tape JSON, complete Agent State,
+Checkpoint data, idempotency material, or Provider/MCP payloads. There is no
+button to apply Replay, resend a mutation, restore a database, or modify a
+Checkpoint. Resident pages do not expose Replay internals.

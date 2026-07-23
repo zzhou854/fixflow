@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 if TYPE_CHECKING:
+    from app.replay.capture import ReplayCapturePort
     from app.trace.runtime import TraceRuntime
 
 
@@ -19,6 +20,7 @@ class ExecutionContext:
     thread_id: UUID
     trace_id: UUID
     trace: TraceRuntime | None
+    replay_capture: ReplayCapturePort | None = None
 
 
 _CURRENT: ContextVar[ExecutionContext | None] = ContextVar(
@@ -36,6 +38,7 @@ def bind_execution_context(
     thread_id: UUID,
     trace_id: UUID,
     trace: TraceRuntime | None,
+    replay_capture: ReplayCapturePort | None = None,
 ) -> Iterator[None]:
     token = _CURRENT.set(
         ExecutionContext(
@@ -43,6 +46,7 @@ def bind_execution_context(
             thread_id=thread_id,
             trace_id=trace_id,
             trace=trace,
+            replay_capture=replay_capture,
         )
     )
     try:

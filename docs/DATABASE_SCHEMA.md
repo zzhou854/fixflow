@@ -156,3 +156,18 @@ database and are never managed by business Alembic. Task 10 now supplies Trace
 and Outbox storage; conversations, Replay scenarios, fault-harness records, and
 evaluation storage remain deferred and require separately reviewed migrations
 only if their later design truly needs persistence.
+
+Revision `20260723_0006` adds the deterministic Replay control plane:
+
+- `agent_replay_bundles`, one RESTRICT-linked artifact per `agent_runs` row;
+- `agent_replay_steps`, unique by Bundle/sequence and Bundle/step key;
+- `agent_replay_executions`, unique by requesting actor and request-key
+  fingerprint.
+
+All status and step fields remain `VARCHAR + named CHECK`, not PostgreSQL
+Native Enum. READY Bundles require complete expected projections and checksum.
+RUNNING Executions cannot have a completion result; terminal Executions require
+one. Foreign keys use `ON DELETE RESTRICT`, timestamps are timezone-aware, and
+downgrade removes Replay rows/tables before removing `REPLAY` from the Trace
+source check. The isolated LangGraph Checkpoint database contains no Replay
+tables.

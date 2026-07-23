@@ -5,14 +5,20 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
+from app.agent.enums import AgentIntent, PendingAction
+from app.agent.state import CachedAppointmentSnapshot, CachedTicketSnapshot
 from app.agent_runtime.mcp.delivery import (
     MutationDeliveryClassification,
     classify_application_mutation_result,
 )
 from app.application.models import EscalateTicketCommand, MutationMetadata, OperationResult
-from app.application.query_models import GetTicketSnapshotQuery, QueryActor
+from app.application.query_models import (
+    GetTicketSnapshotQuery,
+    QueryActor,
+    TicketSnapshotReadModel,
+)
 from app.application.services import FixFlowApplicationService
-from app.domain.enums import ActorType
+from app.domain.enums import ActorType, WorkflowStage
 from app.fault_injection import FaultInjector, FaultPoint, NoOpFaultInjector
 from app.infrastructure.database.models.observability import (
     AgentRunStatus,
@@ -20,8 +26,12 @@ from app.infrastructure.database.models.observability import (
     TraceSource,
 )
 from app.infrastructure.database.models.reconciliation import ReconciliationAction
+from app.policy.enums import EvidenceSufficiency
 from app.reconciliation.coordinator import UnknownCommitCoordinator
 from app.reconciliation.models import CreateCase, ReconciliationCaseView
+from app.replay.capture import ReplayCaptureService
+from app.replay.models import OperatorActionReplayInput, ReplaySafeAgentState
+from app.replay.steps import OperatorMutationResultStep
 from app.trace.models import StartRun, TracePayload
 from app.trace.runtime import TraceRuntime
 
@@ -49,11 +59,13 @@ class OperatorActionService:
         *,
         reconciliation: UnknownCommitCoordinator | None = None,
         fault_injector: FaultInjector | None = None,
+        replay: ReplayCaptureService | None = None,
     ) -> None:
         self._application = application
         self._trace = trace
         self._reconciliation = reconciliation
         self._faults = fault_injector or NoOpFaultInjector()
+        self._replay = replay
 
     async def escalate(
         self,
@@ -81,6 +93,18 @@ class OperatorActionService:
         )
         run_id = uuid4()
         occurred_at = datetime.now(UTC)
+        replay_input = OperatorActionReplayInput(
+            action="ESCALATE_TO_OPERATOR",
+            target_entity_id=ticket_id,
+            expected_version=expected_version,
+            request_fingerprint=request_fingerprint,
+        )
+        replay_state = self._replay_state(
+            operator_id=operator_id,
+            trace_id=trace_id,
+            snapshot=snapshot,
+            observed_at=occurred_at,
+        )
         if self._trace is not None:
             await self._trace.start_run(
                 StartRun(
@@ -141,6 +165,8 @@ class OperatorActionService:
                 request_fingerprint=request_fingerprint,
                 run_id=run_id,
                 trace_id=trace_id,
+                replay_input=replay_input,
+                replay_state=replay_state,
             )
 
         classification = classify_application_mutation_result(ok=result.ok, code=result.code)
@@ -155,6 +181,8 @@ class OperatorActionService:
                 request_fingerprint=request_fingerprint,
                 run_id=run_id,
                 trace_id=trace_id,
+                replay_input=replay_input,
+                replay_state=replay_state,
             )
         if classification is MutationDeliveryClassification.KNOWN_SUCCESS and (
             result.resource_id != ticket_id
@@ -171,6 +199,8 @@ class OperatorActionService:
                 request_fingerprint=request_fingerprint,
                 run_id=run_id,
                 trace_id=trace_id,
+                replay_input=replay_input,
+                replay_state=replay_state,
             )
         try:
             await self._faults.hit(
@@ -187,6 +217,8 @@ class OperatorActionService:
                 request_fingerprint=request_fingerprint,
                 run_id=run_id,
                 trace_id=trace_id,
+                replay_input=replay_input,
+                replay_state=replay_state,
             )
         if self._trace is not None:
             await self._trace.finish_run(
@@ -195,6 +227,21 @@ class OperatorActionService:
                 occurred_at=datetime.now(UTC),
                 error_code=None if result.ok else result.code,
             )
+        await self._capture_replay(
+            run_id=run_id,
+            trace_id=trace_id,
+            input_envelope=replay_input,
+            state=replay_state,
+            mutation=OperatorMutationResultStep(
+                action="ESCALATE_TO_OPERATOR",
+                operation_id=operation_id,
+                request_fingerprint=request_fingerprint,
+                delivery_classification=classification.value,
+                resource_id=result.resource_id,
+                resource_version=result.resource_version,
+                business_error_code=None if result.ok else result.code,
+            ),
+        )
         return OperatorEscalationExecution(operation=result, run_id=run_id)
 
     async def _unknown(
@@ -209,6 +256,8 @@ class OperatorActionService:
         request_fingerprint: str,
         run_id: UUID,
         trace_id: UUID,
+        replay_input: OperatorActionReplayInput,
+        replay_state: ReplaySafeAgentState,
     ) -> OperatorEscalationExecution:
         if self._trace is not None:
             await self._trace.finish_run(
@@ -239,7 +288,101 @@ class OperatorActionService:
                 expected_entity_version=expected_version,
             )
         )
+        await self._capture_replay(
+            run_id=run_id,
+            trace_id=trace_id,
+            input_envelope=replay_input,
+            state=replay_state,
+            mutation=OperatorMutationResultStep(
+                action="ESCALATE_TO_OPERATOR",
+                operation_id=operation_id,
+                request_fingerprint=request_fingerprint,
+                delivery_classification="UNKNOWN_COMMIT",
+                resource_id=ticket_id,
+                business_error_code="UNKNOWN_COMMIT",
+                reconciliation_case_id=case.id,
+            ),
+        )
         return OperatorEscalationExecution(operation=None, run_id=run_id, reconciliation_case=case)
+
+    async def _capture_replay(
+        self,
+        *,
+        run_id: UUID,
+        trace_id: UUID,
+        input_envelope: OperatorActionReplayInput,
+        state: ReplaySafeAgentState,
+        mutation: OperatorMutationResultStep,
+    ) -> None:
+        if self._replay is None:
+            return
+        await self._replay.capture_operator_action(
+            original_run_id=run_id,
+            original_trace_id=trace_id,
+            input_envelope=input_envelope,
+            start_state=state,
+            mutation=mutation,
+        )
+
+    @staticmethod
+    def _replay_state(
+        *,
+        operator_id: UUID,
+        trace_id: UUID,
+        snapshot: TicketSnapshotReadModel,
+        observed_at: datetime,
+    ) -> ReplaySafeAgentState:
+        active = snapshot.active_appointment
+        cached_appointment = (
+            CachedAppointmentSnapshot(
+                appointment_id=active.appointment_id,
+                worker_id=active.worker_id,
+                appointment_status=active.status,
+                scheduled_start=active.scheduled_start,
+                scheduled_end=active.scheduled_end,
+                appointment_version=active.appointment_version,
+            )
+            if active is not None
+            else None
+        )
+        cached = CachedTicketSnapshot(
+            ticket_id=snapshot.ticket_id,
+            ticket_version=snapshot.ticket_version,
+            ticket_status=snapshot.ticket_status,
+            severity=snapshot.severity,
+            rework_count=snapshot.rework_count,
+            active_appointment=cached_appointment,
+            observed_at=observed_at,
+        )
+        return ReplaySafeAgentState(
+            thread_id=None,
+            trace_id=trace_id,
+            actor_type=ActorType.OPERATOR,
+            actor_id=operator_id,
+            user_id=operator_id,
+            property_id=snapshot.property_id,
+            property_context_verified=True,
+            workflow_stage=WorkflowStage.HUMAN_REVIEW,
+            task_intent=AgentIntent.REQUEST_HUMAN,
+            utterance_intent=AgentIntent.REQUEST_HUMAN,
+            intent_version=1,
+            issue_category=snapshot.issue_category,
+            issue_location=snapshot.issue_location,
+            normalized_issue_location=" ".join(snapshot.issue_location.casefold().split()),
+            safe_issue_summary=f"{snapshot.issue_category.value}:{snapshot.issue_location}",
+            severity=snapshot.severity,
+            safety_review_required=False,
+            policy_sufficiency=EvidenceSufficiency.SUFFICIENT,
+            policy_conflict=False,
+            active_ticket_id=snapshot.ticket_id,
+            active_appointment_id=(active.appointment_id if active is not None else None),
+            active_ticket_snapshot=cached,
+            ticket_snapshot_version=snapshot.ticket_version,
+            appointment_version=(active.appointment_version if active is not None else None),
+            pending_action=PendingAction.NONE,
+            reference_time=observed_at,
+            timezone_name="Asia/Shanghai",
+        )
 
     async def record_api_replay(
         self,

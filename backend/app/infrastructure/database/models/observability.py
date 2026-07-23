@@ -44,6 +44,7 @@ class TraceSource(StrEnum):
     DOMAIN = "DOMAIN"
     OUTBOX = "OUTBOX"
     RECONCILIATION = "RECONCILIATION"
+    REPLAY = "REPLAY"
 
 
 class OutboxStatus(StrEnum):

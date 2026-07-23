@@ -7,6 +7,12 @@ from app.api.dependencies import ApiServices, get_services, require_operator
 from app.api.errors import ApiError
 from app.api.schemas.agent import OperatorThreadResponse
 from app.api.schemas.reconciliation import ReconciliationCasePage, ReconciliationCaseResponse
+from app.api.schemas.replay import (
+    ReplayBundleResponse,
+    ReplayExecutionResponse,
+    ReplayRunDetailResponse,
+    ReplayRunPageResponse,
+)
 from app.api.schemas.tickets import (
     EscalateTicketRequest,
     OperationResponse,
@@ -29,8 +35,100 @@ from app.infrastructure.database.models.reconciliation import (
     ReconciliationAction,
     ReconciliationStatus,
 )
+from app.replay.repository import ReplayConflict, ReplayIdempotencyConflict
 
 router = APIRouter(prefix="/api/v1/operator", tags=["operator"])
+
+
+@router.get("/threads/{thread_id}/replay-runs", response_model=ReplayRunPageResponse)
+async def list_replay_runs(
+    thread_id: UUID,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> ReplayRunPageResponse:
+    if services.operator_replay is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "重放验证暂不可用。", retryable=True)
+    rows = await services.operator_replay.list_for_thread(
+        identity, thread_id, limit=limit, offset=offset
+    )
+    if rows is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已授权的会话执行记录。")
+    return ReplayRunPageResponse(items=rows, limit=limit, offset=offset)
+
+
+@router.get("/runs/{run_id}/replay", response_model=ReplayRunDetailResponse)
+async def get_replay_run(
+    run_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> ReplayRunDetailResponse:
+    row = (
+        await services.operator_replay.get_run(identity, run_id)
+        if services.operator_replay
+        else None
+    )
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已授权的重放记录。")
+    return row
+
+
+@router.get("/replay-bundles/{bundle_id}", response_model=ReplayBundleResponse)
+async def get_replay_bundle(
+    bundle_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> ReplayBundleResponse:
+    row = (
+        await services.operator_replay.get_bundle(identity, bundle_id)
+        if services.operator_replay
+        else None
+    )
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已授权的重放证据。")
+    return row
+
+
+@router.post("/runs/{run_id}/replay/verify", response_model=ReplayExecutionResponse)
+async def verify_replay(
+    run_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+) -> ReplayExecutionResponse:
+    if services.operator_replay is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "重放验证暂不可用。", retryable=True)
+    try:
+        row = await services.operator_replay.verify(
+            identity, run_id, idempotency_key=idempotency_key
+        )
+    except ReplayIdempotencyConflict as exc:
+        raise ApiError(409, "IDEMPOTENCY_CONFLICT", "该幂等键已用于其他验证请求。") from exc
+    except ReplayConflict as exc:
+        raise ApiError(409, "REPLAY_NOT_READY", "该执行缺少完整重放证据。") from exc
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已授权的重放记录。")
+    return row
+
+
+@router.get(
+    "/replay-executions/{execution_id}",
+    response_model=ReplayExecutionResponse,
+)
+async def get_replay_execution(
+    execution_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> ReplayExecutionResponse:
+    row = (
+        await services.operator_replay.get_execution(identity, execution_id)
+        if services.operator_replay
+        else None
+    )
+    if row is None:
+        raise ApiError(404, "NOT_FOUND", "未找到已授权的验证结果。")
+    return row
 
 
 @router.get("/reconciliation/cases", response_model=ReconciliationCasePage)

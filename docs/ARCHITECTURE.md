@@ -6,6 +6,8 @@
 flowchart LR
     Resident["Resident React UI"] --> API["FastAPI + JWT API"]
     Operator["Operator React workbench"] --> API
+    API --> Replay["Deterministic Replay control plane"]
+    Replay --> PostgreSQL
     API --> Orchestrator["Single typed orchestrator"]
     Orchestrator --> Services["Deterministic application services"]
     Orchestrator --> LLM["Typed interpret/compose core"]
@@ -57,6 +59,13 @@ timeline without changing the Single Orchestrator or domain state machines.
 Task 11 adds a separate reconciliation control plane. It uses durable operation,
 idempotency, aggregate, and Outbox evidence; its fenced worker never replays a
 mutation or reads LangGraph Checkpoint.
+Task 12 adds a replay control plane beside—not inside—the business transaction
+path. Focused recording adapters persist validated, sanitized tape results.
+Replay rebuilds the same Graph with recorded adapters and an in-memory saver,
+never the live Provider, MCP server, policy search, business Repository, or
+formal Checkpoint. Operator access reuses ticket-linked Trace authorization.
+Replay results and current PostgreSQL facts are displayed in separate
+projections and cannot modify each other.
 
 ## Product API boundary
 

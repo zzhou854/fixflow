@@ -3,8 +3,12 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.agent.nodes.compose_response import ComposeResponseNode
-from app.agent.nodes.interpret_message import InterpretMessageNode
+from app.agent.models import (
+    ComposeResponseInput,
+    ComposeResponseResult,
+    InterpretationNodeResult,
+    InterpretMessageInput,
+)
 from app.agent_runtime.mcp.client import PropertyOperationsClient
 from app.policy.models import PolicyRetrievalRequest, PolicyRetrievalResult
 
@@ -19,8 +23,8 @@ class NodeContext:
     """
 
     mcp: PropertyOperationsClient
-    interpret: InterpretMessageNode
-    compose: ComposeResponseNode
+    interpret: Callable[[InterpretMessageInput], Awaitable[InterpretationNodeResult]]
+    compose: Callable[[ComposeResponseInput], Awaitable[ComposeResponseResult]]
     retrieve_policy: Callable[[PolicyRetrievalRequest], Awaitable[PolicyRetrievalResult]]
 
 

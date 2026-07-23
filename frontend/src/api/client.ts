@@ -1,4 +1,4 @@
-import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, Ticket, TicketDetail, TraceEvent } from '../types'
+import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, ReplayExecution, ReplayRun, ReplayRunDetail, Ticket, TicketDetail, TraceEvent } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
@@ -29,6 +29,11 @@ export const api = {
   operatorThread: (token: string, threadId: string) => apiRequest<OperatorThread>(`/api/v1/operator/threads/${threadId}`, token),
   operatorRuns: (token: string, threadId: string, query = '') => apiRequest<{ items: AgentRun[] }>(`/api/v1/operator/threads/${threadId}/runs${query}`, token),
   operatorRunEvents: (token: string, runId: string, query = '') => apiRequest<{ items: TraceEvent[] }>(`/api/v1/operator/runs/${runId}/events${query}`, token),
+  replayRuns: (token: string, threadId: string) => apiRequest<{ items: ReplayRun[] }>(`/api/v1/operator/threads/${threadId}/replay-runs`, token),
+  replayRun: (token: string, runId: string) => apiRequest<ReplayRunDetail>(`/api/v1/operator/runs/${runId}/replay`, token),
+  verifyReplay: (token: string, runId: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<ReplayExecution>(`/api/v1/operator/runs/${runId}/replay/verify`, token, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey },
+  }),
   reconciliationCases: (token: string, query = '') => apiRequest<{items: ReconciliationCase[]}>(`/api/v1/operator/reconciliation/cases${query}`,token),
   recheckReconciliation: (token: string, caseId: string) => apiRequest<ReconciliationCase>(`/api/v1/operator/reconciliation/cases/${caseId}/recheck`,token,{method:'POST'}),
   reconciliationCase: (token: string, caseId: string) => apiRequest<ReconciliationCase>(`/api/v1/operator/reconciliation/cases/${caseId}`, token),
