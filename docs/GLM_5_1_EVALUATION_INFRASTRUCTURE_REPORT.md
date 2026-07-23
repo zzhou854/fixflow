@@ -52,6 +52,15 @@ audited waiting was 165.677823 seconds, including one whole-run circuit pause.
 The upstream response supplied no usable `Retry-After`. Probe completion was
 0%, so Smoke and all quality stages were correctly skipped.
 
+After an additional cooldown, a third isolated `probe-only` run lowered the
+rate to one request per minute. Run
+`6f50365f-015d-434a-b1e2-846395411394` again ended its first Case
+`RATE_LIMITED` after two bounded attempts and 59.797 seconds of audited waiting.
+Its safe summary hash is
+`c54537115f867ae538effee7aa992e77d3a3b3369deb9fc072c78e2cf69b7240`.
+This rules out concurrency and request bursts as the current cause and is
+consistent with an account-level quota or upstream service limit.
+
 Safe evidence hashes:
 
 - development summary:
