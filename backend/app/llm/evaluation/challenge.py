@@ -17,10 +17,11 @@ def validate_challenge_isolation(
     *,
     regression: EvaluationDataset,
     prompts: tuple[PromptDefinition, ...],
+    expected_version: str = CHALLENGE_DATASET_VERSION,
 ) -> None:
     if challenge.metadata.dataset_id != CHALLENGE_DATASET_ID:
         raise DatasetValidationError("challenge dataset identity mismatch")
-    if challenge.metadata.dataset_version != CHALLENGE_DATASET_VERSION:
+    if challenge.metadata.dataset_version != expected_version:
         raise DatasetValidationError("challenge dataset version mismatch")
     challenge_messages = {_normalized(case.input.current_user_message) for case in challenge.cases}
     regression_messages = {

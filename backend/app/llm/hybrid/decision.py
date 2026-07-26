@@ -35,17 +35,26 @@ _BOOKING_COMMAND = re.compile(r"(我想预约|请约|想约|直接约|能排|请
 _STRONG_RESCHEDULE = re.compile(
     r"(改期|预约.{0,8}(改|换)|原预约|之前的预约|上次约|"
     r"换个时间|这个时间不行|不要原来的|调整到|都可以改|"
-    r"就改到|还是改到|朋友家的预约)"
+    r"就改到|还是改到|改成|朋友家的预约|已约.{0,8}改|原来约|"
+    r"预约.{0,8}(挪到|往后推)|上门时间.{0,8}改|重新约)"
+)
+_SLOT_SELECTION = re.compile(
+    r"(我选.{0,6}(第[一二三四五六七八九十]|最后)|选.{0,10}(师傅|那一档|时间)|"
+    r"(第[一二三四五六七八九十]|最后).{0,6}(个|档|时间).{0,4}(可以|就行))"
 )
 _PRECISE_TIME = re.compile(
     r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上).{0,12}"
-    r"(周[一二三四五六日天]|\d{4}年|\d{1,2}月|明天|后天|下周)|"
-    r"(周[一二三四五六日天]|\d{4}年|\d{1,2}月|明天|后天|下周).{0,12}"
+    r"(周[一二三四五六日天]|星期[一二三四五六日天]|\d{4}年|\d{1,2}月|"
+    r"[一二三四五六七八九十]{1,3}号|明天|明晚|后天|下周)|"
+    r"(周[一二三四五六日天]|星期[一二三四五六日天]|\d{4}年|\d{1,2}[月号]|"
+    r"[一二三四五六七八九十]{1,3}号|明天|明晚|后天|下周).{0,12}"
     r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上)"
 )
 
 
 def resolved_issue_category(facts: NormalizedResidentFactsV1) -> IssueCategory | None:
+    if "电梯" in facts.source_text:
+        return None
     if not facts.issue_category_evidence:
         if "冒烟风险" in facts.source_text:
             return IssueCategory.ELECTRICAL
@@ -66,6 +75,12 @@ def _time_is_actionable(
     if "不要原来的" in text and any(marker in text for marker in ("上午", "下午", "晚上")):
         return True
     if re.search(r"改到(明天|后天)", text):
+        return True
+    if re.search(
+        r"(改|换|挪).{0,6}(周[一二三四五六日天]|星期[一二三四五六日天]|"
+        r"\d{1,2}号|[一二三四五六七八九十]{1,3}号)",
+        text,
+    ):
         return True
     if re.search(r"\d{1,2}:\d{2}.{0,3}\d{1,2}:\d{2}", text):
         return True
@@ -92,6 +107,9 @@ def _decide_intent(
     if facts.explicit_human_request:
         trace.append(DecisionTraceEntry(rule_id="INTENT_HUMAN_PRIORITY", outcome="REQUEST_HUMAN"))
         return AgentIntent.REQUEST_HUMAN
+    if facts.unsupported_request_evidence and not facts.issue_category_evidence:
+        trace.append(DecisionTraceEntry(rule_id="INTENT_UNSUPPORTED", outcome="UNKNOWN"))
+        return AgentIntent.UNKNOWN
     if facts.reschedule_request_mentioned and _STRONG_RESCHEDULE.search(facts.source_text):
         trace.append(
             DecisionTraceEntry(
@@ -123,6 +141,18 @@ def _decide_intent(
             DecisionTraceEntry(rule_id="INTENT_STATUS_QUERY", outcome="QUERY_TICKET_STATUS")
         )
         return AgentIntent.QUERY_TICKET_STATUS
+    if _SLOT_SELECTION.search(facts.source_text) and any(
+        marker in message.content
+        for message in node_input.recent_conversation_messages
+        for marker in ("可选", "候选", "时间", "档")
+    ):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_SLOT_SELECTION_CONTEXT",
+                outcome="SELECT_APPOINTMENT_SLOT",
+            )
+        )
+        return AgentIntent.SELECT_APPOINTMENT_SLOT
     if (
         facts.time_expression_present
         and node_input.current_state_summary.task_intent is AgentIntent.SELECT_APPOINTMENT_SLOT
@@ -137,6 +167,19 @@ def _decide_intent(
             DecisionTraceEntry(rule_id="INTENT_BOOKING_REQUEST", outcome="SELECT_APPOINTMENT_SLOT")
         )
         return AgentIntent.SELECT_APPOINTMENT_SLOT
+    if node_input.current_state_summary.task_intent is AgentIntent.NEW_REPAIR and (
+        facts.location_mentioned
+        or facts.issue_description_present
+        or facts.time_expression_present
+        or facts.issue_category_evidence
+    ):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_ACTIVE_REPAIR_SUPPLEMENT",
+                outcome="PROVIDE_INFORMATION",
+            )
+        )
+        return AgentIntent.PROVIDE_INFORMATION
     if node_input.recent_conversation_messages and (
         facts.location_mentioned
         or facts.issue_description_present
@@ -152,9 +195,29 @@ def _decide_intent(
             DecisionTraceEntry(rule_id="INTENT_CONTEXT_RESPONSE", outcome="PROVIDE_INFORMATION")
         )
         return AgentIntent.PROVIDE_INFORMATION
-    if facts.small_talk_only or facts.unsupported_request_evidence:
+    if facts.small_talk_only:
         trace.append(DecisionTraceEntry(rule_id="INTENT_NON_REPAIR", outcome="UNKNOWN"))
         return AgentIntent.UNKNOWN
+    if "电梯" in facts.source_text and any(
+        marker in facts.source_text for marker in ("被困", "困在", "门打不开")
+    ):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_UNSUPPORTED_SAFETY_REVIEW",
+                outcome="UNKNOWN",
+            )
+        )
+        return AgentIntent.UNKNOWN
+    if facts.time_expression_present and not (
+        _ISSUE_ACTION.search(facts.source_text) or facts.issue_category_evidence
+    ):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_AVAILABILITY_SUPPLEMENT",
+                outcome="PROVIDE_INFORMATION",
+            )
+        )
+        return AgentIntent.PROVIDE_INFORMATION
     if (
         _ISSUE_ACTION.search(facts.source_text)
         or facts.issue_category_evidence
@@ -197,6 +260,8 @@ class IntentRequirementPolicy:
         if intent is AgentIntent.RESCHEDULE_APPOINTMENT:
             return () if _time_is_actionable(facts, node_input) else (IssueField.AVAILABILITY,)
         if intent is AgentIntent.SELECT_APPOINTMENT_SLOT:
+            if _SLOT_SELECTION.search(facts.source_text):
+                return ()
             if "还没报修" in facts.source_text or (
                 category is None
                 and not facts.issue_description_present
@@ -205,6 +270,19 @@ class IntentRequirementPolicy:
                 return (IssueField.ISSUE_CATEGORY, IssueField.ISSUE_DESCRIPTION)
             return () if _time_is_actionable(facts, node_input) else (IssueField.AVAILABILITY,)
         if intent in {AgentIntent.NEW_REPAIR, AgentIntent.UNKNOWN, AgentIntent.PROVIDE_INFORMATION}:
+            if (
+                intent is AgentIntent.PROVIDE_INFORMATION
+                and facts.time_expression_present
+                and not (_ISSUE_ACTION.search(facts.source_text) or facts.issue_category_evidence)
+            ):
+                return (
+                    (IssueField.AVAILABILITY,)
+                    if any(
+                        marker in facts.source_text
+                        for marker in ("具体几点", "几点还不知道", "还没决定")
+                    )
+                    else ()
+                )
             if (
                 intent is AgentIntent.PROVIDE_INFORMATION
                 and node_input.current_state_summary.task_intent

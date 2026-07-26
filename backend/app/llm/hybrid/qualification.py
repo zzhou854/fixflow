@@ -23,7 +23,7 @@ from app.llm.hybrid.models import HybridInterpretationMetadata
 HYBRID_SCORER_ID: Literal["resident_hybrid_interpretation_scorer"] = (
     "resident_hybrid_interpretation_scorer"
 )
-HYBRID_SCORER_VERSION: Literal["1.0.0"] = "1.0.0"
+HYBRID_SCORER_VERSION: Literal["1.1.0"] = "1.1.0"
 HYBRID_GATE_ID: Literal["resident_hybrid_interpretation_gate"] = (
     "resident_hybrid_interpretation_gate"
 )
@@ -86,7 +86,7 @@ class HybridQualificationEvidence(EvaluationModel):
     provider: Literal["deepseek"]
     model: Literal["deepseek-v4-flash", "deepseek-v4-pro"]
     scorer_id: Literal["resident_hybrid_interpretation_scorer"] = HYBRID_SCORER_ID
-    scorer_version: Literal["1.0.0"] = HYBRID_SCORER_VERSION
+    scorer_version: Literal["1.1.0"] = HYBRID_SCORER_VERSION
     gate_id: Literal["resident_hybrid_interpretation_gate"] = HYBRID_GATE_ID
     gate_version: Literal["1.0.0"] = HYBRID_GATE_VERSION
     gate_hash: Sha256 = HYBRID_GATE_HASH
@@ -122,7 +122,7 @@ class HybridBaselineManifest(EvaluationModel):
     sdk_version: str
     endpoint_fingerprint: Sha256
     scorer_id: Literal["resident_hybrid_interpretation_scorer"] = HYBRID_SCORER_ID
-    scorer_version: Literal["1.0.0"] = HYBRID_SCORER_VERSION
+    scorer_version: Literal["1.1.0"] = HYBRID_SCORER_VERSION
     policy_id: Literal["resident_hybrid_interpretation_gate"] = HYBRID_GATE_ID
     policy_version: Literal["1.0.0"] = HYBRID_GATE_VERSION
     policy_hash: Sha256 = HYBRID_GATE_HASH

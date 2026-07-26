@@ -96,7 +96,8 @@ class DatasetValidator:
         if dataset.metadata.case_count != len(cases):
             errors.append("manifest case_count does not match JSONL")
         expected_case_file = (
-            "resident_interpretation_challenge_v1.jsonl"
+            "resident_interpretation_challenge_"
+            f"v{dataset.metadata.dataset_version.split('.', maxsplit=1)[0]}.jsonl"
             if dataset.metadata.dataset_id == "resident_interpretation_challenge"
             else "resident_interpretation_v1.jsonl"
         )

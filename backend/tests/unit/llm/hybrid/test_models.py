@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import pytest
-from app.llm.hybrid.models import EvidenceSpan, ExtractedResidentFactsV1
+from app.llm.hybrid.models import (
+    EvidenceSpan,
+    ExtractedAvailabilityWindow,
+    ExtractedResidentFactsV1,
+)
 from app.llm.hybrid.normalizer import ResidentFactNormalizer
 from app.llm.hybrid.prompts import FactPromptRegistry
 from pydantic import ValidationError
@@ -18,14 +22,37 @@ def test_fact_schema_is_closed_and_serialization_is_deterministic() -> None:
         )
 
 
-def test_positive_fact_requires_matching_evidence_shape() -> None:
-    with pytest.raises(ValidationError, match="human request"):
-        empty_facts(explicit_human_request=True)
+def test_provider_cross_field_conflict_is_normalized_not_parse_retried() -> None:
+    extracted = empty_facts(explicit_human_request=True)
+    normalized = ResidentFactNormalizer().normalize(
+        extracted,
+        current_user_message="厨房漏水，请安排维修。",
+    )
+    assert normalized.explicit_human_request is False
+    assert normalized.rejected_evidence_count == 1
+
     facts = empty_facts(
         explicit_human_request=True,
         human_request_evidence=EvidenceSpan(text="转人工"),
     )
     assert facts.explicit_human_request is True
+
+
+def test_invalid_provider_time_window_is_rejected_not_parse_retried() -> None:
+    extracted = empty_facts(
+        availability_windows=(
+            ExtractedAvailabilityWindow(
+                starts_at="2026-07-27T15:00:00+08:00",
+                ends_at="2026-07-27T14:00:00+08:00",
+            ),
+        )
+    )
+    normalized = ResidentFactNormalizer().normalize(
+        extracted,
+        current_user_message="最后那个时间可以。",
+    )
+    assert normalized.availability_windows == ()
+    assert normalized.rejected_evidence_count == 1
 
 
 def test_unverifiable_evidence_is_rejected_before_decision() -> None:

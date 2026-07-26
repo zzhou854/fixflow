@@ -7,10 +7,11 @@ identity, or business mutation material.
 ## Frozen candidate
 
 ```text
-architecture       hybrid_interpretation@1.4.0
-architecture hash  e7c94c2bf8d6b0839320973648a30dd9abfb907f431244b4a09922be39d3896d
+architecture       hybrid_interpretation@1.7.0
+architecture hash  7381f06b0a67c8b8cb533fa43ed7c5aa9ecd414989d022ded1d7cb3f86f211d3
 fact prompt        resident_fact_extraction@1.0.0
-fact prompt hash   00f28a6fe50b62b6c619ee952f58999455115628e3582a91464c31d6580ad150
+fact prompt hash   2ec06592d5836161b2b305c1ef6b494ef3a513c7258fce19489fbd428b65b0b7
+hybrid scorer      resident_hybrid_interpretation_scorer@1.1.0
 provider           deepseek
 model              deepseek-v4-flash
 temperature        0
@@ -45,8 +46,8 @@ default product provider remains `scripted`.
 Both independent 120-case runs passed the absolute development gate. Run IDs:
 
 ```text
-Repeat 1  2b1b10ed-dc76-4639-847a-30c5eab6bc3f
-Repeat 2  65f0da42-59f6-4949-8550-ba57aa80cb66
+Repeat 1  34321300-9983-4b63-aa9c-df1fed8cbace
+Repeat 2  55ac288a-1906-4e1d-a33c-3d8aff755401
 ```
 
 Three cases in each repeat differed from an exact Golden projection, but the
@@ -72,13 +73,13 @@ interpretation gates.
 
 | Diagnostic | Repeat 1 | Repeat 2 |
 | --- | ---: | ---: |
-| Fact precision | 100% | 100% |
-| Fact recall | 94.83% | 96.55% |
-| Fact F1 | 97.35% | 98.25% |
-| Evidence span validity | 93.16% | 94.48% |
-| Safety evidence recall | 88.24% | 94.12% |
+| Fact precision | 98.25% | 98.25% |
+| Fact recall | 96.55% | 96.55% |
+| Fact F1 | 97.39% | 97.39% |
+| Evidence span validity | 94.00% | 93.85% |
+| Safety evidence recall | 94.12% | 94.12% |
 | Verification calls | 0 | 0 |
-| Total tokens | 320,594 | 319,943 |
+| Total tokens | 321,797 | 321,762 |
 
 There were no provider failures or rate-limit responses. Evaluation made no
 SDK tool calls, MCP calls, Agent Graph calls, business mutations, Outbox writes,
@@ -87,11 +88,20 @@ writes.
 
 ## Holdout status
 
-At this development checkpoint:
+Challenge v1 was consumed by formal candidate 1.4.0, failed, and was not reused
+as a holdout. It is now a historical regression corpus. Candidate 1.7.0 passed
+all 60 historical cases in run
+`b7f52669-3ffb-4ab8-bb63-84615290c1e5`.
+
+At this development checkpoint, the independently authored v2 corpus has only
+been validated offline:
 
 ```text
-challenge_consumed=false
-challenge_live_calls=0
+challenge_v1_consumed=true
+challenge_v1_role=HISTORICAL_REGRESSION
+challenge_v2_hash=b8875bf62124c77af91e8fee21b43a637cb3c1cb3fe345551911367b2e0bfcff
+challenge_v2_consumed=false
+challenge_v2_live_calls=0
 formal_qualification=NOT_STARTED
 baseline=NOT_CREATED
 release_candidate=NOT_CREATED
@@ -99,5 +109,5 @@ activation=NOT_ACTIVATED
 default_provider=scripted
 ```
 
-The locked Challenge Corpus may be used only after this candidate is committed,
+The locked Challenge v2 may be used only after this candidate is committed,
 the full repository checks pass, and the working tree is clean.

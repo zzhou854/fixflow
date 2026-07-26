@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 from app.llm.evaluation.dataset_loader import load_dataset
-from app.llm.evaluation.scorer_v2 import score_success
 from app.llm.hybrid.pipeline import HybridInterpretationNode
+from app.llm.hybrid.scorer import score_hybrid_success
 from tests.unit.llm.hybrid.conftest import empty_facts
 from tests.unit.llm.hybrid.test_pipeline import FactProvider
 
@@ -25,7 +25,7 @@ async def test_deterministic_hybrid_decisions_preserve_development_golden_contra
     for case in dataset.cases:
         result = await node(case.input.to_provider_input())
         now = datetime.now(UTC)
-        scored = score_success(
+        scored = score_hybrid_success(
             case,
             repeat_index=0,
             result=result,

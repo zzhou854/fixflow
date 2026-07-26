@@ -1,0 +1,15 @@
+{
+  "dataset_id": "resident_interpretation_challenge",
+  "dataset_version": "2.0.0",
+  "dataset_schema_version": "evaluation-case-v1",
+  "description": "60-case synthetic engineering-authored locked hybrid challenge corpus v2",
+  "locale": "zh-CN",
+  "case_count": 60,
+  "created_for_prompt_id": "resident_interpretation",
+  "created_for_schema_version": "interpretation-result-v1",
+  "provenance": "synthetic_engineering_holdout",
+  "review_status": "engineering_authored_locked",
+  "contains_real_personal_data": false,
+  "case_file": "resident_interpretation_challenge_v2.jsonl",
+  "dataset_hash": "b8875bf62124c77af91e8fee21b43a637cb3c1cb3fe345551911367b2e0bfcff"
+}

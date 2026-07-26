@@ -22,7 +22,6 @@ from app.llm.evaluation.development import (
     evaluate_development_gate,
     evaluate_smoke_gate,
 )
-from app.llm.evaluation.metrics import calculate_metrics
 from app.llm.evaluation.models import (
     EvaluationCase,
     EvaluationCaseResult,
@@ -30,9 +29,10 @@ from app.llm.evaluation.models import (
     EvaluationMetrics,
     EvaluationModel,
 )
-from app.llm.evaluation.scorer_v2 import score_failure, score_success
+from app.llm.evaluation.scorer_v2 import score_failure
 from app.llm.hybrid.models import HybridInterpretationMetadata, NormalizedResidentFactsV1
 from app.llm.hybrid.pipeline import HybridInterpretationNode
+from app.llm.hybrid.scorer import calculate_hybrid_metrics, score_hybrid_success
 
 
 class HybridFactMetrics(EvaluationModel):
@@ -76,7 +76,14 @@ class HybridSafeCaseSummary(EvaluationModel):
 class HybridEvaluationReport(EvaluationModel):
     report_schema_version: Literal["hybrid-evaluation-report-v1"] = "hybrid-evaluation-report-v1"
     run_id: UUID
-    stage: Literal["PROBE", "SMOKE", "DEVELOPMENT", "FORMAL_REGRESSION", "FORMAL_CHALLENGE"]
+    stage: Literal[
+        "PROBE",
+        "SMOKE",
+        "DEVELOPMENT",
+        "HISTORICAL_REGRESSION",
+        "FORMAL_REGRESSION",
+        "FORMAL_CHALLENGE",
+    ]
     development_only: bool
     challenge_consumed: bool = False
     dataset_id: str
@@ -113,7 +120,14 @@ class HybridStabilityReport(EvaluationModel):
     failed_rules: tuple[str, ...] = ()
 
 
-type HybridStage = Literal["PROBE", "SMOKE", "DEVELOPMENT", "FORMAL_REGRESSION", "FORMAL_CHALLENGE"]
+type HybridStage = Literal[
+    "PROBE",
+    "SMOKE",
+    "DEVELOPMENT",
+    "HISTORICAL_REGRESSION",
+    "FORMAL_REGRESSION",
+    "FORMAL_CHALLENGE",
+]
 
 
 async def run_hybrid_evaluation(
@@ -151,7 +165,7 @@ async def run_hybrid_evaluation(
                 )
                 completed = datetime.now(UTC)
                 latency_ms = int((time.monotonic() - monotonic_started) * 1000)
-                scored = score_success(
+                scored = score_hybrid_success(
                     case,
                     repeat_index=repeat_index,
                     result=node_result,
@@ -251,7 +265,7 @@ async def run_hybrid_evaluation(
             if progress is not None:
                 progress(len(results), len(dataset.cases) * repeat_count, scored)
     result_tuple = tuple(results)
-    metrics = calculate_metrics(dataset.cases, result_tuple)
+    metrics = calculate_hybrid_metrics(dataset.cases, result_tuple)
     gate = (
         evaluate_smoke_gate(metrics)
         if stage in {"PROBE", "SMOKE"}
@@ -263,8 +277,8 @@ async def run_hybrid_evaluation(
     report = HybridEvaluationReport(
         run_id=uuid4(),
         stage=stage,
-        development_only=stage in {"PROBE", "SMOKE", "DEVELOPMENT"},
-        challenge_consumed=stage == "FORMAL_CHALLENGE",
+        development_only=stage in {"PROBE", "SMOKE", "DEVELOPMENT", "HISTORICAL_REGRESSION"},
+        challenge_consumed=stage in {"HISTORICAL_REGRESSION", "FORMAL_CHALLENGE"},
         dataset_id=dataset.metadata.dataset_id,
         dataset_version=dataset.metadata.dataset_version,
         dataset_hash=dataset.metadata.dataset_hash,

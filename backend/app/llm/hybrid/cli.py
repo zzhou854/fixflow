@@ -24,7 +24,10 @@ from app.llm.validation.parser import StructuredInterpretationParser
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DATASET = ROOT / "evals" / "datasets" / "resident_interpretation_v1.jsonl"
-CHALLENGE_DATASET = ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v1.jsonl"
+HISTORICAL_CHALLENGE_DATASET = (
+    ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v1.jsonl"
+)
+CHALLENGE_DATASET = ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v2.jsonl"
 SMOKE_DEFINITION = ROOT / "evals" / "development" / "resident_interpretation_prompt_v2_smoke.json"
 
 
@@ -36,6 +39,7 @@ def parser() -> argparse.ArgumentParser:
             "probe",
             "smoke",
             "development",
+            "historical-challenge",
             "formal-regression",
             "formal-challenge",
         ),
@@ -95,6 +99,8 @@ async def _run(args: argparse.Namespace) -> int:
             stage = "SMOKE"
         elif args.stage == "development":
             stage = "DEVELOPMENT"
+        elif args.stage == "historical-challenge":
+            stage = "HISTORICAL_REGRESSION"
         elif args.stage == "formal-regression":
             stage = "FORMAL_REGRESSION"
         else:
@@ -133,7 +139,9 @@ async def _run(args: argparse.Namespace) -> int:
         "runtime_commit": report.runtime_commit,
         "source_clean": report.source_clean,
         "challenge_live_calls": (
-            report.evaluation_call_count if report.stage == "FORMAL_CHALLENGE" else 0
+            report.evaluation_call_count
+            if report.stage in {"HISTORICAL_REGRESSION", "FORMAL_CHALLENGE"}
+            else 0
         ),
         "artifact": str(args.output),
     }
@@ -145,12 +153,14 @@ def _dataset(stage: str, probe_count: int) -> EvaluationDataset:
     dataset = load_dataset(DEFAULT_DATASET)
     if stage in {"development", "formal-regression"}:
         return dataset
-    if stage == "formal-challenge":
-        challenge = load_dataset(CHALLENGE_DATASET)
+    if stage in {"historical-challenge", "formal-challenge"}:
+        historical = stage == "historical-challenge"
+        challenge = load_dataset(HISTORICAL_CHALLENGE_DATASET if historical else CHALLENGE_DATASET)
         validate_challenge_isolation(
             challenge,
             regression=dataset,
             prompts=(),
+            expected_version="1.0.0" if historical else "2.0.0",
         )
         return challenge
     if stage == "smoke":

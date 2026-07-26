@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.agent.enums import AcceptanceDecision, AgentIntent, IssueField, SafetyFlag
-from app.agent.models import TimeWindow
 from app.domain.enums import IssueCategory
 
 EvidenceText = Annotated[
@@ -17,14 +17,14 @@ EvidenceText = Annotated[
 FactName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{1,79}$")]
 
 ARCHITECTURE_ID = "hybrid_interpretation"
-ARCHITECTURE_VERSION = "1.4.0"
+ARCHITECTURE_VERSION = "1.7.0"
 FACT_SCHEMA_VERSION = "resident-facts-v1"
 DECISION_ENGINE_ID = "resident_interpretation_decision_engine"
 DECISION_ENGINE_VERSION = "1.0.0"
 SAFETY_POLICY_VERSION = "1.0.0"
 REQUIREMENTS_POLICY_VERSION = "1.0.0"
 HYBRID_SCORER_ID = "resident_hybrid_interpretation_scorer"
-HYBRID_SCORER_VERSION = "1.0.0"
+HYBRID_SCORER_VERSION = "1.1.0"
 
 
 class HybridModel(BaseModel):
@@ -73,6 +73,13 @@ class FactConfidence(HybridModel):
     confidence: float = Field(ge=0, le=1)
 
 
+class ExtractedAvailabilityWindow(HybridModel):
+    """Provider claim; temporal invariants are enforced by the normalizer."""
+
+    starts_at: datetime
+    ends_at: datetime
+
+
 class ExtractedResidentFactsV1(HybridModel):
     schema_version: Literal["resident-facts-v1"] = "resident-facts-v1"
     issue_description_present: bool
@@ -101,7 +108,7 @@ class ExtractedResidentFactsV1(HybridModel):
     time_expression_present: bool
     time_expression_text: str | None = Field(default=None, max_length=500)
     time_expression_evidence: EvidenceSpan | None = None
-    availability_windows: tuple[TimeWindow, ...] = Field(default=(), max_length=20)
+    availability_windows: tuple[ExtractedAvailabilityWindow, ...] = Field(default=(), max_length=20)
     correction_present: bool
     corrected_fields: tuple[CorrectedFact, ...] = Field(default=(), max_length=5)
     safety_evidence: tuple[SafetyEvidence, ...] = Field(default=(), max_length=20)
@@ -109,8 +116,14 @@ class ExtractedResidentFactsV1(HybridModel):
     small_talk_only: bool
     confidence_by_fact: tuple[FactConfidence, ...] = Field(default=(), max_length=40)
 
+
+class NormalizedResidentFactsV1(ExtractedResidentFactsV1):
+    source_text: str = Field(min_length=1, max_length=4000)
+    rejected_evidence_count: int = Field(default=0, ge=0)
+    conflict_codes: tuple[str, ...] = ()
+
     @model_validator(mode="after")
-    def validate_boolean_evidence_pairs(self) -> ExtractedResidentFactsV1:
+    def validate_boolean_evidence_pairs(self) -> NormalizedResidentFactsV1:
         pairs = (
             (self.issue_description_present, self.issue_description_evidence, "description"),
             (self.location_mentioned, self.location_evidence, "location"),
@@ -148,12 +161,6 @@ class ExtractedResidentFactsV1(HybridModel):
         if self.correction_present != bool(self.corrected_fields):
             raise ValueError("correction boolean and corrected_fields must agree")
         return self
-
-
-class NormalizedResidentFactsV1(ExtractedResidentFactsV1):
-    source_text: str = Field(min_length=1, max_length=4000)
-    rejected_evidence_count: int = Field(default=0, ge=0)
-    conflict_codes: tuple[str, ...] = ()
 
 
 class DecisionTraceEntry(HybridModel):

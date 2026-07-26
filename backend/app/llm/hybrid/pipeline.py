@@ -19,6 +19,7 @@ from app.agent.models import (
     LLMMessage,
     LLMRequestConfig,
     NodeMetadata,
+    TimeWindow,
 )
 from app.agent.ports import LLMProvider
 from app.llm.hybrid.decision import (
@@ -141,7 +142,10 @@ class HybridInterpretationNode:
                 facts.issue_description_text if facts.issue_description_present else None
             ),
             safety_flags=decision.safety_flags,
-            user_availability_windows=facts.availability_windows,
+            user_availability_windows=tuple(
+                TimeWindow.model_validate(window.model_dump())
+                for window in facts.availability_windows
+            ),
             user_correction=facts.correction_present,
             acceptance_decision=facts.acceptance_decision,
             requested_human=decision.requested_human,
