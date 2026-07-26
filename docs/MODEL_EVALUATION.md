@@ -1,5 +1,13 @@
 # Model evaluation
 
+> `hybrid_interpretation@3.0.0` passed Smoke, two development repeats, and two
+> clean-commit formal regression repeats. Its single 120-case locked
+> engineering Holdout failed intent, clarification, missing-field, safety,
+> critical-safety, and human-request gates. The Holdout is consumed; repeat 2
+> was skipped. Formal qualification is `NOT_QUALIFIED`, no Baseline or Release
+> Candidate exists, and activation is prohibited. See
+> `HYBRID_3_0_QUALIFICATION_BLOCKER.md`.
+
 Task 17 evaluates `hybrid_interpretation` as a new architecture identity. The
 existing 120-case corpus is a development regression corpus because it has
 already informed prompt and rule development. The locked 60-case Challenge v1
