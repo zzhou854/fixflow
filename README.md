@@ -1,5 +1,11 @@
 # FixFlow
 
+The current model-quality work is a non-activated hybrid interpretation
+candidate: an LLM extracts evidence-backed language facts and deterministic code
+owns safety, intent, missing-field, and clarification decisions. The public
+Agent contract remains `interpretation-result-v1`, and the default provider
+remains `scripted`. See `docs/HYBRID_INTERPRETATION.md`.
+
 FixFlow is a recoverable and auditable property-maintenance coordination agent.
 It converts a resident's changing, multi-turn repair request into constrained
 business state and reliably advances a long-running task across the resident,

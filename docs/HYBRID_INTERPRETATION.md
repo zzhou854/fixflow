@@ -1,0 +1,90 @@
+# Hybrid resident interpretation
+
+## Status and identities
+
+Task 17 introduces an internal candidate architecture without activating it:
+
+```text
+architecture       hybrid_interpretation@1.0.0
+fact prompt        resident_fact_extraction@1.0.0
+fact schema        resident-facts-v1
+decision engine    resident_interpretation_decision_engine@1.0.0
+safety policy      1.0.0
+requirements       1.0.0
+hybrid scorer      resident_hybrid_interpretation_scorer@1.0.0
+external schema    interpretation-result-v1
+```
+
+The default product provider remains `scripted`. The historic GLM and DeepSeek
+direct-interpretation results remain immutable evidence about the previous
+single-call architecture; they are not qualification evidence for this
+candidate.
+
+## Responsibility boundary
+
+```text
+bounded resident input
+  -> provider transport
+  -> ExtractedResidentFactsV1
+  -> ResidentFactNormalizer
+  -> HybridSafetyDetector
+  -> ResidentIntentDecisionEngine
+  -> IntentRequirementPolicy
+  -> clarification from missing fields
+  -> InterpretationConflictDetector
+  -> optional controlled fact verification
+  -> InterpretMessageOutput (interpretation-result-v1)
+```
+
+The model extracts language facts and exact evidence. It does not return the
+final intent, missing fields, clarification decision, authorization, business
+IDs, slot truth, mutation plans, or tool calls. Deterministic code owns the
+final business-facing interpretation.
+
+`EvidenceSpan.text` must normalize to a substring of the current resident
+message. Unsupported evidence is rejected before decisions. Facts are strict
+Pydantic models with `extra="forbid"`; raw provider messages, reasoning,
+credentials, and complete prompts are not persisted.
+
+## Deterministic decisions
+
+The engine uses the already frozen `AgentIntent` values. It does not introduce
+parallel intent names:
+
+1. explicit human request;
+2. explicit appointment reschedule;
+3. correction or bounded field supplement;
+4. cancellation, acceptance, or status query;
+5. explicit appointment-slot request;
+6. new supported repair;
+7. non-repair or insufficient evidence (`UNKNOWN`).
+
+Missing fields are computed from typed facts and bounded state context. Database
+IDs, authorization, slot availability, expected versions, duplicate detection,
+and idempotency material are never requested from a resident. Clarification is
+exactly `bool(missing_fields)`.
+
+Safety is the stable union of validated model evidence and deterministic
+patterns. Patterns include negation and hypothetical guards and map only to the
+frozen `SafetyFlag` enum. Safety evidence does not set severity or execute an
+escalation.
+
+## Controlled verification
+
+Version 1 normally makes one model call. A supplied verifier may be called at
+most once when the conflict detector reports a bounded conflict. Its output is
+only `SUPPORTED`, `NOT_SUPPORTED`, or `INSUFFICIENT_EVIDENCE`; it cannot produce
+an interpretation or call a tool. Verification is not enabled by default.
+
+## Compatibility and side effects
+
+`HybridInterpretationNode` returns the existing `InterpretationNodeResult`, so
+Graph merge, API, Replay, and clients continue to consume
+`interpretation-result-v1`. Existing Scripted and recorded interpretations are
+unchanged. The client cannot select an internal architecture or prompt.
+
+Interpretation evaluation has no MCP calls, business mutations, Outbox writes,
+Checkpoint writes, Replay writes, business Trace writes, or business database
+writes. Challenge corpus v1 remains locked and must not receive a live call
+until the candidate, model, policies, scorer, tests, and clean runtime commit are
+all frozen after two passing development repeats.

@@ -1,5 +1,13 @@
 # Model evaluation
 
+Task 17 evaluates `hybrid_interpretation` as a new architecture identity. The
+existing 120-case corpus is a development regression corpus because it has
+already informed prompt and rule development. The locked 60-case Challenge v1
+remains unconsumed until a model and all deterministic components pass two
+independent development repeats from a clean committed runtime. Hybrid
+qualification reports final `interpretation-result-v1` metrics and separate
+diagnostic fact/evidence metrics; fact metrics never replace release gates.
+
 ## Scope and identity
 
 Task 14 adds local release infrastructure for the structured resident

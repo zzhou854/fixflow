@@ -1,5 +1,11 @@
 # FixFlow implementation roadmap
 
+Current reliability work: Task 17 is implementing and qualifying a deterministic
+hybrid resident-interpretation candidate. This does not activate an online
+provider, change the default `scripted` provider, add a migration, or expand
+Agent/MCP business scope. Formal qualification, baseline, and release-candidate
+evidence remain pending until all development and locked-Challenge gates pass.
+
 ## Project north star
 
 **FixFlow: a recoverable and auditable property-maintenance coordination Agent.**

@@ -14,13 +14,7 @@ from datetime import UTC, datetime
 import httpx
 from pydantic import BaseModel
 
-from app.agent.models import (
-    InterpretMessageOutput,
-    LLMMessage,
-    LLMRequestConfig,
-    StructuredLLMResult,
-    TextLLMResult,
-)
+from app.agent.models import LLMMessage, LLMRequestConfig, StructuredLLMResult, TextLLMResult
 from app.agent_runtime.execution_context import current_execution_context
 from app.infrastructure.database.models.observability import TraceSource
 from app.llm.errors import LLMProviderError, LLMProviderErrorCode
@@ -95,8 +89,6 @@ class DeepSeekStructuredInterpretationProvider:
         response_model: type[BaseModel],
         model_config: LLMRequestConfig,
     ) -> StructuredLLMResult:
-        if response_model is not InterpretMessageOutput:
-            raise ValueError("DeepSeek provider supports only InterpretMessageOutput")
         encoded_messages = [
             {"role": message.role.value.lower(), "content": message.content} for message in messages
         ]
@@ -114,6 +106,7 @@ class DeepSeekStructuredInterpretationProvider:
             async with asyncio.timeout(self._config.total_timeout_seconds):
                 return await self._attempts(
                     encoded_messages,
+                    response_model=response_model,
                     model_config=model_config,
                     input_hash=input_hash,
                     started=started,
@@ -132,6 +125,7 @@ class DeepSeekStructuredInterpretationProvider:
         self,
         messages: list[dict[str, str]],
         *,
+        response_model: type[BaseModel],
         model_config: LLMRequestConfig,
         input_hash: str,
         started: float,
@@ -142,6 +136,7 @@ class DeepSeekStructuredInterpretationProvider:
                 response = await self._call(messages)
                 result = self._response_result(
                     response,
+                    response_model=response_model,
                     model_config=model_config,
                     attempt=attempt,
                     latency_ms=int((time.monotonic() - started) * 1000),
@@ -224,6 +219,7 @@ class DeepSeekStructuredInterpretationProvider:
         self,
         response: httpx.Response,
         *,
+        response_model: type[BaseModel],
         model_config: LLMRequestConfig,
         attempt: int,
         latency_ms: int,
@@ -262,15 +258,26 @@ class DeepSeekStructuredInterpretationProvider:
         transport_tool_call_count = (
             len(tool_calls) if isinstance(tool_calls, list) else int(tool_calls is not None)
         )
-        interpretation = self._parser.parse(
-            message.get("content"),
-            provider=self.provider_name,
-            model=self._config.model,
-        )
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise self._error(
+                LLMProviderErrorCode.EMPTY_RESPONSE,
+                retryable=False,
+                attempt_count=attempt,
+            )
+        try:
+            structured = response_model.model_validate_json(content)
+        except Exception as exc:
+            raise self._error(
+                LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED,
+                retryable=False,
+                attempt_count=attempt,
+                cause=exc,
+            ) from exc
         usage = payload.get("usage")
         usage_values = usage if isinstance(usage, dict) else {}
         return StructuredLLMResult(
-            payload=interpretation.model_dump(mode="json", exclude_none=True),
+            payload=structured.model_dump(mode="json", exclude_none=True),
             provider=self.provider_name,
             model=self._config.model,
             prompt_name=model_config.prompt_name,

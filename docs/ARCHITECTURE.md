@@ -125,6 +125,13 @@ or database session. Only deterministic merge code can update work state after
 interpretation. The LLM cannot set domain status, authorize property access,
 select mutation retry behavior, or claim a business write succeeded.
 
+Task 17 adds a non-activated hybrid interpretation candidate behind the same
+formal output contract. Its provider transport extracts strict, evidence-backed
+resident facts; deterministic normalisation, safety, intent, requirement, and
+clarification components then construct `interpretation-result-v1`. Business
+rules are not embedded in the DeepSeek or Z.AI transport adapters. See
+`docs/HYBRID_INTERPRETATION.md`.
+
 Agent State contains conversation work and cached aggregate versions, never the
 authoritative ticket/appointment record. Established category,
 normalized-location, or durable task-intent changes increment `intent_version`,
