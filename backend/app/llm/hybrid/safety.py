@@ -23,24 +23,24 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
     SafetySignal.SMOKE: (re.compile(r"(冒烟|浓烟|烟雾)"),),
     SafetySignal.OPEN_FLAME: (re.compile(r"(明火|起火|着火|火势)"),),
     SafetySignal.ELECTRICAL_ARC: (
-        re.compile(r"(电线|插座|配电|电器|电表箱|开关).{0,8}(打火|火花|冒烟|起火)"),
+        re.compile(r"(电线|插座|配电|电器|电表箱|开关).{0,8}(打火|火花|冒.{0,2}烟|起火)"),
         re.compile(r"冒烟风险"),
     ),
-    SafetySignal.ELECTRIC_SHOCK: (re.compile(r"(触电|漏电|带电)"),),
+    SafetySignal.ELECTRIC_SHOCK: (re.compile(r"(触电|漏电|带电|裸露.{0,4}导线.{0,6}通电)"),),
     SafetySignal.ACTIVE_FLOODING: (
         re.compile(r"(大量|不停|正在|爆裂|成股).{0,8}(漏水|淌水|涌出|积水|往下流)"),
         re.compile(
             r"(水管爆|水管.{0,4}爆开|大量水|水正在涌|不断往下涌水|"
-            r"积水(越来越多|迅速增多))"
+            r"积水(越来越多|迅速增多|正在迅速扩大)|水帘.{0,8}往下灌|进水管.{0,6}(崩开|爆开))"
         ),
     ),
     SafetySignal.WATER_NEAR_ELECTRICITY: (
         re.compile(
             r"(水|积水|漏水|淌水|水滴).{0,16}"
-            r"(电线|插座|插排|插线板|电器|冰箱|灯|浴霸)"
+            r"(电线|插座|墙插|排插|插排|插线板|电器|冰箱|灯|灯具|浴霸)"
         ),
         re.compile(
-            r"(电线|插座|插排|插线板|电器|灯|浴霸).{0,16}"
+            r"(电线|插座|墙插|排插|插排|插线板|电器|灯|灯具|浴霸).{0,20}"
             r"(水|积水|漏水|淌水|水滴)"
         ),
     ),
@@ -53,7 +53,7 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
         re.compile(r"(玻璃|天花板|吊顶).{0,8}松动"),
     ),
     SafetySignal.PERSON_INJURED: (
-        re.compile(r"(有人|人员|住户|孩子|家人|老人).{0,8}(受伤|流血)"),
+        re.compile(r"(有人|人员|住户|孩子|家人|老人).{0,12}(受伤|流血|划伤|砸伤|摔伤)"),
         re.compile(r"(砸伤|摔伤|划伤).{0,5}(人|家人|住户)"),
         re.compile(r"(砸到|撞到).{0,3}(人|家人|住户)"),
     ),

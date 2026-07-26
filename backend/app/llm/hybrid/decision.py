@@ -29,22 +29,27 @@ _VAGUE_ISSUE = re.compile(
 )
 _ISSUE_ACTION = re.compile(
     r"(漏水|渗水|滴水|门锁|门把手|插座|电线|灯|跳闸|故障|不正常|"
-    r"不热|堵住|开不了|合不上|噪声|报修|维修|检修|处理|看看)"
+    r"不热|堵住|开不了|合不上|扣不上|不通电|不亮|渗|划伤|"
+    r"噪声|报修|维修|检修|处理|看看)"
 )
 _BOOKING_COMMAND = re.compile(r"(我想预约|请约|想约|直接约|能排|请安排上门|保证|只要.{0,10}来维修)")
 _STRONG_RESCHEDULE = re.compile(
     r"(改期|预约.{0,8}(改|换)|原预约|之前的预约|已经约好|上次约|"
-    r"换个时间|换个日子|这个时间不行|不要原来的|调整.{0,4}(到|为)|都可以改|"
-    r"改到|就改到|还是改到|改成|朋友家的预约|已约.{0,8}改|原来约|"
-    r"预约.{0,8}(挪到|往后推)|上门时间.{0,8}(改|调)|"
-    r"上门.{0,8}(延后|另约)|新的时间还没定|重新约)"
+    r"换个时间|换个日子|这个时间不行|不要原来的|调整.{0,4}到|"
+    r"调整为.{0,6}(周|星期|上午|下午|晚上|明天|后天)|都可以改|"
+    r"改到|就改到|还是改到|朋友家的预约|已约.{0,8}(改|换)|原来约|"
+    r"预约.{0,8}(挪到|调到|往后推)|上门(时间|日期).{0,8}(改|调|换)|"
+    r"(师傅|上门|到访).{0,8}改成|"
+    r"上门.{0,8}(延后|另约)|来的时间.{0,8}重新安排|新的时间还没定|重新约)"
 )
 _SLOT_SELECTION = re.compile(
-    r"(我选.{0,6}(第[一二三四五六七八九十]|最后)|选.{0,10}(师傅|那一档|时间)|"
+    r"(我选.{0,8}(第[一二三四五六七八九十]|最后)|"
+    r"(选|确认).{0,10}(第[一二三四五六七八九十]|师傅|那一档|时间)|"
     r"(第[一二三四五六七八九十]|最后).{0,6}(个|项|档|时间).{0,4}(可以|就行)|"
     r"候选列表.{0,8}第[一二三四五六七八九十]项|"
-    r"(选|就定).{0,8}(中间那个|那一个时间段))"
+    r"(选|就定|确认).{0,12}(中间那个|那一个时间段|对应的那个时段|排在最前面))"
 )
+_SUPPLEMENT = re.compile(r"(补充|情况有变化|再说明|位置是|日期是|时间是)")
 _PRECISE_TIME = re.compile(
     r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上).{0,12}"
     r"(周[一二三四五六日天]|星期[一二三四五六日天]|\d{4}年|\d{1,2}月|"
@@ -119,7 +124,14 @@ def _decide_intent(
     if facts.unsupported_request_evidence and not facts.issue_category_evidence:
         trace.append(DecisionTraceEntry(rule_id="INTENT_UNSUPPORTED", outcome="UNKNOWN"))
         return AgentIntent.UNKNOWN
-    if facts.reschedule_request_mentioned and _STRONG_RESCHEDULE.search(facts.source_text):
+    contextual_reschedule = "改成" in facts.source_text and any(
+        marker in message.content
+        for message in node_input.recent_conversation_messages
+        for marker in ("原预约", "预约时间", "新的可用时间")
+    )
+    if facts.reschedule_request_mentioned and (
+        _STRONG_RESCHEDULE.search(facts.source_text) or contextual_reschedule
+    ):
         trace.append(
             DecisionTraceEntry(
                 rule_id="INTENT_RESCHEDULE_PRIORITY", outcome="RESCHEDULE_APPOINTMENT"
@@ -176,10 +188,13 @@ def _decide_intent(
             )
         )
         return AgentIntent.PROVIDE_INFORMATION
-    if _SLOT_SELECTION.search(facts.source_text) and any(
-        marker in message.content
-        for message in node_input.recent_conversation_messages
-        for marker in ("可选", "候选", "时间", "时段", "档", "列表", "维修人员")
+    if _SLOT_SELECTION.search(facts.source_text) and (
+        any(marker in facts.source_text for marker in ("候选", "列表", "师傅", "时段"))
+        or any(
+            marker in message.content
+            for message in node_input.recent_conversation_messages
+            for marker in ("可选", "候选", "时间", "时段", "档", "列表", "维修人员")
+        )
     ):
         trace.append(
             DecisionTraceEntry(
@@ -188,6 +203,14 @@ def _decide_intent(
             )
         )
         return AgentIntent.SELECT_APPOINTMENT_SLOT
+    if _SUPPLEMENT.search(facts.source_text):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_EXPLICIT_SUPPLEMENT",
+                outcome="PROVIDE_INFORMATION",
+            )
+        )
+        return AgentIntent.PROVIDE_INFORMATION
     if (
         facts.time_expression_present
         and node_input.current_state_summary.task_intent is AgentIntent.SELECT_APPOINTMENT_SLOT
@@ -197,7 +220,14 @@ def _decide_intent(
             DecisionTraceEntry(rule_id="INTENT_TIME_SUPPLEMENT", outcome="PROVIDE_INFORMATION")
         )
         return AgentIntent.PROVIDE_INFORMATION
-    if facts.booking_request_mentioned and _BOOKING_COMMAND.search(facts.source_text):
+    if (
+        facts.booking_request_mentioned
+        and _BOOKING_COMMAND.search(facts.source_text)
+        and (
+            node_input.current_state_summary.task_intent is AgentIntent.SELECT_APPOINTMENT_SLOT
+            or (not facts.issue_category_evidence and not facts.issue_description_present)
+        )
+    ):
         trace.append(
             DecisionTraceEntry(rule_id="INTENT_BOOKING_REQUEST", outcome="SELECT_APPOINTMENT_SLOT")
         )
@@ -277,7 +307,7 @@ def _decide_intent(
 class IntentRequirementPolicy:
     """Versioned deterministic missing-field policy for the frozen Agent enum."""
 
-    version: str = "1.1.0"
+    version: str = "1.2.0"
 
     def missing_fields(
         self,

@@ -50,6 +50,11 @@ async def test_consumed_challenge_corpora_are_historical_regression_only() -> No
             "challenge2-missing-009",
             "challenge2-correction-003",
         },
+        # This message explicitly says "卧室门锁"; the frozen v3 Golden
+        # incorrectly requires ISSUE_LOCATION to remain missing.
+        "resident_interpretation_challenge_v3.jsonl": {
+            "challenge3-missing-009",
+        },
     }
     for filename, expected in expected_failures.items():
         dataset = load_dataset(Path("backend/evals/datasets") / filename)
