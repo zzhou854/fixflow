@@ -5,12 +5,12 @@
 Task 17 introduces an internal candidate architecture without activating it:
 
 ```text
-architecture       hybrid_interpretation@2.0.0
+architecture       hybrid_interpretation@2.1.0
 fact prompt        resident_fact_extraction@1.0.0
 fact schema        resident-facts-v1
-decision engine    resident_interpretation_decision_engine@2.0.0
-safety policy      2.0.0
-requirements       2.0.0
+decision engine    resident_interpretation_decision_engine@2.1.0
+safety policy      2.1.0
+requirements       2.1.0
 hybrid scorer      resident_hybrid_interpretation_scorer@1.1.0
 external schema    interpretation-result-v1
 ```
@@ -21,9 +21,9 @@ single-call architecture; they are not qualification evidence for this
 candidate.
 
 DeepSeek V4 Flash passed two independent 120-case development repeats and all
-frozen development stability gates for candidate 2.0.0. Challenge v1–v4 were
+frozen development stability gates for candidate 2.1.0. Challenge v1–v5 were
 consumed by failed formal attempts and are now immutable historical regression
-evidence. The independently authored Challenge v5 has passed only
+evidence. The independently authored Challenge v6 has passed only
 offline identity, privacy, hash, and isolation checks; it has received zero
 online calls. No Baseline or Release Candidate exists yet. See
 `HYBRID_DEVELOPMENT_EVIDENCE.md`.
@@ -71,7 +71,7 @@ Candidate 1.4 validates `small_talk_only` and unsupported-request evidence
 against deterministic boundaries. Those model fields cannot suppress required
 repair clarification without matching message evidence.
 
-Candidate 2.0 keeps the provider schema closed and strongly typed while moving
+Candidate 2.1 keeps the provider schema closed and strongly typed while moving
 cross-field consistency and time-window ordering to the deterministic
 normalizer. A conflicting boolean/evidence pair or an end-before-start provider
 window is rejected as an untrusted fact instead of invalidating the entire
@@ -117,6 +117,6 @@ unchanged. The client cannot select an internal architecture or prompt.
 
 Interpretation evaluation has no MCP calls, business mutations, Outbox writes,
 Checkpoint writes, Replay writes, business Trace writes, or business database
-writes. Challenge corpus v5 must not receive a live call until the candidate,
+writes. Challenge corpus v6 must not receive a live call until the candidate,
 model, policies, scorer, tests, and clean runtime commit are all frozen after
 two passing development repeats.

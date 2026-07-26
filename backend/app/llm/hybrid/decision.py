@@ -51,7 +51,7 @@ _SLOT_SELECTION = re.compile(
     r"(选|就定|请定|确认).{0,12}(中间那个|那一个时间段|对应的那个时段|"
     r"排在最前面|最后一个时间))"
 )
-_SUPPLEMENT = re.compile(r"(补充|情况有变化|情况更新|再说明|位置是|日期是|时间是)")
+_SUPPLEMENT = re.compile(r"(补充|情况有变化|情况更新|最新情况|再说明|位置是|日期是|时间是)")
 _PRECISE_TIME = re.compile(
     r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上).{0,12}"
     r"(周[一二三四五六日天]|星期[一二三四五六日天]|\d{4}年|\d{1,2}月|"
@@ -168,7 +168,9 @@ def _decide_intent(
         facts.time_expression_present
         and not facts.issue_category_evidence
         and not _BOOKING_COMMAND.search(facts.source_text)
-        and any(marker in facts.source_text for marker in ("有空", "方便上门", "家里有人"))
+        and any(
+            marker in facts.source_text for marker in ("有空", "方便上门", "方便维修", "家里有人")
+        )
     ):
         trace.append(
             DecisionTraceEntry(
@@ -309,7 +311,7 @@ def _decide_intent(
 class IntentRequirementPolicy:
     """Versioned deterministic missing-field policy for the frozen Agent enum."""
 
-    version: str = "2.0.0"
+    version: str = "2.1.0"
 
     def missing_fields(
         self,
@@ -340,7 +342,10 @@ class IntentRequirementPolicy:
             if (
                 intent is AgentIntent.PROVIDE_INFORMATION
                 and facts.time_expression_present
-                and any(marker in facts.source_text for marker in ("有空", "方便上门", "家里有人"))
+                and any(
+                    marker in facts.source_text
+                    for marker in ("有空", "方便上门", "方便维修", "家里有人")
+                )
             ):
                 return ()
             if (

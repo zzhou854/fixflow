@@ -28,7 +28,7 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
     ),
     SafetySignal.ELECTRIC_SHOCK: (re.compile(r"(触电|漏电|带电|裸露.{0,4}导线.{0,6}通电)"),),
     SafetySignal.ACTIVE_FLOODING: (
-        re.compile(r"(大量|不停|正在|爆裂|成股).{0,8}(漏水|淌水|涌出|积水|往下流)"),
+        re.compile(r"(大量|不停|爆裂|成股).{0,8}(漏水|淌水|涌出|积水|往下流)"),
         re.compile(
             r"(水管爆|水管.{0,4}爆开|大量水|水正在涌|不断往下涌水|"
             r"积水(越来越多|迅速增多|正在迅速扩大)|水帘.{0,8}往下灌|进水管.{0,6}(崩开|爆开))"
@@ -37,10 +37,10 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
     SafetySignal.WATER_NEAR_ELECTRICITY: (
         re.compile(
             r"(水|积水|漏水|淌水|水滴).{0,16}"
-            r"(电线|插座|墙插|排插|插排|插线板|电器|冰箱|灯|灯具|浴霸)"
+            r"(电线|插座|墙插|排插|插排|插线板|插头|电器|冰箱|灯|灯具|浴霸)"
         ),
         re.compile(
-            r"(电线|插座|墙插|排插|插排|插线板|电器|灯|灯具|浴霸).{0,20}"
+            r"(电线|插座|墙插|排插|插排|插线板|插头|电器|灯|灯具|浴霸).{0,20}"
             r"(水|积水|漏水|淌水|水滴)"
         ),
     ),

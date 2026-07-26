@@ -56,6 +56,7 @@ async def test_consumed_challenge_corpora_are_historical_regression_only() -> No
             "challenge3-missing-009",
         },
         "resident_interpretation_challenge_v4.jsonl": set(),
+        "resident_interpretation_challenge_v5.jsonl": set(),
     }
     for filename, expected in expected_failures.items():
         dataset = load_dataset(Path("backend/evals/datasets") / filename)
