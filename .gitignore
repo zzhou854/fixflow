@@ -8,8 +8,7 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
-.artifacts/evaluations/
-.artifacts/hybrid-evaluations/
+.artifacts/
 .idea/
 .vscode/
 dist/

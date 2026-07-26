@@ -14,6 +14,7 @@ from app.domain.enums import IssueCategory, WorkflowStage
 from app.llm.hybrid.decision import InterpretationConflictDetector, ResidentIntentDecisionEngine
 from app.llm.hybrid.models import HybridDecision, NormalizedResidentFactsV1
 from app.llm.hybrid.normalizer import ResidentFactNormalizer
+from app.llm.hybrid.semantic import derive_semantic_features
 
 from tests.unit.llm.hybrid.conftest import empty_facts
 
@@ -207,3 +208,78 @@ def test_negated_model_safety_evidence_cannot_override_source_context() -> None:
         node_input=node_input(facts.source_text),
     )
     assert decision.safety_flags == ()
+
+
+@pytest.mark.parametrize(
+    ("message", "intent", "missing"),
+    [
+        ("卧室有个设施不能使用了，请检查。", AgentIntent.NEW_REPAIR, (IssueField.ISSUE_CATEGORY,)),
+        (
+            "已确认的预约时间不合适，要重新安排。",
+            AgentIntent.RESCHEDULE_APPOINTMENT,
+            (IssueField.AVAILABILITY,),
+        ),
+        ("就定孙师傅对应的时间段。", AgentIntent.SELECT_APPOINTMENT_SLOT, ()),
+        ("星期日全天都可以，维修时长由系统确定。", AgentIntent.PROVIDE_INFORMATION, ()),
+        (
+            "这次预约向后延，具体日期还没想好。",
+            AgentIntent.RESCHEDULE_APPOINTMENT,
+            (IssueField.AVAILABILITY,),
+        ),
+        ("报修不要撤销，只调整师傅上门时间到周三。", AgentIntent.RESCHEDULE_APPOINTMENT, ()),
+        ("不要自动安排师傅，让工作人员给我回电。", AgentIntent.REQUEST_HUMAN, ()),
+        ("帮我订购一份早餐送到楼下。", AgentIntent.UNKNOWN, ()),
+    ],
+)
+def test_challenge_v6_failure_families_are_generalized(
+    message: str,
+    intent: AgentIntent,
+    missing: tuple[IssueField, ...],
+) -> None:
+    decision = decide(message)[1]
+    assert decision.utterance_intent is intent
+    if missing:
+        assert set(decision.missing_fields).issuperset(missing)
+    else:
+        assert decision.missing_fields == ()
+
+
+@pytest.mark.parametrize(
+    ("message", "category"),
+    [
+        ("书房灯不断闪，请让物业人工处理。", IssueCategory.ELECTRICAL),
+        ("客厅灯无法点亮，没有烟、火花、异味或发热。", IssueCategory.ELECTRICAL),
+        ("老人困在储藏室，双方都无法开门。", IssueCategory.DOOR_LOCK),
+    ],
+)
+def test_challenge_v6_category_paraphrases_are_normalized(
+    message: str,
+    category: IssueCategory,
+) -> None:
+    facts, _ = decide(message)
+    from app.llm.hybrid.decision import resolved_issue_category
+
+    assert resolved_issue_category(facts) is category
+
+
+@pytest.mark.parametrize(
+    ("message", "feature"),
+    [
+        ("请让工作人员给我回电。", "callback_request"),
+        ("已确认的预约时间需要重新安排。", "confirmed_appointment_reference"),
+        ("原预约向后延，具体日期还没想好。", "availability_missing"),
+        ("就定王师傅对应的时间段。", "slot_selection_request"),
+        ("这个设施已经无法使用。", "generic_facility_failure"),
+        ("不要取消工单，只调整上门时间。", "negated_cancellation"),
+        ("维修时长由系统确定，星期日全天都可以。", "system_owned_duration"),
+    ],
+)
+def test_semantic_features_are_compositional(message: str, feature: str) -> None:
+    source = node_input(message)
+    facts = ResidentFactNormalizer().normalize(
+        empty_facts(),
+        current_user_message=message,
+    )
+    features = derive_semantic_features(facts, node_input=source)
+
+    assert getattr(features, feature) is True

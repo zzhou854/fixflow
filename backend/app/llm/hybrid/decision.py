@@ -16,6 +16,7 @@ from app.llm.hybrid.models import (
     NormalizedResidentFactsV1,
 )
 from app.llm.hybrid.safety import detect_safety_signals, map_safety_flags
+from app.llm.hybrid.semantic import ResidentSemanticFeatures, derive_semantic_features
 
 _ISSUE_ORDER = (
     IssueField.ISSUE_CATEGORY,
@@ -33,16 +34,6 @@ _ISSUE_ACTION = re.compile(
     r"噪声|报修|维修|检修|处理|看看)"
 )
 _BOOKING_COMMAND = re.compile(r"(我想预约|请约|想约|直接约|能排|请安排上门|保证|只要.{0,10}来维修)")
-_STRONG_RESCHEDULE = re.compile(
-    r"(改期|预约.{0,8}(改|换)|原预约|之前的预约|已经约好|上次约|"
-    r"换个时间|换个日子|这个时间不行|不要原来的|调整.{0,4}到|"
-    r"调整为.{0,6}(周|星期|上午|下午|晚上|明天|后天)|都可以改|"
-    r"改到|就改到|还是改到|朋友家的预约|已约.{0,8}(改|换)|原来约|"
-    r"预约.{0,8}(挪到|调到|调整到|往后推|延迟|延后)|"
-    r"上门(时间|日期).{0,8}(改|调|换|更换)|"
-    r"(师傅|上门|到访).{0,8}改成|另约.{0,8}时间|"
-    r"上门.{0,8}(延后|另约)|来的时间.{0,8}重新安排|新的时间还没定|重新约)"
-)
 _SLOT_SELECTION = re.compile(
     r"(我选.{0,8}(第[一二三四五六七八九十]|最后)|"
     r"(选|确认).{0,10}(第[一二三四五六七八九十]|师傅|那一档|时间)|"
@@ -92,6 +83,11 @@ def _time_is_actionable(
     if re.search(r"改到(明天|后天)", text):
         return True
     if re.search(
+        r"(调整|改|换|挪|延).{0,14}(周[一二三四五六日天]|星期[一二三四五六日天])",
+        text,
+    ):
+        return True
+    if re.search(
         r"(改|换|挪|调|调整).{0,6}(周[一二三四五六日天]|星期[一二三四五六日天]|"
         r"\d{1,2}号|[一二三四五六七八九十]{1,3}号)",
         text,
@@ -119,31 +115,25 @@ def _decide_intent(
     node_input: InterpretMessageInput,
     trace: list[DecisionTraceEntry],
     safety_flags: tuple[SafetyFlag, ...],
+    features: ResidentSemanticFeatures,
 ) -> AgentIntent:
-    if facts.explicit_human_request:
+    if features.explicit_human_request:
         trace.append(DecisionTraceEntry(rule_id="INTENT_HUMAN_PRIORITY", outcome="REQUEST_HUMAN"))
         return AgentIntent.REQUEST_HUMAN
-    contextual_reschedule = "改成" in facts.source_text and any(
-        marker in message.content
-        for message in node_input.recent_conversation_messages
-        for marker in ("原预约", "预约时间", "新的可用时间")
-    )
-    if facts.reschedule_request_mentioned and (
-        _STRONG_RESCHEDULE.search(facts.source_text) or contextual_reschedule
-    ):
+    if features.reschedule_request:
         trace.append(
             DecisionTraceEntry(
                 rule_id="INTENT_RESCHEDULE_PRIORITY", outcome="RESCHEDULE_APPOINTMENT"
             )
         )
         return AgentIntent.RESCHEDULE_APPOINTMENT
-    if facts.unsupported_request_evidence and not facts.issue_category_evidence:
+    if features.unsupported_service_request and not facts.issue_category_evidence:
         trace.append(DecisionTraceEntry(rule_id="INTENT_UNSUPPORTED", outcome="UNKNOWN"))
         return AgentIntent.UNKNOWN
     if facts.correction_present:
         trace.append(DecisionTraceEntry(rule_id="INTENT_CORRECTION", outcome="PROVIDE_INFORMATION"))
         return AgentIntent.PROVIDE_INFORMATION
-    if facts.explicit_cancellation_request:
+    if features.cancellation_request:
         intent = (
             AgentIntent.CANCEL_APPOINTMENT
             if facts.existing_appointment_mentioned or "预约" in facts.source_text
@@ -164,6 +154,14 @@ def _decide_intent(
             DecisionTraceEntry(rule_id="INTENT_STATUS_QUERY", outcome="QUERY_TICKET_STATUS")
         )
         return AgentIntent.QUERY_TICKET_STATUS
+    if features.availability_provided and features.system_owned_duration:
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_SYSTEM_DURATION_AVAILABILITY",
+                outcome="PROVIDE_INFORMATION",
+            )
+        )
+        return AgentIntent.PROVIDE_INFORMATION
     if (
         facts.time_expression_present
         and not facts.issue_category_evidence
@@ -183,6 +181,7 @@ def _decide_intent(
         facts.location_mentioned
         and not facts.issue_category_evidence
         and not _ISSUE_ACTION.search(facts.source_text)
+        and not features.generic_facility_failure
         and not safety_flags
     ):
         trace.append(
@@ -192,7 +191,7 @@ def _decide_intent(
             )
         )
         return AgentIntent.PROVIDE_INFORMATION
-    if _SLOT_SELECTION.search(facts.source_text) and (
+    if features.slot_selection_request and (
         any(marker in facts.source_text for marker in ("候选", "可选", "列表", "师傅", "时段"))
         or any(
             marker in message.content
@@ -225,7 +224,7 @@ def _decide_intent(
         )
         return AgentIntent.PROVIDE_INFORMATION
     if (
-        facts.booking_request_mentioned
+        features.new_booking_request
         and _BOOKING_COMMAND.search(facts.source_text)
         and (
             node_input.current_state_summary.task_intent is AgentIntent.SELECT_APPOINTMENT_SLOT
@@ -288,7 +287,8 @@ def _decide_intent(
         )
         return AgentIntent.PROVIDE_INFORMATION
     if (
-        _ISSUE_ACTION.search(facts.source_text)
+        features.generic_facility_failure
+        or _ISSUE_ACTION.search(facts.source_text)
         or facts.issue_category_evidence
         or any(
             marker in facts.source_text
@@ -311,7 +311,7 @@ def _decide_intent(
 class IntentRequirementPolicy:
     """Versioned deterministic missing-field policy for the frozen Agent enum."""
 
-    version: str = "2.1.0"
+    version: str = "2.3.0"
 
     def missing_fields(
         self,
@@ -321,15 +321,22 @@ class IntentRequirementPolicy:
         node_input: InterpretMessageInput,
         category: IssueCategory | None,
         safety_flags: tuple[SafetyFlag, ...],
+        features: ResidentSemanticFeatures,
     ) -> tuple[IssueField, ...]:
         if intent is AgentIntent.REQUEST_HUMAN or safety_flags:
             return ()
-        if facts.small_talk_only or facts.unsupported_request_evidence:
+        if facts.small_talk_only or features.unsupported_service_request:
             return ()
         if intent is AgentIntent.RESCHEDULE_APPOINTMENT:
-            return () if _time_is_actionable(facts, node_input) else (IssueField.AVAILABILITY,)
+            return (
+                (IssueField.AVAILABILITY,)
+                if features.availability_missing
+                else ()
+                if features.availability_provided or _time_is_actionable(facts, node_input)
+                else (IssueField.AVAILABILITY,)
+            )
         if intent is AgentIntent.SELECT_APPOINTMENT_SLOT:
-            if _SLOT_SELECTION.search(facts.source_text):
+            if features.slot_selection_request:
                 return ()
             if "还没报修" in facts.source_text or (
                 category is None
@@ -339,6 +346,12 @@ class IntentRequirementPolicy:
                 return (IssueField.ISSUE_CATEGORY, IssueField.ISSUE_DESCRIPTION)
             return () if _time_is_actionable(facts, node_input) else (IssueField.AVAILABILITY,)
         if intent in {AgentIntent.NEW_REPAIR, AgentIntent.UNKNOWN, AgentIntent.PROVIDE_INFORMATION}:
+            if (
+                intent is AgentIntent.PROVIDE_INFORMATION
+                and facts.time_expression_present
+                and features.system_owned_duration
+            ):
+                return ()
             if (
                 intent is AgentIntent.PROVIDE_INFORMATION
                 and facts.time_expression_present
@@ -423,6 +436,7 @@ class ResidentIntentDecisionEngine:
         node_input: InterpretMessageInput,
     ) -> HybridDecision:
         trace: list[DecisionTraceEntry] = []
+        features = derive_semantic_features(facts, node_input=node_input)
         signals = detect_safety_signals(facts)
         safety_flags = map_safety_flags(signals)
         trace.append(
@@ -431,7 +445,7 @@ class ResidentIntentDecisionEngine:
                 outcome=",".join(flag.value for flag in safety_flags) or "NONE",
             )
         )
-        intent = _decide_intent(facts, node_input, trace, safety_flags)
+        intent = _decide_intent(facts, node_input, trace, safety_flags, features)
         category = resolved_issue_category(facts)
         missing = self._requirements.missing_fields(
             intent=intent,
@@ -439,6 +453,7 @@ class ResidentIntentDecisionEngine:
             node_input=node_input,
             category=category,
             safety_flags=safety_flags,
+            features=features,
         )
         trace.append(
             DecisionTraceEntry(

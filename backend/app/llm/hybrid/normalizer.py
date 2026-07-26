@@ -55,8 +55,10 @@ _CATEGORY_TERMS: dict[IssueCategory, tuple[str, ...]] = {
         "顶灯",
         "灯坏",
         "灯不亮",
+        "灯无法点亮",
         "灯一直闪",
         "灯闪",
+        "灯不断闪",
         "忽明忽暗",
         "开关",
         "电表箱",
@@ -85,6 +87,7 @@ _CATEGORY_TERMS: dict[IssueCategory, tuple[str, ...]] = {
         "锁舌",
         "门扣不上",
         "开不了门",
+        "无法开门",
         "门锁扣不上",
     ),
 }
@@ -128,18 +131,22 @@ _HUMAN = re.compile(
     r"安排人工联系|和真人.{0,6}沟通|马上转人工|转接真人|真人客服|"
     r"(人工人员|物业工作人员|值班人员).{0,8}(跟进|沟通|联系|处理|接手)|"
     r"交给人工人员|接通.{0,6}(人工|真人|物业|工作人员)|只想和.{0,10}(物业|值班人员).{0,6}(谈|沟通)|"
-    r"(让|请).{0,6}(物业|值班人员).{0,6}(回电|接手)|直接安排人工|"
+    r"(让|请).{0,8}(物业|值班人员|工作人员).{0,8}(人工处理|回电|联系|接手)|"
+    r"不要自动安排.{0,8}(物业|值班人员|工作人员).{0,8}(回电|联系|处理)|直接安排人工|"
     r"(转给|交给).{0,5}(人工|真人|物业|值班人员)|不想继续填写.{0,8}人工|"
     r"(安排|请|帮我).{0,6}(人工|真人|物业|值班人员).{0,8}(回电|联系|处理|接手)|"
     r"(要|想).{0,4}和.{0,8}(值班|物业|工作人员).{0,6}(沟通|联系))"
 )
 _RESCHEDULE = re.compile(
     r"(改期|改.{0,6}(预约|时间)|改到|预约.{0,6}(改|换)|换个时间|"
-    r"原预约|原来的预约|原来约|原先约|已经约好|上次约|不要原来的|调整到|调整为|都可以改|就改到|还是改到|改成|"
+    r"原预约|原来的预约|原来约|原先约|已经约好|上次约|不要原来的|调整到|调整为|都可以改|就改到|还是改到|"
+    r"改成.{0,4}(周|星期|明天|后天|上午|下午|晚上)|"
     r"已约.{0,8}(改|换)|预约.{0,8}挪到|预约.{0,8}(换到|调到)|预约.{0,8}往后推|"
     r"上门(时间|日期).{0,8}(改|调|换|更换)|上门.{0,8}(延后|延迟|另约)|"
     r"预约.{0,8}(延迟|延后)|来的时间.{0,8}重新安排|另约.{0,8}时间|"
-    r"新的时间还没定|新日期.{0,8}(确认|确定)|重新约)"
+    r"新的时间还没定|新日期.{0,8}(确认|确定)|重新约|"
+    r"已确认.{0,8}预约时间.{0,8}(不合适|重新安排)|"
+    r"预约.{0,6}(向后延|重新安排)|调整.{0,8}(师傅|维修人员).{0,8}上门时间)"
 )
 _BOOKING = re.compile(
     r"(预约|安排上门|请约|直接约|约.{0,8}(维修|师傅|上门)|"
@@ -150,6 +157,7 @@ _EXISTING_APPOINTMENT = re.compile(
     r"(之前的预约|原预约|原来的预约|已有预约|已约|上次约|这次上门预约|上门时间)"
 )
 _CANCELLATION = re.compile(r"(取消|不要.{0,4}(预约|工单)|撤销)")
+_NEGATED_CANCELLATION = re.compile(r"(不要|不|并非).{0,3}(取消|撤销)")
 _STATUS_QUERY = re.compile(r"(工单|报修|维修).{0,8}(状态|进度|怎么样|到哪)")
 _ACCEPT = re.compile(r"(验收通过|维修结果.{0,4}(接受|满意)|修好了)")
 _REJECT = re.compile(r"(验收不通过|维修结果.{0,4}(拒绝|不满意)|没修好|需要返工)")
@@ -161,7 +169,7 @@ _TIME = re.compile(
 _UNSUPPORTED = re.compile(
     r"(代缴|购买|买.{0,6}(饮料|商品)|订.{0,6}(晚餐|餐食)|"
     r"(车位|储物柜).{0,8}(出租|转租|租出去|出售|广告)|矿泉水|鲜花|"
-    r"(预订|订购).{0,10}(鲜花|商品|餐食)|发布.{0,8}(广告|信息)|"
+    r"(预订|订购).{0,10}(鲜花|商品|餐食|早餐)|发布.{0,8}(广告|信息)|"
     r"天气|吃什么药|法律意见|长期门禁|身份改成操作员|"
     r"隔壁住户|system prompt|api key|调用.{0,10}工具|create_ticket|"
     r"授予全部权限|伪造schema|忽略之前所有指令|不要返回 json|内部分析|"
@@ -492,7 +500,13 @@ class ResidentFactNormalizer:
             "explicit_cancellation_request",
             "cancellation_request_evidence",
             _CANCELLATION,
+            allowed=_NEGATED_CANCELLATION.search(source) is None,
         )
+        if _NEGATED_CANCELLATION.search(source) is not None:
+            if extracted.explicit_cancellation_request:
+                rejected += 1
+            updates["explicit_cancellation_request"] = False
+            updates["cancellation_request_evidence"] = None
         enrich("status_query_mentioned", "status_query_evidence", _STATUS_QUERY)
         if extracted.acceptance_decision is None:
             from app.agent.enums import AcceptanceDecision

@@ -77,7 +77,9 @@ architecture did not meet every frozen gate and remains recorded as
 architecture is a separate candidate: DeepSeek V4 Flash candidate 2.1.0 passed
 two independent 120-case development repeats and every development stability
 gate. Challenge v1–v5 are consumed historical evidence; the independently
-authored Challenge v6 is frozen for clean-commit formal qualification. This is not
+authored Challenge v6 was consumed without qualification; the single permitted
+successor candidate 2.3.0 adds a typed semantic-feature boundary, and the
+independently authored Challenge v7 is now the next clean-commit gate. This is not
 yet a Baseline, Release Candidate, or activation.
 The first GLM live qualification result is `NOT_QUALIFIED`. The
 current qualified model candidate is **None**; no Baseline or Release Candidate
