@@ -74,13 +74,12 @@ GLM-5.1 and DeepSeek-V4 Flash/Pro structured interpretation adapters are
 available behind explicit configuration. The historic DeepSeek direct-output
 architecture did not meet every frozen gate and remains recorded as
 `DEEPSEEK_V4_MODEL_CAPABILITY_BLOCKER`. The new deterministic hybrid
-architecture is a separate candidate: DeepSeek V4 Flash candidate 2.1.0 passed
-two independent 120-case development repeats and every development stability
-gate. Challenge v1–v5 are consumed historical evidence; the independently
-authored Challenge v6 was consumed without qualification; the single permitted
-successor candidate 2.3.0 adds a typed semantic-feature boundary, and the
-independently authored Challenge v7 is now the next clean-commit gate. This is not
-yet a Baseline, Release Candidate, or activation.
+architecture is a separate candidate. DeepSeek V4 Flash candidate 2.3.0 passed
+two independent 120-case formal Regression runs and every Regression stability
+gate. The one-time locked Challenge v7 run completed without infrastructure
+failures but failed clarification, missing-field, safety, and critical-safety
+gates. Challenge v7 is consumed and no second repeat was run. No Baseline or
+Release Candidate was created, and activation remains prohibited.
 The first GLM live qualification result is `NOT_QUALIFIED`. The
 current qualified model candidate is **None**; no Baseline or Release Candidate
 was published, and the default runtime remains Scripted. See
@@ -90,7 +89,8 @@ first 120-case repeat suffered 87 terminal rate-limit
 failures; the locked Challenge Corpus was not called. See
 `docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md`,
 `docs/DEEPSEEK_V4_CAPABILITY_REPORT.md`, and
-`docs/HYBRID_DEVELOPMENT_EVIDENCE.md`. Formal hybrid qualification, online
+`docs/HYBRID_DEVELOPMENT_EVIDENCE.md` and
+`docs/HYBRID_2_3_FORMAL_QUALIFICATION_REPORT.md`. Formal hybrid qualification, online
 embedding, online free-text generation, the ReAct baseline, and Stage D
 ablations remain mandatory roadmap work, not cancelled scope.
 Replay verifies control-plane determinism;

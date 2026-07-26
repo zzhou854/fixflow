@@ -20,13 +20,12 @@ direct-interpretation results remain immutable evidence about the previous
 single-call architecture; they are not qualification evidence for this
 candidate.
 
-DeepSeek V4 Flash passed two independent 120-case development repeats and all
-frozen development stability gates for candidate 2.1.0. Challenge v1–v6 were
-consumed by failed formal attempts and are now immutable historical regression
-evidence. The independently authored Challenge v7 has passed only
-offline identity, privacy, hash, and isolation checks; it has received zero
-online calls. No Baseline or Release Candidate exists yet. See
-`HYBRID_DEVELOPMENT_EVIDENCE.md`.
+DeepSeek V4 Flash candidate 2.3.0 passed two independent clean-commit 120-case
+formal Regression runs and all six stability gates. Challenge v1-v6 remain
+immutable historical evidence. The independently authored Challenge v7 was
+consumed once: all 60 cases completed without provider failure, but four
+absolute quality gates failed. Its second repeat was not run. No Baseline or
+Release Candidate exists. See `HYBRID_2_3_FORMAL_QUALIFICATION_REPORT.md`.
 
 ## Responsibility boundary
 
