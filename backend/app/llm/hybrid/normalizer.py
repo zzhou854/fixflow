@@ -99,6 +99,11 @@ _VAGUE_DESCRIPTION = re.compile(
     r"^(坏了[.!。]?|麻烦帮我处理一下[.!。]?|[?？!！]+|\[图片\]|"
     r"就是那个东西坏[咯了]?[.!。]?|你猜一下哪里坏了就行[.!。]?)$"
 )
+_STRUCTURED_LOCATION = re.compile(
+    r"([A-Za-z]座[^,，。.!！?？]{0,12}房间|洗菜盆.{0,6}下方|"
+    r"马桶.{0,6}后面|墙角|门口地面)"
+)
+_CUSTOM_LOCATION_SOURCE = re.compile(r"[A-Za-z]座[^,，。.!！?？]{0,12}房间")
 
 
 def normalize_text(value: str) -> str:
@@ -172,10 +177,66 @@ class ResidentFactNormalizer:
                 if prefix in {"issue_description", "location", "time_expression"}:
                     updates[f"{prefix}_text"] = None
 
+        semantic_flags = (
+            (
+                "explicit_human_request",
+                "human_request_evidence",
+                extracted.human_request_evidence,
+                _HUMAN,
+            ),
+            (
+                "booking_request_mentioned",
+                "booking_request_evidence",
+                extracted.booking_request_evidence,
+                _BOOKING,
+            ),
+            (
+                "reschedule_request_mentioned",
+                "reschedule_request_evidence",
+                extracted.reschedule_request_evidence,
+                _RESCHEDULE,
+            ),
+            (
+                "explicit_cancellation_request",
+                "cancellation_request_evidence",
+                extracted.cancellation_request_evidence,
+                _CANCELLATION,
+            ),
+            (
+                "status_query_mentioned",
+                "status_query_evidence",
+                extracted.status_query_evidence,
+                _STATUS_QUERY,
+            ),
+        )
+        for present_field, evidence_field, evidence, pattern in semantic_flags:
+            present = bool(updates.get(present_field, getattr(extracted, present_field)))
+            if present and (
+                evidence is None or pattern.search(normalize_text(evidence.text)) is None
+            ):
+                rejected += 1
+                updates[present_field] = False
+                updates[evidence_field] = None
+        if extracted.acceptance_decision is not None:
+            evidence = extracted.acceptance_decision_evidence
+            accepted = evidence is not None and (
+                _ACCEPT.search(normalize_text(evidence.text)) is not None
+                or _REJECT.search(normalize_text(evidence.text)) is not None
+            )
+            if not accepted:
+                rejected += 1
+                updates["acceptance_decision"] = None
+                updates["acceptance_decision_evidence"] = None
+
         category_evidence = tuple(
             item
             for item in extracted.issue_category_evidence
             if _contains_evidence(source, item.evidence)
+            and any(
+                _active_term(source, term)
+                for term in _CATEGORY_TERMS[item.category]
+                if term in normalize_text(item.evidence.text)
+            )
         )
         rejected += len(extracted.issue_category_evidence) - len(category_evidence)
         existing_categories = {item.category for item in category_evidence}
@@ -191,6 +252,13 @@ class ResidentFactNormalizer:
 
         location = extracted.location_text
         location_evidence = extracted.location_evidence
+        if location is not None and not (
+            any(term in normalize_text(location) for term in _LOCATION_TERMS)
+            or _STRUCTURED_LOCATION.search(normalize_text(location)) is not None
+        ):
+            rejected += 1
+            location = None
+            location_evidence = None
         uncertainty = any(
             marker in source
             for marker in ("哪个门", "没想起来", "不确定是不是", "哪里坏", "什么地方")
@@ -198,7 +266,7 @@ class ResidentFactNormalizer:
         if (not location or not _contains_evidence(source, location_evidence)) and not uncertainty:
             term = _first_term(source, _LOCATION_TERMS)
             if term is None:
-                custom_location = re.search(r"[A-Za-z]座[^,，。.!！?？]{0,12}房间", source)
+                custom_location = _CUSTOM_LOCATION_SOURCE.search(source)
                 term = custom_location.group(0) if custom_location is not None else None
             if term is not None:
                 location = term
@@ -215,6 +283,12 @@ class ResidentFactNormalizer:
         description_present = extracted.issue_description_present
         description_text = extracted.issue_description_text
         description_evidence = extracted.issue_description_evidence
+        if _VAGUE_DESCRIPTION.fullmatch(source.casefold()):
+            if description_present:
+                rejected += 1
+            description_present = False
+            description_text = None
+            description_evidence = None
         has_issue_language = bool(category_evidence) or any(
             marker in source
             for marker in (
@@ -294,18 +368,25 @@ class ResidentFactNormalizer:
             )
             if isinstance(time_evidence, EvidenceSpan):
                 updates["time_expression_text"] = time_evidence.text
-        if not extracted.unsupported_request_evidence:
+        supported_unsupported = tuple(
+            item
+            for item in extracted.unsupported_request_evidence
+            if _UNSUPPORTED.search(normalize_text(item.text).casefold()) is not None
+        )
+        rejected += len(extracted.unsupported_request_evidence) - len(supported_unsupported)
+        updates["unsupported_request_evidence"] = supported_unsupported
+        if not supported_unsupported:
             match = _UNSUPPORTED.search(source.casefold())
             if match is not None:
                 updates["unsupported_request_evidence"] = (_evidence(match.group(0)),)
-        if not extracted.small_talk_only:
-            updates["small_talk_only"] = (
-                _SMALL_TALK.search(source.casefold()) is not None
-                and not has_issue_language
-                and not bool(
-                    updates.get("explicit_human_request", extracted.explicit_human_request)
-                )
-            )
+        deterministic_small_talk = (
+            _SMALL_TALK.search(source.casefold()) is not None
+            and not has_issue_language
+            and not bool(updates.get("explicit_human_request", extracted.explicit_human_request))
+        )
+        if extracted.small_talk_only and not deterministic_small_talk:
+            rejected += 1
+        updates["small_talk_only"] = deterministic_small_talk
 
         safety_evidence = tuple(
             item for item in extracted.safety_evidence if _contains_evidence(source, item.evidence)

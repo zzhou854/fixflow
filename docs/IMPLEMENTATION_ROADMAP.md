@@ -1,10 +1,11 @@
 # FixFlow implementation roadmap
 
-Current reliability work: Task 17 is implementing and qualifying a deterministic
-hybrid resident-interpretation candidate. This does not activate an online
-provider, change the default `scripted` provider, add a migration, or expand
-Agent/MCP business scope. Formal qualification, baseline, and release-candidate
-evidence remain pending until all development and locked-Challenge gates pass.
+Current reliability work: Task 17 has frozen
+`hybrid_interpretation@1.4.0` after DeepSeek V4 Flash passed two independent
+120-case development repeats and every stability gate. This does not activate
+an online provider, change the default `scripted` provider, add a migration, or
+expand Agent/MCP business scope. Formal Regression and locked-Challenge
+qualification, Baseline, and Release Candidate evidence remain pending.
 
 ## Project north star
 
@@ -221,7 +222,7 @@ is still required. No row may be removed or weakened without explicit user appro
 | `UNKNOWN_COMMIT` recovery | C | implemented | `backend/app/reconciliation`, `docs/RECONCILIATION.md`, Task 11 review | Three Resident Agent mutations plus one Operator-only escalation share one coordinator; real committed, not-committed, and inconsistent vertical cases recover without duplicate mutation | No |
 | Fault injection | C | implemented | `backend/app/fault_injection`, `docs/FAULT_INJECTION.md`, Task 11 review | Eight closed delivery/reconciliation fault points and vertical recovery cases pass | No |
 | Replay | C | implemented | `backend/app/replay`, `docs/REPLAY.md`, Task 12 review | Checksummed typed tape, same Graph topology, zero business side effects, ten-run repeatability, and Recovery Console | No |
-| Evaluation suite | D | partial | `backend/evals`, `backend/app/llm/evaluation`, Task 14–16 reports | 120-case development regression corpus, 60-case locked Challenge Corpus, versioned Prompt/Scorer semantics and release gates; Prompt v1 formal qualification is `NOT_QUALIFIED`, Prompt v2's historical run is infrastructure-blocked with quality `INCONCLUSIVE`, and rate-limit-aware scheduling is under verification; no Baseline or Release Candidate exists | No |
+| Evaluation suite | D | partial | `backend/evals`, `backend/app/llm/evaluation`, `backend/app/llm/hybrid`, Task 14–17 reports | 120-case development regression corpus, 60-case locked Challenge Corpus, versioned Prompt/Scorer semantics and release gates; historic direct-output results remain unchanged, while hybrid candidate 1.4.0 passed two complete development repeats and stability gates; formal locked-Challenge qualification, Baseline, and Release Candidate remain pending | No |
 | ReAct baseline | D | deferred | original project specification | Same-model/tool/data comparison is reproducible | No |
 | Core ablations | D | deferred | this roadmap | Three approved removals produce comparable metrics | No |
 | Resident frontend | B | partial | `frontend/src/pages/ResidentPage.tsx`, Task 9 review | Chat, status, typed interrupts, reschedule/human request work; cancellation and acceptance remain manual | No |

@@ -48,7 +48,13 @@ def _active_match(text: str, pattern: re.Pattern[str]) -> bool:
 
 
 def detect_safety_signals(facts: NormalizedResidentFactsV1) -> tuple[SafetySignal, ...]:
-    signals = {item.signal for item in facts.safety_evidence}
+    signals = {
+        item.signal
+        for item in facts.safety_evidence
+        if any(
+            _active_match(item.evidence.text, pattern) for pattern in _SIGNAL_PATTERNS[item.signal]
+        )
+    }
     for signal, patterns in _SIGNAL_PATTERNS.items():
         if any(_active_match(facts.source_text, pattern) for pattern in patterns):
             signals.add(signal)

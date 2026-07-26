@@ -71,9 +71,13 @@ gate:
 - the implementation roadmap and mandatory task-alignment gates.
 
 GLM-5.1 and DeepSeek-V4 Flash/Pro structured interpretation adapters are
-available behind explicit configuration. DeepSeek V4 completed controlled
-development evaluation but did not meet every frozen gate; its current result
-is `DEEPSEEK_V4_MODEL_CAPABILITY_BLOCKER`, not qualification or activation.
+available behind explicit configuration. The historic DeepSeek direct-output
+architecture did not meet every frozen gate and remains recorded as
+`DEEPSEEK_V4_MODEL_CAPABILITY_BLOCKER`. The new deterministic hybrid
+architecture is a separate candidate: DeepSeek V4 Flash passed two independent
+120-case development repeats and every development stability gate. It is now
+frozen for formal Regression and locked-Challenge qualification; this is not
+yet a Baseline, Release Candidate, or activation.
 The first GLM live qualification result is `NOT_QUALIFIED`. The
 current qualified model candidate is **None**; no Baseline or Release Candidate
 was published, and the default runtime remains Scripted. See
@@ -81,9 +85,9 @@ was published, and the default runtime remains Scripted. See
 is `EVALUATION_BLOCKED_INFRASTRUCTURE`, with quality `INCONCLUSIVE`, because the
 first 120-case repeat suffered 87 terminal rate-limit
 failures; the locked Challenge Corpus was not called. See
-`docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md` and
-`docs/DEEPSEEK_V4_CAPABILITY_REPORT.md`. A future remediation or
-requalification, online
+`docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md`,
+`docs/DEEPSEEK_V4_CAPABILITY_REPORT.md`, and
+`docs/HYBRID_DEVELOPMENT_EVIDENCE.md`. Formal hybrid qualification, online
 embedding, online free-text generation, the ReAct baseline, and Stage D
 ablations remain mandatory roadmap work, not cancelled scope.
 Replay verifies control-plane determinism;

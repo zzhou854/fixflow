@@ -42,6 +42,60 @@ def test_unverifiable_evidence_is_rejected_before_decision() -> None:
     assert normalized.rejected_evidence_count == 1
 
 
+def test_unrelated_but_present_evidence_cannot_establish_business_fact() -> None:
+    extracted = empty_facts(
+        explicit_human_request=True,
+        human_request_evidence=EvidenceSpan(text="请安排维修"),
+        booking_request_mentioned=True,
+        booking_request_evidence=EvidenceSpan(text="请安排维修"),
+    )
+    normalized = ResidentFactNormalizer().normalize(
+        extracted,
+        current_user_message="厨房漏水，请安排维修。",
+    )
+    assert normalized.explicit_human_request is False
+    assert normalized.booking_request_mentioned is False
+    assert normalized.rejected_evidence_count == 2
+
+
+@pytest.mark.parametrize("message", ("坏了。", "麻烦帮我处理一下。", "[图片]"))
+def test_vague_evidence_cannot_satisfy_issue_description(message: str) -> None:
+    extracted = empty_facts(
+        issue_description_present=True,
+        issue_description_text=message,
+        issue_description_evidence=EvidenceSpan(text=message),
+    )
+    normalized = ResidentFactNormalizer().normalize(
+        extracted,
+        current_user_message=message,
+    )
+    assert normalized.issue_description_present is False
+    assert normalized.issue_description_text is None
+
+
+def test_non_spatial_evidence_cannot_satisfy_location() -> None:
+    extracted = empty_facts(
+        location_mentioned=True,
+        location_text="帮我处理一下",
+        location_evidence=EvidenceSpan(text="帮我处理一下"),
+    )
+    normalized = ResidentFactNormalizer().normalize(
+        extracted,
+        current_user_message="麻烦帮我处理一下。",
+    )
+    assert normalized.location_mentioned is False
+    assert normalized.location_text is None
+
+
+def test_model_cannot_label_vague_repair_as_small_talk() -> None:
+    normalized = ResidentFactNormalizer().normalize(
+        empty_facts(small_talk_only=True),
+        current_user_message="坏了。",
+    )
+    assert normalized.small_talk_only is False
+    assert normalized.rejected_evidence_count == 1
+
+
 def test_fact_prompt_is_content_addressed_and_does_not_expose_final_intent() -> None:
     first = FactPromptRegistry().resident_fact_extraction()
     second = FactPromptRegistry().resident_fact_extraction()

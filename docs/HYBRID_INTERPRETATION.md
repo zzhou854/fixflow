@@ -5,7 +5,7 @@
 Task 17 introduces an internal candidate architecture without activating it:
 
 ```text
-architecture       hybrid_interpretation@1.0.0
+architecture       hybrid_interpretation@1.4.0
 fact prompt        resident_fact_extraction@1.0.0
 fact schema        resident-facts-v1
 decision engine    resident_interpretation_decision_engine@1.0.0
@@ -19,6 +19,12 @@ The default product provider remains `scripted`. The historic GLM and DeepSeek
 direct-interpretation results remain immutable evidence about the previous
 single-call architecture; they are not qualification evidence for this
 candidate.
+
+DeepSeek V4 Flash passed two independent 120-case development repeats and all
+frozen development stability gates for candidate 1.4.0. The candidate is
+frozen for formal evaluation, but the locked Challenge Corpus has not yet been
+called and no Baseline or Release Candidate exists. See
+`HYBRID_DEVELOPMENT_EVIDENCE.md`.
 
 ## Responsibility boundary
 
@@ -42,9 +48,26 @@ IDs, slot truth, mutation plans, or tool calls. Deterministic code owns the
 final business-facing interpretation.
 
 `EvidenceSpan.text` must normalize to a substring of the current resident
-message. Unsupported evidence is rejected before decisions. Facts are strict
+message. Candidate 1.1 additionally requires the quoted text to satisfy the
+deterministic semantic pattern for its claimed fact type; merely quoting an
+unrelated substring cannot establish a human request, booking, reschedule,
+acceptance, cancellation, status query, category, or safety signal. Unsupported
+evidence is rejected before decisions. Facts are strict
 Pydantic models with `extra="forbid"`; raw provider messages, reasoning,
 credentials, and complete prompts are not persisted.
+
+Candidate 1.2 also rejects vague placeholders such as “坏了”, a generic
+“please handle it”, or an image marker as a sufficient issue description even
+when the provider quotes that text correctly.
+
+Candidate 1.3 validates location evidence against bounded spatial forms and
+checks the source time expression before accepting provider-resolved windows.
+A model cannot turn a generic phrase into a location or a date-only preference
+into a complete scheduling window.
+
+Candidate 1.4 validates `small_talk_only` and unsupported-request evidence
+against deterministic boundaries. Those model fields cannot suppress required
+repair clarification without matching message evidence.
 
 ## Deterministic decisions
 

@@ -17,7 +17,7 @@ EvidenceText = Annotated[
 FactName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{1,79}$")]
 
 ARCHITECTURE_ID = "hybrid_interpretation"
-ARCHITECTURE_VERSION = "1.0.0"
+ARCHITECTURE_VERSION = "1.4.0"
 FACT_SCHEMA_VERSION = "resident-facts-v1"
 DECISION_ENGINE_ID = "resident_interpretation_decision_engine"
 DECISION_ENGINE_VERSION = "1.0.0"

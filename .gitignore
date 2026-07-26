@@ -9,6 +9,7 @@ __pycache__/
 .coverage
 htmlcov/
 .artifacts/evaluations/
+.artifacts/hybrid-evaluations/
 .idea/
 .vscode/
 dist/

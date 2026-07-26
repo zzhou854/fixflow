@@ -190,11 +190,13 @@ class HybridInterpretationNode:
                 invariants_validated=raw.invariants_validated,
             ),
         )
-        return node_result, HybridInterpretationDiagnostics(
+        diagnostics = HybridInterpretationDiagnostics(
             facts=facts,
             decision=decision,
             metadata=hybrid_metadata,
         )
+        self.last_diagnostics = diagnostics
+        return node_result, diagnostics
 
 
 def _architecture_hash(prompt_hash: str) -> str:

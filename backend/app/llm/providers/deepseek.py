@@ -10,6 +10,7 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Protocol
 
 import httpx
 from pydantic import BaseModel
@@ -18,12 +19,18 @@ from app.agent.models import LLMMessage, LLMRequestConfig, StructuredLLMResult, 
 from app.agent_runtime.execution_context import current_execution_context
 from app.infrastructure.database.models.observability import TraceSource
 from app.llm.errors import LLMProviderError, LLMProviderErrorCode
-from app.llm.prompts.registry import PromptDefinition
 from app.llm.validation.parser import StructuredInterpretationParser
 from app.trace.models import TracePayload
 
 Sleeper = Callable[[float], Awaitable[None]]
 SUPPORTED_DEEPSEEK_MODELS = frozenset({"deepseek-v4-flash", "deepseek-v4-pro"})
+
+
+class StructuredPromptIdentity(Protocol):
+    prompt_id: str
+    prompt_version: str
+    prompt_hash: str
+    schema_version: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +57,7 @@ class DeepSeekStructuredInterpretationProvider:
     def __init__(
         self,
         *,
-        prompt: PromptDefinition,
+        prompt: StructuredPromptIdentity,
         parser: StructuredInterpretationParser,
         config: DeepSeekConfig,
         api_key: str | None = None,

@@ -60,8 +60,6 @@ def resolved_issue_category(facts: NormalizedResidentFactsV1) -> IssueCategory |
 def _time_is_actionable(
     facts: NormalizedResidentFactsV1, node_input: InterpretMessageInput
 ) -> bool:
-    if facts.availability_windows:
-        return True
     text = facts.source_text
     if any(marker in text for marker in ("还没决定", "具体几点", "几点还没", "最快", "保证")):
         return False
@@ -71,6 +69,8 @@ def _time_is_actionable(
         return True
     if re.search(r"\d{1,2}:\d{2}.{0,3}\d{1,2}:\d{2}", text):
         return True
+    if facts.availability_windows:
+        return _PRECISE_TIME.search(text) is not None
     if _PRECISE_TIME.search(text):
         return True
     # A direct answer to a bounded availability question may be a day-level preference.
