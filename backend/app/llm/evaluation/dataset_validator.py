@@ -95,12 +95,18 @@ class DatasetValidator:
             errors.append("case_id values must be unique")
         if dataset.metadata.case_count != len(cases):
             errors.append("manifest case_count does not match JSONL")
-        expected_case_file = (
-            "resident_interpretation_challenge_"
-            f"v{dataset.metadata.dataset_version.split('.', maxsplit=1)[0]}.jsonl"
-            if dataset.metadata.dataset_id == "resident_interpretation_challenge"
-            else "resident_interpretation_v1.jsonl"
-        )
+        if dataset.metadata.dataset_id == "resident_interpretation_challenge":
+            expected_case_file = (
+                "resident_interpretation_challenge_"
+                f"v{dataset.metadata.dataset_version.split('.', maxsplit=1)[0]}.jsonl"
+            )
+        elif dataset.metadata.dataset_id == "resident_interpretation_holdout":
+            expected_case_file = (
+                "resident_interpretation_holdout_"
+                f"v{dataset.metadata.dataset_version.split('.', maxsplit=1)[0]}.jsonl"
+            )
+        else:
+            expected_case_file = "resident_interpretation_v1.jsonl"
         if dataset.metadata.case_file != expected_case_file:
             errors.append("manifest case_file is not the frozen case filename")
         actual_hash = dataset_hash(dataset.metadata, cases)

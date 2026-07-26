@@ -1,0 +1,15 @@
+{
+  "dataset_id": "resident_interpretation_holdout",
+  "dataset_version": "1.0.0",
+  "dataset_schema_version": "evaluation-case-v1",
+  "description": "120-case synthetic engineering-authored locked Architecture 3.0 holdout",
+  "locale": "zh-CN",
+  "case_count": 120,
+  "created_for_prompt_id": "resident_interpretation",
+  "created_for_schema_version": "interpretation-result-v1",
+  "provenance": "synthetic_engineering_holdout",
+  "review_status": "engineering_authored_locked",
+  "contains_real_personal_data": false,
+  "case_file": "resident_interpretation_holdout_v1.jsonl",
+  "dataset_hash": "ccb9a35fe35b0b56eff2efc694ac4c847f0194fdfc5a4c08057c1b62345b308f"
+}

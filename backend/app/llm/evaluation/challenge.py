@@ -10,6 +10,8 @@ from app.llm.prompts.registry import PromptDefinition
 
 CHALLENGE_DATASET_ID = "resident_interpretation_challenge"
 CHALLENGE_DATASET_VERSION = "1.0.0"
+HOLDOUT_DATASET_ID = "resident_interpretation_holdout"
+HOLDOUT_DATASET_VERSION = "1.0.0"
 
 
 def validate_challenge_isolation(
@@ -48,6 +50,44 @@ def validate_challenge_isolation(
     ]
     if suspicious:
         raise DatasetValidationError("challenge dataset contains highly similar source templates")
+
+
+def validate_holdout_isolation(
+    holdout: EvaluationDataset,
+    *,
+    references: tuple[EvaluationDataset, ...],
+    prompts: tuple[PromptDefinition, ...],
+) -> None:
+    """Validate the single Architecture 3.0 holdout before its first live call."""
+
+    if holdout.metadata.dataset_id != HOLDOUT_DATASET_ID:
+        raise DatasetValidationError("holdout dataset identity mismatch")
+    if holdout.metadata.dataset_version != HOLDOUT_DATASET_VERSION:
+        raise DatasetValidationError("holdout dataset version mismatch")
+    if holdout.metadata.provenance != "synthetic_engineering_holdout":
+        raise DatasetValidationError("holdout provenance mismatch")
+    if holdout.metadata.review_status != "engineering_authored_locked":
+        raise DatasetValidationError("holdout must be locked before use")
+
+    holdout_messages = {_normalized(case.input.current_user_message) for case in holdout.cases}
+    reference_messages = {
+        _normalized(case.input.current_user_message)
+        for dataset in references
+        for case in dataset.cases
+    }
+    example_messages = {
+        _normalized(
+            str(example.input.get("current_user_message", example.input.get("current_message", "")))
+        )
+        for prompt in prompts
+        for example in prompt.examples
+    }
+    if len(holdout_messages) != len(holdout.cases):
+        raise DatasetValidationError("holdout contains duplicate messages")
+    if holdout_messages & reference_messages:
+        raise DatasetValidationError("holdout duplicates a historical corpus")
+    if holdout_messages & example_messages:
+        raise DatasetValidationError("holdout duplicates a prompt example")
 
 
 def reject_challenge_for_prompt_development(dataset_id: str, *, live_network: bool) -> None:

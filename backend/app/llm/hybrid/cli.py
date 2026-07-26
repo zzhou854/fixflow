@@ -10,7 +10,10 @@ import subprocess
 from pathlib import Path
 
 from app.config import Settings
-from app.llm.evaluation.challenge import validate_challenge_isolation
+from app.llm.evaluation.challenge import (
+    validate_challenge_isolation,
+    validate_holdout_isolation,
+)
 from app.llm.evaluation.dataset_loader import load_dataset
 from app.llm.evaluation.models import EvaluationCaseResult, EvaluationDataset
 from app.llm.hybrid.evaluation import HybridStage, run_hybrid_evaluation
@@ -43,6 +46,7 @@ HISTORICAL_CHALLENGE_V6_DATASET = (
     ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v6.jsonl"
 )
 CHALLENGE_DATASET = ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v7.jsonl"
+HOLDOUT_DATASET = ROOT / "evals" / "datasets" / "resident_interpretation_holdout_v1.jsonl"
 SMOKE_DEFINITION = ROOT / "evals" / "development" / "resident_interpretation_prompt_v2_smoke.json"
 
 
@@ -62,6 +66,7 @@ def parser() -> argparse.ArgumentParser:
             "historical-challenge-v6",
             "formal-regression",
             "formal-challenge",
+            "formal-holdout",
         ),
         required=True,
     )
@@ -173,6 +178,23 @@ def _dataset(stage: str, probe_count: int) -> EvaluationDataset:
     dataset = load_dataset(DEFAULT_DATASET)
     if stage in {"development", "formal-regression"}:
         return dataset
+    if stage == "formal-holdout":
+        holdout = load_dataset(HOLDOUT_DATASET)
+        references = tuple(
+            load_dataset(path)
+            for path in (
+                DEFAULT_DATASET,
+                HISTORICAL_CHALLENGE_V1_DATASET,
+                HISTORICAL_CHALLENGE_V2_DATASET,
+                HISTORICAL_CHALLENGE_V3_DATASET,
+                HISTORICAL_CHALLENGE_V4_DATASET,
+                HISTORICAL_CHALLENGE_V5_DATASET,
+                HISTORICAL_CHALLENGE_V6_DATASET,
+                CHALLENGE_DATASET,
+            )
+        )
+        validate_holdout_isolation(holdout, references=references, prompts=())
+        return holdout
     if stage in {
         "historical-challenge-v1",
         "historical-challenge-v2",

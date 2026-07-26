@@ -142,7 +142,11 @@ class CriticalFailureCode(StrEnum):
 
 
 class EvaluationDatasetMetadata(EvaluationModel):
-    dataset_id: Literal["resident_interpretation", "resident_interpretation_challenge"]
+    dataset_id: Literal[
+        "resident_interpretation",
+        "resident_interpretation_challenge",
+        "resident_interpretation_holdout",
+    ]
     dataset_version: Version
     dataset_schema_version: Literal["evaluation-case-v1"]
     description: SafeText
