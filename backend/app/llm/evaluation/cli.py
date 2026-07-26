@@ -288,7 +288,6 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
                 output=output / "raw-probe",
                 fingerprint=fingerprint,
                 scheduler_configuration=_scheduler_configuration(args),
-                fail_fast=True,
             )
         )
         probe_results = probe_outcome.results
