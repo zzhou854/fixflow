@@ -49,3 +49,38 @@ def test_evaluation_can_inject_prompt_v2_without_changing_runtime_default(
         prompt_version="2.0.0",
     )
     assert prompts == ["2.0.0"]
+
+
+def test_factory_constructs_deepseek_without_changing_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class CapturingProvider:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        factory,
+        "DeepSeekStructuredInterpretationProvider",
+        CapturingProvider,
+    )
+    settings = Settings.model_validate(
+        {
+            "database_url": "postgresql+asyncpg://u:p@localhost/db",
+            "llm_provider": "deepseek",
+            "deepseek_api_key": "synthetic-test-secret-value",
+        }
+    )
+    factory.build_structured_interpretation_provider(
+        settings,
+        scripted_provider=object(),  # type: ignore[arg-type]
+        prompt_version="2.0.0",
+        provider_max_attempts=1,
+        provider_max_concurrency=1,
+    )
+    config = captured["config"]
+    assert config.model == "deepseek-v4-flash"  # type: ignore[attr-defined]
+    assert config.thinking_mode == "disabled"  # type: ignore[attr-defined]
+    assert config.max_attempts == 1  # type: ignore[attr-defined]
+    assert config.max_concurrency == 1  # type: ignore[attr-defined]

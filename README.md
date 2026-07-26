@@ -64,10 +64,11 @@ gate:
   regression comparison, release policy, resumable Runner, and safe local artifacts;
 - the implementation roadmap and mandatory task-alignment gates.
 
-GLM-5.1 structured interpretation is available behind explicit configuration,
-but the first live qualification result is `NOT_QUALIFIED`. The current
-qualified model candidate is **None**; no Baseline or Release Candidate was
-published, and the default runtime remains Scripted. See
+GLM-5.1 and DeepSeek-V4-Flash structured interpretation adapters are available
+behind explicit configuration. DeepSeek has not yet been evaluated or
+activated. The first GLM live qualification result is `NOT_QUALIFIED`. The
+current qualified model candidate is **None**; no Baseline or Release Candidate
+was published, and the default runtime remains Scripted. See
 `docs/GLM_5_1_QUALIFICATION_REPORT.md`. Prompt v2's historical development run
 is `EVALUATION_BLOCKED_INFRASTRUCTURE`, with quality `INCONCLUSIVE`, because the
 first 120-case repeat suffered 87 terminal rate-limit

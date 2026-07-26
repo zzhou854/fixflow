@@ -90,7 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
     hash_command = commands.add_parser("hash-dataset")
     hash_command.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     run = commands.add_parser("run")
-    run.add_argument("--provider", choices=("scripted", "fake-glm", "glm"), required=True)
+    run.add_argument(
+        "--provider",
+        choices=("scripted", "fake-glm", "glm", "deepseek"),
+        required=True,
+    )
     run.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     run.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
     run.add_argument("--output", type=Path)
@@ -123,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     develop.add_argument("--output", type=Path, required=True)
     develop.add_argument("--probe-only", action="store_true")
+    develop.add_argument(
+        "--online-provider",
+        choices=("glm", "deepseek"),
+        default="glm",
+    )
     _add_scheduler_arguments(develop)
     compare = commands.add_parser("compare")
     compare.add_argument("--baseline", type=Path, required=True)
@@ -228,11 +237,12 @@ def _scheduler_configuration(args: argparse.Namespace) -> EvaluationSchedulerCon
 
 
 async def _develop_prompt_v2(args: argparse.Namespace) -> int:
+    online_provider = args.online_provider
     require_online_authorization(
-        provider="glm",
+        provider=online_provider,
         allow_network=args.allow_network,
         acknowledge_cost=args.acknowledge_cost,
-        api_key_available=_api_key_available(),
+        api_key_available=_api_key_available(online_provider),
     )
     registry = PromptRegistry()
     prompt_v1 = registry.resident_interpretation("1.0.0")
@@ -256,7 +266,7 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
         policy_hash=policy.policy_hash,
     )
     provider_args = argparse.Namespace(allow_network=True, acknowledge_cost=True)
-    provider, configuration = _provider("glm", provider_args, prompt_v2)
+    provider, configuration = _provider(online_provider, provider_args, prompt_v2)
     output = args.output
     output.mkdir(parents=True, exist_ok=False)
     all_results: tuple[EvaluationCaseResult, ...] = ()
@@ -552,7 +562,7 @@ async def _run(args: argparse.Namespace) -> int:
             raise ValueError("prompt-development requires --development-source-fingerprint")
         reject_challenge_for_prompt_development(
             dataset.metadata.dataset_id,
-            live_network=args.provider == "glm",
+            live_network=args.provider in {"glm", "deepseek"},
         )
     provider, configuration = _provider(args.provider, args, prompt)
     output = args.output or Path(".artifacts/evaluations") / str(uuid4())
@@ -580,7 +590,8 @@ async def _run(args: argparse.Namespace) -> int:
                 development_source_fingerprint=args.development_source_fingerprint,
                 scheduler_configuration=(
                     _scheduler_configuration(args)
-                    if args.provider == "glm" and args.run_purpose in {"prompt-development"}
+                    if args.provider in {"glm", "deepseek"}
+                    and args.run_purpose in {"prompt-development"}
                     else None
                 ),
             )
@@ -653,9 +664,9 @@ def _provider(
         provider=mode,
         allow_network=args.allow_network,
         acknowledge_cost=args.acknowledge_cost,
-        api_key_available=_api_key_available(),
+        api_key_available=_api_key_available(mode),
     )
-    settings = Settings(llm_provider="glm")
+    settings = Settings(llm_provider=mode)
     online: LLMProvider = build_structured_interpretation_provider(
         settings,
         scripted_provider=DemoScriptedLLMProvider(),
@@ -663,23 +674,47 @@ def _provider(
         provider_max_attempts=1,
         provider_max_concurrency=1,
     )
+    if mode == "deepseek":
+        provider_name = "deepseek"
+        model = settings.deepseek_model
+        provider_sdk = "httpx"
+        provider_sdk_version = importlib.metadata.version("httpx")
+        thinking_mode = settings.deepseek_thinking_mode
+        temperature = settings.deepseek_temperature
+        top_p = settings.deepseek_top_p
+        max_tokens = settings.deepseek_max_tokens
+        request_timeout = settings.deepseek_request_timeout_seconds
+        total_timeout = settings.deepseek_total_timeout_seconds
+        endpoint = settings.deepseek_base_url
+    else:
+        provider_name = "zai"
+        model = settings.glm_model
+        provider_sdk = "zai-sdk"
+        provider_sdk_version = importlib.metadata.version("zai-sdk")
+        thinking_mode = settings.glm_thinking_mode
+        temperature = settings.glm_temperature
+        top_p = settings.glm_top_p
+        max_tokens = settings.glm_max_tokens
+        request_timeout = settings.glm_request_timeout_seconds
+        total_timeout = settings.glm_total_timeout_seconds
+        endpoint = settings.glm_base_url
     return online, EvaluationProviderConfiguration(
-        provider="zai",
-        model=settings.glm_model,
-        provider_sdk="zai-sdk",
-        provider_sdk_version=importlib.metadata.version("zai-sdk"),
+        provider=provider_name,
+        model=model,
+        provider_sdk=provider_sdk,
+        provider_sdk_version=provider_sdk_version,
         prompt_id=prompt.prompt_id,
         prompt_version=prompt.prompt_version,
         prompt_hash=prompt.prompt_hash,
         interpretation_schema_version=prompt.schema_version,
-        thinking_mode=settings.glm_thinking_mode,
-        temperature=settings.glm_temperature,
-        top_p=settings.glm_top_p,
-        max_tokens=settings.glm_max_tokens,
-        request_timeout_seconds=settings.glm_request_timeout_seconds,
-        total_timeout_seconds=settings.glm_total_timeout_seconds,
+        thinking_mode=thinking_mode,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+        request_timeout_seconds=request_timeout,
+        total_timeout_seconds=total_timeout,
         max_attempts=1,
-        endpoint_fingerprint=_endpoint_fingerprint(settings.glm_base_url),
+        endpoint_fingerprint=_endpoint_fingerprint(endpoint),
         live_network=True,
     )
 
@@ -717,14 +752,16 @@ def _offline_fake_glm_provider(
     )
 
 
-def _api_key_available() -> bool:
+def _api_key_available(provider: str = "glm") -> bool:
     try:
         settings = Settings()
     except ValidationError:
         return False
-    return settings.glm_api_key is not None and bool(
-        settings.glm_api_key.get_secret_value().strip()
-    )
+    secret = settings.deepseek_api_key if provider == "deepseek" else settings.glm_api_key
+    if secret is None:
+        return False
+    value = secret.get_secret_value().strip()
+    return bool(value and value != "replace-with-your-deepseek-api-key")
 
 
 def _endpoint_fingerprint(endpoint: str) -> str:

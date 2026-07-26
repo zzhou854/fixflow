@@ -15,6 +15,7 @@ def _isolate_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def test_scripted_provider_does_not_require_key() -> None:
     settings = Settings.model_validate({**BASE, "llm_provider": "scripted"})
     assert settings.glm_api_key is None
+    assert settings.deepseek_api_key is None
 
 
 def test_glm_provider_requires_secret_without_leaking_it() -> None:
@@ -26,6 +27,25 @@ def test_glm_provider_requires_secret_without_leaking_it() -> None:
     assert secret not in repr(settings)
 
 
+def test_deepseek_provider_requires_non_placeholder_secret() -> None:
+    with pytest.raises(ValidationError, match="DEEPSEEK_API_KEY"):
+        Settings.model_validate({**BASE, "llm_provider": "deepseek"})
+    with pytest.raises(ValidationError, match="DEEPSEEK_API_KEY"):
+        Settings.model_validate(
+            {
+                **BASE,
+                "llm_provider": "deepseek",
+                "deepseek_api_key": "replace-with-your-deepseek-api-key",
+            }
+        )
+    secret = "synthetic-deepseek-secret-that-must-not-appear"
+    settings = Settings.model_validate(
+        {**BASE, "llm_provider": "deepseek", "deepseek_api_key": secret}
+    )
+    assert settings.deepseek_model == "deepseek-v4-flash"
+    assert secret not in repr(settings)
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -33,6 +53,12 @@ def test_glm_provider_requires_secret_without_leaking_it() -> None:
         {"glm_thinking_mode": "maybe"},
         {"glm_request_timeout_seconds": 20, "glm_total_timeout_seconds": 10},
         {"glm_max_attempts": 6},
+        {"deepseek_model": "deepseek-chat"},
+        {"deepseek_thinking_mode": "enabled"},
+        {
+            "deepseek_request_timeout_seconds": 20,
+            "deepseek_total_timeout_seconds": 10,
+        },
         {"llm_max_response_bytes": 0},
     ],
 )

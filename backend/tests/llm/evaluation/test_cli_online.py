@@ -43,6 +43,16 @@ def test_scripted_mode_needs_no_online_flags() -> None:
     )
 
 
+def test_deepseek_online_guard_names_its_own_secret() -> None:
+    with pytest.raises(OnlineGuardError, match="DEEPSEEK_API_KEY"):
+        require_online_authorization(
+            provider="deepseek",
+            allow_network=True,
+            acknowledge_cost=True,
+            api_key_available=False,
+        )
+
+
 def test_cli_has_no_api_key_argument() -> None:
     with pytest.raises(SystemExit) as caught:
         build_parser().parse_args(["run", "--provider", "glm", "--api-key", "forbidden"])
@@ -120,6 +130,22 @@ def test_prompt_development_supports_probe_only(tmp_path: Path) -> None:
 
     assert args.probe_only is True
     assert args.requests_per_minute == 20
+    assert args.online_provider == "glm"
+
+
+def test_prompt_development_accepts_deepseek_provider(tmp_path: Path) -> None:
+    args = build_parser().parse_args(
+        [
+            "develop-prompt-v2",
+            "--run-purpose",
+            "prompt-development",
+            "--online-provider",
+            "deepseek",
+            "--output",
+            str(tmp_path / "deepseek"),
+        ]
+    )
+    assert args.online_provider == "deepseek"
 
 
 def test_validate_and_inspect_cli(capsys: pytest.CaptureFixture[str]) -> None:
@@ -140,14 +166,14 @@ def test_hash_dataset_cli(capsys: pytest.CaptureFixture[str]) -> None:
 def test_online_cli_without_network_flag_returns_six(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.llm.evaluation.cli._api_key_available", lambda: True)
+    monkeypatch.setattr("app.llm.evaluation.cli._api_key_available", lambda *_: True)
     assert main(["run", "--provider", "glm"]) == EvaluationExitCode.ONLINE_GUARD_FAILED
 
 
 def test_online_cli_without_cost_ack_returns_six(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.llm.evaluation.cli._api_key_available", lambda: True)
+    monkeypatch.setattr("app.llm.evaluation.cli._api_key_available", lambda *_: True)
     assert (
         main(["run", "--provider", "glm", "--allow-network"])
         == EvaluationExitCode.ONLINE_GUARD_FAILED
@@ -157,7 +183,7 @@ def test_online_cli_without_cost_ack_returns_six(
 def test_online_cli_without_key_returns_six(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.llm.evaluation.cli._api_key_available", lambda: False)
+    monkeypatch.setattr("app.llm.evaluation.cli._api_key_available", lambda *_: False)
     assert (
         main(
             [

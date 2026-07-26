@@ -1,8 +1,9 @@
 # Structured LLM Provider
 
-Task 13 adds an optional online GLM-5.1 provider for resident-language
-interpretation. It does not generate the final resident reply, call tools, choose
-Graph routes, authorize a property, evaluate policy, or execute a mutation.
+FixFlow supports optional online providers for resident-language structured
+interpretation. They do not generate the final resident reply, call tools,
+choose Graph routes, authorize a property, evaluate policy, or execute a
+mutation.
 
 ## Runtime selection
 
@@ -16,19 +17,30 @@ non-empty `FIXFLOW_GLM_API_KEY` and uses `glm-5.1`,
 responses, and no tools. Provider selection is fixed at application startup;
 an online failure never falls back to the Scripted Provider.
 
+`FIXFLOW_LLM_PROVIDER=deepseek` selects the OpenAI-compatible DeepSeek adapter.
+It requires a non-placeholder `FIXFLOW_DEEPSEEK_API_KEY`, fixes the official
+model ID to `deepseek-v4-flash`, and uses `https://api.deepseek.com`. The
+adapter requests JSON Object output, disables thinking explicitly, sends no
+tool definitions, and does not use the model's tool-call capability. It reuses
+the existing `httpx` dependency; no second SDK or retry framework is added.
+
 The production/default Prompt remains `resident_interpretation@1.0.0`.
 Prompt v2 can be injected only by controlled internal evaluation/DI; no client
 request selects it.
 
-The API key is a `SecretStr`. It is never written to Trace, Replay, logs, prompts,
-or responses. `.env.example` contains an empty placeholder only.
+API keys are `SecretStr` values. They are never written to Trace, Replay, logs,
+prompts, or responses. `.env.example` contains only non-secret placeholders.
 
 ## Async and retry boundary
 
-The official SDK call is synchronous. FixFlow reuses one lifecycle-owned
+The Z.AI SDK call is synchronous. FixFlow reuses one lifecycle-owned
 `ZaiClient`, executes calls in a bounded worker-thread boundary, and closes the
 client at runtime shutdown. A timed-out worker retains its concurrency permit
 until the underlying synchronous call really exits.
+
+The DeepSeek adapter uses one lifecycle-owned asynchronous `httpx` client and
+closes it at runtime shutdown. Both adapters apply the same bounded,
+provider-neutral error policy.
 
 Only rate limits, timeouts, connection failures, and upstream 5xx responses are
 retried. Authentication, permission, rejected requests, content filtering,
@@ -69,10 +81,12 @@ Existing Task-12 schema-version-1 Bundles without optional metadata remain
 readable.
 
 Task 14 adds a local evaluation Runner around this same Provider Port. It does
-not import the SDK or implement a second retry layer. Scripted and Fake Zai runs
-are network-free. Live evaluation requires explicit network and cost flags plus
-the existing secret Settings before this adapter is constructed; it never prints
-prompts, responses, or credentials.
+not implement a second provider contract. Scripted and Fake Zai runs are
+network-free. Live GLM or DeepSeek evaluation requires explicit network and cost
+flags plus the corresponding secret Settings before an adapter is constructed;
+it never prints prompts, responses, or credentials. `develop-prompt-v2` accepts
+`--online-provider glm|deepseek`; the default remains `glm` to preserve
+historical command behavior.
 
 Task 15 performed the first clean, sequential live qualification through this
 same adapter. All 240 evaluation calls completed without Provider or

@@ -12,11 +12,13 @@ def require_online_authorization(
     acknowledge_cost: bool,
     api_key_available: bool,
 ) -> None:
-    if provider != "glm":
+    if provider not in {"glm", "deepseek"}:
         return
+    label = "GLM" if provider == "glm" else "DeepSeek"
+    key_name = "GLM_API_KEY" if provider == "glm" else "DEEPSEEK_API_KEY"
     if not allow_network:
-        raise OnlineGuardError("GLM evaluation requires --allow-network")
+        raise OnlineGuardError(f"{label} evaluation requires --allow-network")
     if not acknowledge_cost:
-        raise OnlineGuardError("GLM evaluation requires --acknowledge-cost")
+        raise OnlineGuardError(f"{label} evaluation requires --acknowledge-cost")
     if not api_key_available:
-        raise OnlineGuardError("GLM evaluation requires GLM_API_KEY in existing settings")
+        raise OnlineGuardError(f"{label} evaluation requires {key_name} in existing settings")

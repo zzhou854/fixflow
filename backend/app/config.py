@@ -58,6 +58,19 @@ class Settings(BaseSettings):
     glm_retry_initial_delay_seconds: float = Field(default=0.5, ge=0, le=30)
     glm_retry_max_delay_seconds: float = Field(default=4.0, ge=0, le=60)
     glm_max_concurrency: int = Field(default=8, ge=1, le=100)
+    deepseek_model: str = "deepseek-v4-flash"
+    deepseek_base_url: str = "https://api.deepseek.com"
+    deepseek_api_key: SecretStr | None = None
+    deepseek_thinking_mode: str = "disabled"
+    deepseek_temperature: float = Field(default=0.1, ge=0, le=2)
+    deepseek_top_p: float = Field(default=0.8, gt=0, le=1)
+    deepseek_max_tokens: int = Field(default=1600, gt=0, le=8000)
+    deepseek_request_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    deepseek_total_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    deepseek_max_attempts: int = Field(default=3, ge=1, le=5)
+    deepseek_retry_initial_delay_seconds: float = Field(default=0.5, ge=0, le=30)
+    deepseek_retry_max_delay_seconds: float = Field(default=4.0, ge=0, le=60)
+    deepseek_max_concurrency: int = Field(default=8, ge=1, le=100)
     llm_max_input_characters: int = Field(default=6000, gt=0, le=100_000)
     llm_max_context_messages: int = Field(default=6, gt=0, le=20)
     llm_max_message_characters: int = Field(default=2000, gt=0, le=20_000)
@@ -65,18 +78,36 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_llm_settings(self) -> "Settings":
-        if self.llm_provider not in {"scripted", "glm"}:
-            raise ValueError("LLM_PROVIDER must be one of: scripted, glm")
+        if self.llm_provider not in {"scripted", "glm", "deepseek"}:
+            raise ValueError("LLM_PROVIDER must be one of: scripted, glm, deepseek")
         if self.glm_thinking_mode not in {"disabled", "enabled"}:
             raise ValueError("GLM_THINKING_MODE must be disabled or enabled")
         if self.glm_total_timeout_seconds < self.glm_request_timeout_seconds:
             raise ValueError("GLM_TOTAL_TIMEOUT_SECONDS must be at least request timeout")
         if self.glm_retry_max_delay_seconds < self.glm_retry_initial_delay_seconds:
             raise ValueError("GLM_RETRY_MAX_DELAY_SECONDS must be at least initial delay")
+        if self.deepseek_model != "deepseek-v4-flash":
+            raise ValueError("DEEPSEEK_MODEL must be deepseek-v4-flash")
+        if self.deepseek_thinking_mode != "disabled":
+            raise ValueError(
+                "DEEPSEEK_THINKING_MODE must be disabled for structured interpretation"
+            )
+        if self.deepseek_total_timeout_seconds < self.deepseek_request_timeout_seconds:
+            raise ValueError("DEEPSEEK_TOTAL_TIMEOUT_SECONDS must be at least request timeout")
+        if self.deepseek_retry_max_delay_seconds < self.deepseek_retry_initial_delay_seconds:
+            raise ValueError("DEEPSEEK_RETRY_MAX_DELAY_SECONDS must be at least initial delay")
         if self.llm_provider == "glm" and (
             self.glm_api_key is None or not self.glm_api_key.get_secret_value().strip()
         ):
             raise ValueError("GLM_API_KEY is required when LLM_PROVIDER=glm")
+        if self.llm_provider == "deepseek":
+            key = (
+                self.deepseek_api_key.get_secret_value().strip()
+                if self.deepseek_api_key is not None
+                else ""
+            )
+            if not key or key == "replace-with-your-deepseek-api-key":
+                raise ValueError("DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek")
         return self
 
 
