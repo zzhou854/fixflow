@@ -1,6 +1,13 @@
 import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, ReplayExecution, ReplayRun, ReplayRunDetail, Ticket, TicketDetail, TraceEvent } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const SHANGHAI_OFFSET_MILLISECONDS = 8 * 60 * 60 * 1000
+
+export function shanghaiReferenceTime(now: Date = new Date()): string {
+  return new Date(now.getTime() + SHANGHAI_OFFSET_MILLISECONDS)
+    .toISOString()
+    .replace('Z', '+08:00')
+}
 
 export class ApiError extends Error {
   constructor(public readonly body: ApiErrorBody, public readonly status: number) {
@@ -51,12 +58,12 @@ export const api = {
   createThread: (token: string, property_id: string, initial_message: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>('/api/v1/agent/threads', token, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ property_id, initial_message, timezone_name: 'Asia/Shanghai', reference_time: new Date().toISOString() }),
+    body: JSON.stringify({ property_id, initial_message, timezone_name: 'Asia/Shanghai', reference_time: shanghaiReferenceTime() }),
   }),
   sendMessage: (token: string, threadId: string, message: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}/messages`, token, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ message, message_id: crypto.randomUUID(), timezone_name: 'Asia/Shanghai', reference_time: new Date().toISOString() }),
+    body: JSON.stringify({ message, message_id: crypto.randomUUID(), timezone_name: 'Asia/Shanghai', reference_time: shanghaiReferenceTime() }),
   }),
   resume: (token: string, threadId: string, body: object, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}/resume`, token, {
     method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(body),

@@ -1,0 +1,14 @@
+# Production-like local override. Secrets must be supplied through the environment
+# or an ignored .env file; this file intentionally contains no credentials.
+services:
+  postgres:
+    ports: []
+  api:
+    environment:
+      FIXFLOW_CORS_ORIGINS: ${FIXFLOW_PRODUCTION_CORS_ORIGINS:?Set FIXFLOW_PRODUCTION_CORS_ORIGINS}
+      FIXFLOW_ALLOWED_HOSTS: ${FIXFLOW_PRODUCTION_ALLOWED_HOSTS:?Set FIXFLOW_PRODUCTION_ALLOWED_HOSTS}
+    ports:
+      - "${API_PORT:-8000}:8000"
+  frontend:
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"

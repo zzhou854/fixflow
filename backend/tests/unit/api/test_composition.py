@@ -40,3 +40,36 @@ def test_product_runtime_rejects_online_provider_as_primary() -> None:
                 deepseek_api_key="synthetic-test-key",
             )
         )
+
+
+def test_production_runtime_rejects_unsafe_defaults() -> None:
+    with pytest.raises(ValueError, match="RUNTIME_MODE"):
+        _settings(environment="production")
+    with pytest.raises(ValueError, match="DEBUG"):
+        _settings(environment="production", runtime_mode="production", debug=True)
+    with pytest.raises(ValueError, match="placeholder"):
+        _settings(
+            environment="production",
+            runtime_mode="production",
+            database_url="postgresql+asyncpg://fixflow:change-me@postgres/fixflow",
+        )
+    with pytest.raises(ValueError, match="ALLOWED_HOSTS"):
+        _settings(
+            environment="production",
+            runtime_mode="production",
+            allowed_hosts="*",
+        )
+
+
+def test_production_runtime_accepts_scripted_locked_configuration() -> None:
+    settings = _settings(
+        environment="production",
+        runtime_mode="production",
+        database_url="postgresql+asyncpg://fixflow:strong-password@postgres/fixflow",
+        debug=False,
+        llm_provider="scripted",
+        llm_experimental_enabled=False,
+        cors_origins="https://fixflow.example",
+        allowed_hosts="fixflow.example",
+    )
+    _validate_security_settings(settings)

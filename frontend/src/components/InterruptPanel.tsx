@@ -1,4 +1,5 @@
 import { Button, Card, Form, Input, List, Space, Tag, Typography } from 'antd'
+import { shanghaiReferenceTime } from '../api/client'
 import type { Interrupt } from '../types'
 
 export function InterruptPanel({ interrupt, onResume }: { interrupt: Interrupt; onResume: (body: object) => Promise<void> }) {
@@ -8,7 +9,7 @@ export function InterruptPanel({ interrupt, onResume }: { interrupt: Interrupt; 
       <Typography.Text type="secondary">缺失：{interrupt.missing_fields.join('、')}</Typography.Text>
       <Form onFinish={(value: { information: string }) => onResume({
         kind: 'PROVIDE_INFORMATION', intent_version: interrupt.intent_version,
-        user_message: value.information, reference_time: new Date().toISOString(), timezone_name: 'Asia/Shanghai',
+        user_message: value.information, reference_time: shanghaiReferenceTime(), timezone_name: 'Asia/Shanghai',
       })}>
         <Form.Item name="information" rules={[{ required: true }]}><Input.TextArea aria-label="补充信息" /></Form.Item>
         <Button htmlType="submit" type="primary">提交补充信息</Button>

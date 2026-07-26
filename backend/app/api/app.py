@@ -10,6 +10,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response
 
 from app.api.composition import open_api_services
@@ -42,7 +43,12 @@ def create_app(
             application.state.services = live_services
             yield
 
-    application = FastAPI(title="FixFlow API", version="0.2.0", lifespan=lifespan)
+    application = FastAPI(
+        title="FixFlow API",
+        version="0.2.0",
+        debug=settings.debug if settings is not None else False,
+        lifespan=lifespan,
+    )
     application.state.logger = structlog.get_logger("fixflow.api")
     if services is not None:
         application.state.services = services
@@ -61,6 +67,13 @@ def create_app(
         allow_methods=["GET", "POST"],
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
     )
+    configured_hosts = (
+        settings.allowed_hosts if settings is not None else "127.0.0.1,localhost,testserver,test"
+    )
+    allowed_hosts = [item.strip() for item in configured_hosts.split(",") if item.strip()]
+    if not allowed_hosts or "*" in allowed_hosts:
+        raise ValueError("Allowed hosts must be explicit")
+    application.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
     @application.middleware("http")
     async def request_trace(

@@ -9,6 +9,7 @@ from app.agent.ports import LLMProvider
 from app.agent_runtime.composition import open_agent_orchestrator
 from app.api.demo_providers import DemoDeterministicEmbeddingProvider, DemoScriptedLLMProvider
 from app.api.dependencies import ApiServices
+from app.api.readiness import verify_database_migration_head
 from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.operator import OperatorActionService
@@ -37,12 +38,11 @@ from app.trace.sanitizer import TraceSanitizer
 
 @asynccontextmanager
 async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
-    if settings.runtime_mode != "demo":
-        raise ValueError("Task 9 supports only FIXFLOW_RUNTIME_MODE=demo")
     _validate_security_settings(settings)
     assert settings.jwt_secret is not None
     engine = create_async_engine(settings.database_url.get_secret_value())
     sessions = async_sessionmaker(engine, expire_on_commit=False)
+    await verify_database_migration_head(engine)
 
     def uow_factory() -> UnitOfWork:
         return SqlAlchemyUnitOfWork(sessions)

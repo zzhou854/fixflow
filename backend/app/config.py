@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_minutes: int = 30
     runtime_mode: str = "demo"
+    debug: bool = False
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
+    allowed_hosts: str = "127.0.0.1,localhost,testserver,test"
     outbox_poll_interval_seconds: float = Field(default=1.0, gt=0)
     outbox_batch_size: int = Field(default=50, ge=1, le=1000)
     outbox_lease_seconds: int = Field(default=30, ge=1, le=3600)
@@ -80,6 +82,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_llm_settings(self) -> "Settings":
+        if self.environment not in {"development", "test", "production"}:
+            raise ValueError("ENVIRONMENT must be development, test, or production")
+        if self.runtime_mode not in {"demo", "production"}:
+            raise ValueError("RUNTIME_MODE must be demo or production")
         if self.llm_provider not in {"scripted", "glm", "deepseek"}:
             raise ValueError("LLM_PROVIDER must be one of: scripted, glm, deepseek")
         if self.llm_experimental_provider not in {"glm", "deepseek"}:
@@ -131,6 +137,24 @@ class Settings(BaseSettings):
                     raise ValueError(
                         "DEEPSEEK_API_KEY is required when LLM_EXPERIMENTAL_PROVIDER=deepseek"
                     )
+        if self.environment == "production":
+            if self.runtime_mode != "production":
+                raise ValueError("production ENVIRONMENT requires RUNTIME_MODE=production")
+            if self.debug:
+                raise ValueError("DEBUG must be false in production")
+            if self.llm_provider != "scripted":
+                raise ValueError("production LLM_PROVIDER must remain scripted")
+            if self.llm_experimental_enabled:
+                raise ValueError("LLM_EXPERIMENTAL_ENABLED must be false in production")
+            database_url = self.database_url.get_secret_value()
+            if "change-me" in database_url.casefold():
+                raise ValueError("production DATABASE_URL cannot contain a placeholder")
+            origins = [value.strip() for value in self.cors_origins.split(",") if value.strip()]
+            hosts = [value.strip() for value in self.allowed_hosts.split(",") if value.strip()]
+            if not origins or "*" in origins:
+                raise ValueError("production CORS_ORIGINS must be explicit")
+            if not hosts or "*" in hosts:
+                raise ValueError("production ALLOWED_HOSTS must be explicit")
         return self
 
 
