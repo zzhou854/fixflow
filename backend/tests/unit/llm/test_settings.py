@@ -14,8 +14,36 @@ def _isolate_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_scripted_provider_does_not_require_key() -> None:
     settings = Settings.model_validate({**BASE, "llm_provider": "scripted"})
+    assert settings.llm_experimental_enabled is False
     assert settings.glm_api_key is None
     assert settings.deepseek_api_key is None
+
+
+def test_experimental_shadow_requires_key_and_keeps_primary_scripted() -> None:
+    with pytest.raises(ValidationError, match="DEEPSEEK_API_KEY"):
+        Settings.model_validate({**BASE, "llm_experimental_enabled": True})
+    settings = Settings.model_validate(
+        {
+            **BASE,
+            "llm_provider": "scripted",
+            "llm_experimental_enabled": True,
+            "deepseek_api_key": "synthetic-shadow-secret",
+        }
+    )
+    assert settings.llm_provider == "scripted"
+    assert settings.llm_experimental_provider == "deepseek"
+
+
+def test_experimental_shadow_rejects_online_primary() -> None:
+    with pytest.raises(ValidationError, match="must remain scripted"):
+        Settings.model_validate(
+            {
+                **BASE,
+                "llm_provider": "deepseek",
+                "llm_experimental_enabled": True,
+                "deepseek_api_key": "synthetic-shadow-secret",
+            }
+        )
 
 
 def test_glm_provider_requires_secret_without_leaking_it() -> None:

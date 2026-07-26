@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.agent.ports import LLMProvider
 from app.agent_runtime.composition import open_agent_orchestrator
 from app.api.demo_providers import DemoDeterministicEmbeddingProvider, DemoScriptedLLMProvider
 from app.api.dependencies import ApiServices
@@ -23,6 +24,7 @@ from app.config import Settings
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
 from app.llm.factory import build_structured_interpretation_provider
+from app.llm.shadow import InMemoryShadowEvaluationSink, ShadowingLLMProvider
 from app.reconciliation.coordinator import UnknownCommitCoordinator
 from app.reconciliation.repository import SqlAlchemyReconciliationRepository
 from app.replay.capture import ReplayCaptureService
@@ -75,18 +77,26 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
     )
     try:
         scripted_llm = DemoScriptedLLMProvider()
-        interpretation_provider = build_structured_interpretation_provider(
-            settings,
-            scripted_provider=scripted_llm,
-        )
+        interpretation_provider: LLMProvider = scripted_llm
+        if settings.llm_experimental_enabled:
+            shadow_settings = settings.model_copy(
+                update={"llm_provider": settings.llm_experimental_provider}
+            )
+            shadow_provider = build_structured_interpretation_provider(
+                shadow_settings,
+                scripted_provider=scripted_llm,
+            )
+            interpretation_provider = ShadowingLLMProvider(
+                primary=scripted_llm,
+                shadow=shadow_provider,
+                sink=InMemoryShadowEvaluationSink(),
+            )
         async with open_agent_orchestrator(
             settings,
             interpretation_provider=interpretation_provider,
             response_provider=scripted_llm,
             embedding_provider=DemoDeterministicEmbeddingProvider(),
-            language_model_name=(
-                settings.glm_model if settings.llm_provider == "glm" else "fixflow-demo-scripted-v1"
-            ),
+            language_model_name="fixflow-demo-scripted-v1",
         ) as orchestrator:
             operator_review = OperatorThreadReviewService(orchestrator)
             operator_trace = OperatorTraceQueryService(operator_review, trace)
@@ -139,6 +149,8 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
 
 
 def _validate_security_settings(settings: Settings) -> None:
+    if settings.llm_provider != "scripted":
+        raise ValueError("FIXFLOW_LLM_PROVIDER must remain scripted for the product runtime")
     if settings.jwt_secret is None:
         raise ValueError("FIXFLOW_JWT_SECRET is required")
     secret = settings.jwt_secret.get_secret_value()

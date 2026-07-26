@@ -30,3 +30,13 @@ def test_runtime_rejects_non_hs256_and_wildcard_cors() -> None:
 
 def test_runtime_accepts_explicit_demo_security_configuration() -> None:
     _validate_security_settings(_settings())
+
+
+def test_product_runtime_rejects_online_provider_as_primary() -> None:
+    with pytest.raises(ValueError, match="must remain scripted"):
+        _validate_security_settings(
+            _settings(
+                llm_provider="deepseek",
+                deepseek_api_key="synthetic-test-key",
+            )
+        )
