@@ -17,12 +17,12 @@ EvidenceText = Annotated[
 FactName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{1,79}$")]
 
 ARCHITECTURE_ID = "hybrid_interpretation"
-ARCHITECTURE_VERSION = "2.3.0"
-FACT_SCHEMA_VERSION = "resident-facts-v1"
+ARCHITECTURE_VERSION = "3.0.0"
+FACT_SCHEMA_VERSION = "resident-facts-v2"
 DECISION_ENGINE_ID = "resident_interpretation_decision_engine"
-DECISION_ENGINE_VERSION = "2.3.0"
-SAFETY_POLICY_VERSION = "2.3.0"
-REQUIREMENTS_POLICY_VERSION = "2.3.0"
+DECISION_ENGINE_VERSION = "3.0.0"
+SAFETY_POLICY_VERSION = "3.0.0"
+REQUIREMENTS_POLICY_VERSION = "3.0.0"
 HYBRID_SCORER_ID = "resident_hybrid_interpretation_scorer"
 HYBRID_SCORER_VERSION = "1.1.0"
 
@@ -81,7 +81,7 @@ class ExtractedAvailabilityWindow(HybridModel):
 
 
 class ExtractedResidentFactsV1(HybridModel):
-    schema_version: Literal["resident-facts-v1"] = "resident-facts-v1"
+    schema_version: Literal["resident-facts-v1", "resident-facts-v2"] = "resident-facts-v1"
     issue_description_present: bool
     issue_description_text: str | None = Field(default=None, max_length=4000)
     issue_description_evidence: EvidenceSpan | None = None
@@ -115,6 +115,24 @@ class ExtractedResidentFactsV1(HybridModel):
     unsupported_request_evidence: tuple[EvidenceSpan, ...] = Field(default=(), max_length=10)
     small_talk_only: bool
     confidence_by_fact: tuple[FactConfidence, ...] = Field(default=(), max_length=40)
+
+
+class ExtractedResidentFactsV2(ExtractedResidentFactsV1):
+    """Evidence-only provider contract; it contains no final business decision."""
+
+    schema_version: Literal["resident-facts-v2"] = "resident-facts-v2"
+    repair_problem_present: bool = False
+    generic_facility_failure: bool = False
+    confirmed_appointment_reference: bool = False
+    new_booking_request: bool = False
+    slot_selection_request: bool = False
+    availability_expression: bool = False
+    availability_unknown: bool = False
+    callback_request: bool = False
+    do_not_automate_request: bool = False
+    negated_cancellation: bool = False
+    corrected_fact_types: tuple[CorrectedFact, ...] = Field(default=(), max_length=5)
+    unsupported_service_request: bool = False
 
 
 class NormalizedResidentFactsV1(ExtractedResidentFactsV1):
@@ -172,7 +190,7 @@ class DecisionTraceV1(HybridModel):
     engine_id: Literal["resident_interpretation_decision_engine"] = (
         "resident_interpretation_decision_engine"
     )
-    engine_version: Literal["2.3.0"] = "2.3.0"
+    engine_version: Literal["3.0.0"] = "3.0.0"
     entries: tuple[DecisionTraceEntry, ...] = Field(max_length=30)
 
 
@@ -198,6 +216,8 @@ class ConflictCode(StrEnum):
     CLARIFICATION_MISMATCH = "CLARIFICATION_MISMATCH"
     RESCHEDULE_WITHOUT_APPOINTMENT = "RESCHEDULE_WITHOUT_APPOINTMENT"
     SMALL_TALK_AS_REPAIR = "SMALL_TALK_AS_REPAIR"
+    NEGATED_CANCELLATION_CONFLICT = "NEGATED_CANCELLATION_CONFLICT"
+    UNSUPPORTED_AS_BOOKING = "UNSUPPORTED_AS_BOOKING"
 
 
 class VerificationVerdict(StrEnum):

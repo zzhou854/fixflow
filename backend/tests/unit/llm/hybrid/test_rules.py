@@ -14,7 +14,11 @@ from app.domain.enums import IssueCategory, WorkflowStage
 from app.llm.hybrid.decision import InterpretationConflictDetector, ResidentIntentDecisionEngine
 from app.llm.hybrid.models import HybridDecision, NormalizedResidentFactsV1
 from app.llm.hybrid.normalizer import ResidentFactNormalizer
-from app.llm.hybrid.semantic import derive_semantic_features
+from app.llm.hybrid.semantic import (
+    ResidentSemanticAct,
+    derive_semantic_acts,
+    derive_semantic_features,
+)
 
 from tests.unit.llm.hybrid.conftest import empty_facts
 
@@ -67,6 +71,108 @@ def test_intent_priority_is_deterministic(message: str, intent: AgentIntent) -> 
     second = decide(message)[1]
     assert first == second
     assert first.utterance_intent is intent
+
+
+@pytest.mark.parametrize(
+    ("message", "intent", "category", "missing", "safety"),
+    [
+        (
+            "卧室门锁需要报修，具体表现还没确认。",
+            AgentIntent.NEW_REPAIR,
+            IssueCategory.DOOR_LOCK,
+            (IssueField.ISSUE_DESCRIPTION,),
+            (),
+        ),
+        (
+            "我要报修阳台水管，具体表现还不清楚。",
+            AgentIntent.NEW_REPAIR,
+            IssueCategory.WATER_LEAK,
+            (IssueField.ISSUE_DESCRIPTION,),
+            (),
+        ),
+        (
+            "已有工单，请给我安排师傅上门。",
+            AgentIntent.SELECT_APPOINTMENT_SLOT,
+            None,
+            None,
+            (),
+        ),
+        (
+            "已约的师傅来访时间重新安排到明晚。",
+            AgentIntent.RESCHEDULE_APPOINTMENT,
+            None,
+            (),
+            (),
+        ),
+        (
+            "洗衣房水管爆裂，水正涌向通电的洗衣机。",
+            AgentIntent.NEW_REPAIR,
+            IssueCategory.WATER_LEAK,
+            (),
+            (
+                SafetyFlag.ACTIVE_FLOODING,
+                SafetyFlag.ELECTRICAL_HAZARD,
+                SafetyFlag.IMMEDIATE_DANGER,
+            ),
+        ),
+        (
+            "客卫顶部不断灌水，地面积水正在快速扩大。",
+            AgentIntent.NEW_REPAIR,
+            IssueCategory.WATER_LEAK,
+            (),
+            (SafetyFlag.ACTIVE_FLOODING, SafetyFlag.IMMEDIATE_DANGER),
+        ),
+        (
+            "书房墙插正在冒烟，并且有烧焦气味。",
+            AgentIntent.NEW_REPAIR,
+            IssueCategory.ELECTRICAL,
+            (),
+            (
+                SafetyFlag.ELECTRICAL_HAZARD,
+                SafetyFlag.IMMEDIATE_DANGER,
+            ),
+        ),
+        (
+            "卫生间漏下来的水已经落到亮着的照明灯旁。",
+            AgentIntent.NEW_REPAIR,
+            IssueCategory.WATER_LEAK,
+            (),
+            (
+                SafetyFlag.ACTIVE_FLOODING,
+                SafetyFlag.ELECTRICAL_HAZARD,
+                SafetyFlag.IMMEDIATE_DANGER,
+            ),
+        ),
+    ],
+)
+def test_consumed_challenge_v7_failure_shapes_are_regressions(
+    message: str,
+    intent: AgentIntent,
+    category: IssueCategory | None,
+    missing: tuple[IssueField, ...] | None,
+    safety: tuple[SafetyFlag, ...],
+) -> None:
+    facts, decision = decide(message)
+    from app.llm.hybrid.decision import resolved_issue_category
+
+    assert decision.utterance_intent is intent
+    assert resolved_issue_category(facts) is category
+    if missing is not None:
+        assert decision.missing_fields == missing
+    assert decision.safety_flags == safety
+
+
+def test_semantic_acts_are_closed_and_correction_precedes_reschedule() -> None:
+    message = "更正时间，之前说周二不准确，改到周四上午。"
+    source = node_input(message)
+    facts = ResidentFactNormalizer().normalize(empty_facts(), current_user_message=message)
+    acts = derive_semantic_acts(facts, node_input=source)
+    assert acts.contains(ResidentSemanticAct.CORRECT_PREVIOUS_FACT)
+    assert acts.contains(ResidentSemanticAct.REQUEST_RESCHEDULE)
+    assert (
+        ResidentIntentDecisionEngine().decide(facts, node_input=source).utterance_intent
+        is AgentIntent.PROVIDE_INFORMATION
+    )
 
 
 def test_missing_fields_and_clarification_are_one_deterministic_decision() -> None:

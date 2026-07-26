@@ -34,13 +34,14 @@ from app.llm.hybrid.models import (
     REQUIREMENTS_POLICY_VERSION,
     SAFETY_POLICY_VERSION,
     ControlledVerificationResult,
-    ExtractedResidentFactsV1,
+    ExtractedResidentFactsV2,
     HybridDecision,
     HybridInterpretationMetadata,
     NormalizedResidentFactsV1,
 )
 from app.llm.hybrid.normalizer import ResidentFactNormalizer
 from app.llm.hybrid.prompts import FactPromptRegistry
+from app.llm.hybrid.semantic import ResidentSemanticActsV1, derive_semantic_acts
 from app.llm.sanitizer import InterpretationInputLimits, build_sanitized_interpretation_input
 
 Verifier = Callable[
@@ -52,6 +53,7 @@ Verifier = Callable[
 @dataclass(frozen=True, slots=True)
 class HybridInterpretationDiagnostics:
     facts: NormalizedResidentFactsV1
+    semantic_acts: ResidentSemanticActsV1
     decision: HybridDecision
     metadata: HybridInterpretationMetadata
 
@@ -104,7 +106,7 @@ class HybridInterpretationNode:
         )
         raw = await self._provider.generate_structured(
             messages=messages,
-            response_model=ExtractedResidentFactsV1,
+            response_model=ExtractedResidentFactsV2,
             model_config=LLMRequestConfig(
                 model=self._model,
                 prompt_name=prompt.prompt_id,
@@ -114,15 +116,16 @@ class HybridInterpretationNode:
             ),
         )
         try:
-            extracted = ExtractedResidentFactsV1.model_validate(raw.payload)
+            extracted = ExtractedResidentFactsV2.model_validate(raw.payload)
         except ValidationError as exc:
             raise StructuredOutputInvalid("resident fact extraction failed validation") from exc
         facts = self._normalizer.normalize(
             extracted,
             current_user_message=node_input.current_user_message,
         )
+        semantic_acts = derive_semantic_acts(facts, node_input=node_input)
         decision = self._decision.decide(facts, node_input=node_input)
-        conflicts = self._conflicts.detect(facts, decision)
+        conflicts = self._conflicts.detect(facts, decision, node_input=node_input)
         verification_count = 0
         verification_reason: str | None = None
         verification_result = None
@@ -196,6 +199,7 @@ class HybridInterpretationNode:
         )
         diagnostics = HybridInterpretationDiagnostics(
             facts=facts,
+            semantic_acts=semantic_acts,
             decision=decision,
             metadata=hybrid_metadata,
         )

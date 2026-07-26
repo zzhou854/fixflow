@@ -10,6 +10,7 @@ from app.llm.hybrid.models import (
     CorrectedFact,
     EvidenceSpan,
     ExtractedResidentFactsV1,
+    ExtractedResidentFactsV2,
     IssueCategoryEvidence,
     NormalizedResidentFactsV1,
 )
@@ -46,6 +47,9 @@ _CATEGORY_TERMS: dict[IssueCategory, tuple[str, ...]] = {
         "漏出的水",
         "水管爆开",
         "涌水",
+        "水管",
+        "灌水",
+        "积水",
     ),
     IssueCategory.ELECTRICAL: (
         "插座",
@@ -150,6 +154,7 @@ _RESCHEDULE = re.compile(
 )
 _BOOKING = re.compile(
     r"(预约|安排上门|请约|直接约|约.{0,8}(维修|师傅|上门)|"
+    r"安排.{0,4}(师傅|维修人员).{0,4}上门|"
     r"排这个时间|来维修|保证.{0,12}空位)"
 )
 _EXISTING_TICKET = re.compile(r"(工单已经有|已有工单|现有.{0,4}工单|之前的工单)")
@@ -167,7 +172,7 @@ _TIME = re.compile(
     r"\d{1,2}:\d{2}|上午|下午|晚上|两点|几点)"
 )
 _UNSUPPORTED = re.compile(
-    r"(代缴|购买|买.{0,6}(饮料|商品)|订.{0,6}(晚餐|餐食)|"
+    r"(代缴|购买|买.{0,6}(饮料|商品)|订.{0,6}(早餐|晚餐|餐食)|"
     r"(车位|储物柜).{0,8}(出租|转租|租出去|出售|广告)|矿泉水|鲜花|"
     r"(预订|订购).{0,10}(鲜花|商品|餐食|早餐)|发布.{0,8}(广告|信息)|"
     r"天气|吃什么药|法律意见|长期门禁|身份改成操作员|"
@@ -176,7 +181,7 @@ _UNSUPPORTED = re.compile(
     r"编造.{0,8}ticket id)"
 )
 _SMALL_TALK = re.compile(
-    r"^(嗨|你好|早上好|下午好|晚上好|谢谢|辛苦|好的|再见|先这样|今天外面会下雨|给我讲|"
+    r"(嗨|你好|早上好|下午好|晚上好|谢谢|辛苦|好的|再见|先这样|今天外面会下雨|给我讲|"
     r"你是什么类型的助手|可以讲.{0,5}笑话|你目前能帮我|"
     r"这个机器人反应|你今天忙吗|你今天怎么样|介绍一下你自己|讲一个.{0,8}故事|"
     r"请讲一个.{0,8}故事|(给我|请).{0,4}写.{0,12}(句|段|首)|[（(]?微笑表情[）)]?)"
@@ -226,7 +231,7 @@ class ResidentFactNormalizer:
 
     def normalize(
         self,
-        extracted: ExtractedResidentFactsV1,
+        extracted: ExtractedResidentFactsV1 | ExtractedResidentFactsV2,
         *,
         current_user_message: str,
     ) -> NormalizedResidentFactsV1:
@@ -457,6 +462,7 @@ class ResidentFactNormalizer:
             and has_issue_language
             and not _VAGUE_DESCRIPTION.fullmatch(source.casefold())
             and "具体表现还没确认" not in source
+            and "具体表现还不清楚" not in source
             and "不知道坏的是什么" not in source
         ):
             description_present = True
@@ -549,6 +555,16 @@ class ResidentFactNormalizer:
             _SMALL_TALK.search(source.casefold()) is not None
             and not has_issue_language
             and not bool(updates.get("explicit_human_request", extracted.explicit_human_request))
+            and not bool(
+                updates.get("booking_request_mentioned", extracted.booking_request_mentioned)
+            )
+            and not bool(
+                updates.get(
+                    "reschedule_request_mentioned",
+                    extracted.reschedule_request_mentioned,
+                )
+            )
+            and not bool(updates.get("status_query_mentioned", extracted.status_query_mentioned))
         )
         if extracted.small_talk_only and not deterministic_small_talk:
             rejected += 1
@@ -570,18 +586,12 @@ class ResidentFactNormalizer:
 
         # A provider cannot turn an ordinary supplement into a correction.
         # Only explicit correction language establishes this control signal.
-        correction = any(
-            marker in source
-            for marker in (
-                "纠正",
-                "更正",
-                "说错",
-                "不是",
-                "改一下",
-                "改到",
-                "其实",
-                "不准确",
-                "先不",
+        correction = (
+            any(marker in source for marker in ("纠正", "更正", "说错", "不准确", "不在", "先不"))
+            or ("不是" in source and re.search(r"不是.{0,3}(取消|撤销)", source) is None)
+            or (
+                re.search(r"(时间|日期|位置|类别).{0,3}改一下", source) is not None
+                and re.search(r"(已|已经|原来|之前).{0,4}(约好|预约)", source) is None
             )
         )
         corrected_fields = set(extracted.corrected_fields) if correction else set()
@@ -599,6 +609,10 @@ class ResidentFactNormalizer:
             conflict_codes=(),
         )
         payload = extracted.model_dump()
+        if isinstance(extracted, ExtractedResidentFactsV2):
+            v1_fields = set(ExtractedResidentFactsV1.model_fields)
+            payload = {key: value for key, value in payload.items() if key in v1_fields}
+            payload["schema_version"] = "resident-facts-v1"
         payload.update(updates)
         payload["source_text"] = source
         return NormalizedResidentFactsV1.model_validate(payload)

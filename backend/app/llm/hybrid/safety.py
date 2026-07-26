@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from app.agent.enums import SafetyFlag
 from app.llm.hybrid.models import NormalizedResidentFactsV1, SafetySignal
@@ -23,11 +24,14 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
     SafetySignal.SMOKE: (re.compile(r"(冒烟|浓烟|烟雾)"),),
     SafetySignal.OPEN_FLAME: (re.compile(r"(明火|起火|着火|火势)"),),
     SafetySignal.ELECTRICAL_ARC: (
+        re.compile(r"(墙插|插排|插线板).{0,8}(冒烟|烧焦|打火|火花)"),
         re.compile(r"(电线|插座|配电|电器|电表箱|开关).{0,8}(打火|火花|冒.{0,2}烟|起火)"),
         re.compile(r"冒烟风险"),
     ),
     SafetySignal.ELECTRIC_SHOCK: (re.compile(r"(触电|漏电|带电|裸露.{0,4}导线.{0,6}通电)"),),
     SafetySignal.ACTIVE_FLOODING: (
+        re.compile(r"(不断|持续|正在).{0,8}(灌水|涌水|进水|积水.{0,4}(扩大|增多))"),
+        re.compile(r"(灌水|涌水).{0,12}(积水|地面)"),
         re.compile(r"(大量|不停|爆裂|成股).{0,8}(漏水|淌水|涌出|积水|往下流)"),
         re.compile(
             r"(水管爆|水管.{0,4}爆开|大量水|水正在涌|不断往下涌水|"
@@ -35,6 +39,7 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
         ),
     ),
     SafetySignal.WATER_NEAR_ELECTRICITY: (
+        re.compile(r"(水|积水|漏水|涌水).{0,20}(通电|亮着).{0,8}(洗衣机|电器|照明灯|灯具)"),
         re.compile(
             r"(水|积水|漏水|淌水|水滴).{0,16}"
             r"(电线|插座|墙插|排插|插排|插线板|插头|电器|冰箱|灯|灯具|浴霸)"
@@ -136,3 +141,41 @@ def map_safety_flags(signals: tuple[SafetySignal, ...]) -> tuple[SafetyFlag, ...
     ):
         flags.add(SafetyFlag.OTHER_REVIEW_REQUIRED)
     return tuple(sorted(flags, key=lambda item: item.value))
+
+
+@dataclass(frozen=True, slots=True)
+class HybridSafetyAssessmentV2:
+    """Independent safety result, separate from intent and requirement decisions."""
+
+    signals: tuple[SafetySignal, ...]
+    flags: tuple[SafetyFlag, ...]
+    critical_signals: tuple[SafetySignal, ...]
+
+
+class HybridSafetyPipelineV2:
+    """High-recall dual-channel safety pipeline with deterministic scope guards."""
+
+    _CRITICAL = frozenset(
+        {
+            SafetySignal.GAS_ODOR,
+            SafetySignal.GAS_LEAK,
+            SafetySignal.SMOKE,
+            SafetySignal.OPEN_FLAME,
+            SafetySignal.ELECTRICAL_ARC,
+            SafetySignal.ELECTRIC_SHOCK,
+            SafetySignal.ACTIVE_FLOODING,
+            SafetySignal.WATER_NEAR_ELECTRICITY,
+            SafetySignal.ELEVATOR_ENTRAPMENT,
+            SafetySignal.PERSON_TRAPPED,
+            SafetySignal.PERSON_INJURED,
+            SafetySignal.FALL_HAZARD,
+        }
+    )
+
+    def evaluate(self, facts: NormalizedResidentFactsV1) -> HybridSafetyAssessmentV2:
+        signals = detect_safety_signals(facts)
+        return HybridSafetyAssessmentV2(
+            signals=signals,
+            flags=map_safety_flags(signals),
+            critical_signals=tuple(signal for signal in signals if signal in self._CRITICAL),
+        )

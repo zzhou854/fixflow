@@ -11,7 +11,7 @@ from app.agent.models import (
 )
 from app.llm.hybrid.models import (
     ControlledVerificationResult,
-    ExtractedResidentFactsV1,
+    ExtractedResidentFactsV2,
     VerificationVerdict,
 )
 from app.llm.hybrid.pipeline import HybridInterpretationNode
@@ -22,7 +22,7 @@ from tests.unit.llm.hybrid.test_rules import node_input
 
 
 class FactProvider:
-    def __init__(self, facts: ExtractedResidentFactsV1) -> None:
+    def __init__(self, facts: ExtractedResidentFactsV2) -> None:
         self.facts = facts
         self.response_models: list[type[BaseModel]] = []
 
@@ -41,7 +41,7 @@ class FactProvider:
             model=model_config.model,
             prompt_name=model_config.prompt_name,
             prompt_version=model_config.prompt_version,
-            schema_version="resident-facts-v1",
+            schema_version="resident-facts-v2",
         )
 
     async def generate_response(
@@ -66,7 +66,7 @@ async def test_pipeline_returns_existing_formal_schema_without_tools() -> None:
         node_input("厨房水管漏水，请安排维修。")
     )
 
-    assert provider.response_models == [ExtractedResidentFactsV1]
+    assert provider.response_models == [ExtractedResidentFactsV2]
     assert result.interpretation.utterance_intent.value == "NEW_REPAIR"
     assert result.interpretation.issue_category is not None
     assert result.interpretation.issue_category.value == "WATER_LEAK"

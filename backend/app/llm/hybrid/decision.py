@@ -15,8 +15,14 @@ from app.llm.hybrid.models import (
     HybridDecision,
     NormalizedResidentFactsV1,
 )
-from app.llm.hybrid.safety import detect_safety_signals, map_safety_flags
-from app.llm.hybrid.semantic import ResidentSemanticFeatures, derive_semantic_features
+from app.llm.hybrid.safety import HybridSafetyPipelineV2
+from app.llm.hybrid.semantic import (
+    ResidentSemanticAct,
+    ResidentSemanticActsV1,
+    ResidentSemanticFeatures,
+    derive_semantic_acts,
+    derive_semantic_features,
+)
 
 _ISSUE_ORDER = (
     IssueField.ISSUE_CATEGORY,
@@ -62,7 +68,15 @@ def resolved_issue_category(facts: NormalizedResidentFactsV1) -> IssueCategory |
         return None
     categories = {item.category for item in facts.issue_category_evidence}
     if IssueCategory.WATER_LEAK in categories and any(
-        marker in facts.source_text for marker in ("漏水", "渗水", "渗漏", "水管突然爆开", "水管爆")
+        marker in facts.source_text
+        for marker in (
+            "漏水",
+            "渗水",
+            "渗漏",
+            "漏下来的水",
+            "水管突然爆开",
+            "水管爆",
+        )
     ):
         return IssueCategory.WATER_LEAK
     positions = [
@@ -116,24 +130,33 @@ def _decide_intent(
     trace: list[DecisionTraceEntry],
     safety_flags: tuple[SafetyFlag, ...],
     features: ResidentSemanticFeatures,
+    acts: ResidentSemanticActsV1,
 ) -> AgentIntent:
-    if features.explicit_human_request:
+    if acts.contains(ResidentSemanticAct.REQUEST_HUMAN):
         trace.append(DecisionTraceEntry(rule_id="INTENT_HUMAN_PRIORITY", outcome="REQUEST_HUMAN"))
         return AgentIntent.REQUEST_HUMAN
-    if features.reschedule_request:
+    if acts.contains(ResidentSemanticAct.CORRECT_PREVIOUS_FACT):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_CORRECTION_PRIORITY",
+                outcome="PROVIDE_INFORMATION",
+            )
+        )
+        return AgentIntent.PROVIDE_INFORMATION
+    if acts.contains(ResidentSemanticAct.REQUEST_RESCHEDULE):
         trace.append(
             DecisionTraceEntry(
                 rule_id="INTENT_RESCHEDULE_PRIORITY", outcome="RESCHEDULE_APPOINTMENT"
             )
         )
         return AgentIntent.RESCHEDULE_APPOINTMENT
-    if features.unsupported_service_request and not facts.issue_category_evidence:
+    if acts.contains(ResidentSemanticAct.SMALL_TALK):
+        trace.append(DecisionTraceEntry(rule_id="INTENT_SMALL_TALK", outcome="UNKNOWN"))
+        return AgentIntent.UNKNOWN
+    if acts.contains(ResidentSemanticAct.UNSUPPORTED_SERVICE) and not facts.issue_category_evidence:
         trace.append(DecisionTraceEntry(rule_id="INTENT_UNSUPPORTED", outcome="UNKNOWN"))
         return AgentIntent.UNKNOWN
-    if facts.correction_present:
-        trace.append(DecisionTraceEntry(rule_id="INTENT_CORRECTION", outcome="PROVIDE_INFORMATION"))
-        return AgentIntent.PROVIDE_INFORMATION
-    if features.cancellation_request:
+    if acts.contains(ResidentSemanticAct.REQUEST_CANCELLATION):
         intent = (
             AgentIntent.CANCEL_APPOINTMENT
             if facts.existing_appointment_mentioned or "预约" in facts.source_text
@@ -141,6 +164,14 @@ def _decide_intent(
         )
         trace.append(DecisionTraceEntry(rule_id="INTENT_CANCELLATION", outcome=intent.value))
         return intent
+    if acts.contains(ResidentSemanticAct.REQUEST_BOOKING) and features.existing_ticket_reference:
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_BOOK_EXISTING_TICKET",
+                outcome="SELECT_APPOINTMENT_SLOT",
+            )
+        )
+        return AgentIntent.SELECT_APPOINTMENT_SLOT
     if facts.acceptance_decision is not None:
         intent = (
             AgentIntent.ACCEPT_REPAIR
@@ -191,7 +222,7 @@ def _decide_intent(
             )
         )
         return AgentIntent.PROVIDE_INFORMATION
-    if features.slot_selection_request and (
+    if acts.contains(ResidentSemanticAct.SELECT_SLOT) and (
         any(marker in facts.source_text for marker in ("候选", "可选", "列表", "师傅", "时段"))
         or any(
             marker in message.content
@@ -224,7 +255,7 @@ def _decide_intent(
         )
         return AgentIntent.PROVIDE_INFORMATION
     if (
-        features.new_booking_request
+        acts.contains(ResidentSemanticAct.REQUEST_BOOKING)
         and _BOOKING_COMMAND.search(facts.source_text)
         and (
             node_input.current_state_summary.task_intent is AgentIntent.SELECT_APPOINTMENT_SLOT
@@ -311,7 +342,7 @@ def _decide_intent(
 class IntentRequirementPolicy:
     """Versioned deterministic missing-field policy for the frozen Agent enum."""
 
-    version: str = "2.3.0"
+    version: str = "3.0.0"
 
     def missing_fields(
         self,
@@ -325,8 +356,6 @@ class IntentRequirementPolicy:
     ) -> tuple[IssueField, ...]:
         if intent is AgentIntent.REQUEST_HUMAN or safety_flags:
             return ()
-        if facts.small_talk_only or features.unsupported_service_request:
-            return ()
         if intent is AgentIntent.RESCHEDULE_APPOINTMENT:
             return (
                 (IssueField.AVAILABILITY,)
@@ -335,6 +364,8 @@ class IntentRequirementPolicy:
                 if features.availability_provided or _time_is_actionable(facts, node_input)
                 else (IssueField.AVAILABILITY,)
             )
+        if facts.small_talk_only or features.unsupported_service_request:
+            return ()
         if intent is AgentIntent.SELECT_APPOINTMENT_SLOT:
             if features.slot_selection_request:
                 return ()
@@ -437,15 +468,21 @@ class ResidentIntentDecisionEngine:
     ) -> HybridDecision:
         trace: list[DecisionTraceEntry] = []
         features = derive_semantic_features(facts, node_input=node_input)
-        signals = detect_safety_signals(facts)
-        safety_flags = map_safety_flags(signals)
+        acts = derive_semantic_acts(facts, node_input=node_input)
+        safety_flags = HybridSafetyPipelineV2().evaluate(facts).flags
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="SEMANTIC_ACTS",
+                outcome=",".join(item.value for item in acts.acts) or "NONE",
+            )
+        )
         trace.append(
             DecisionTraceEntry(
                 rule_id="SAFETY_UNION",
                 outcome=",".join(flag.value for flag in safety_flags) or "NONE",
             )
         )
-        intent = _decide_intent(facts, node_input, trace, safety_flags, features)
+        intent = _decide_intent(facts, node_input, trace, safety_flags, features, acts)
         category = resolved_issue_category(facts)
         missing = self._requirements.missing_fields(
             intent=intent,
@@ -483,6 +520,8 @@ class InterpretationConflictDetector:
         self,
         facts: NormalizedResidentFactsV1,
         decision: HybridDecision,
+        *,
+        node_input: InterpretMessageInput | None = None,
     ) -> tuple[ConflictCode, ...]:
         conflicts: list[ConflictCode] = []
         if (
@@ -507,4 +546,13 @@ class InterpretationConflictDetector:
             conflicts.append(ConflictCode.RESCHEDULE_WITHOUT_APPOINTMENT)
         if facts.small_talk_only and decision.utterance_intent is AgentIntent.NEW_REPAIR:
             conflicts.append(ConflictCode.SMALL_TALK_AS_REPAIR)
+        if node_input is not None:
+            features = derive_semantic_features(facts, node_input=node_input)
+            if features.negated_cancellation and features.cancellation_request:
+                conflicts.append(ConflictCode.NEGATED_CANCELLATION_CONFLICT)
+            if features.unsupported_service_request and decision.utterance_intent in {
+                AgentIntent.SELECT_APPOINTMENT_SLOT,
+                AgentIntent.RESCHEDULE_APPOINTMENT,
+            }:
+                conflicts.append(ConflictCode.UNSUPPORTED_AS_BOOKING)
         return tuple(conflicts)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.llm.hybrid.models import ExtractedResidentFactsV1
+from app.llm.hybrid.models import ExtractedResidentFactsV2
 
 
 class FactPromptDefinition(BaseModel):
@@ -24,9 +24,9 @@ class FactPromptDefinition(BaseModel):
 
 class FactPromptRegistry:
     PROMPT_ID = "resident_fact_extraction"
-    DEFAULT_VERSION = "1.0.0"
-    SCHEMA_VERSION = "resident-facts-v1"
-    SUPPORTED_VERSIONS = ("1.0.0",)
+    DEFAULT_VERSION = "2.0.0"
+    SCHEMA_VERSION = "resident-facts-v2"
+    SUPPORTED_VERSIONS = ("2.0.0",)
 
     def __init__(self, root: Path | None = None) -> None:
         self._root = root or Path(__file__).parents[1] / "prompts" / self.PROMPT_ID
@@ -38,8 +38,8 @@ class FactPromptRegistry:
             raise ValueError(f"unsupported resident fact prompt version: {selected}")
         if selected in self._definitions:
             return self._definitions[selected]
-        system = (self._root / "system_v1.md").read_text(encoding="utf-8")
-        schema = ExtractedResidentFactsV1.model_json_schema(mode="validation")
+        system = (self._root / "system_v2.md").read_text(encoding="utf-8")
+        schema = ExtractedResidentFactsV2.model_json_schema(mode="validation")
         canonical = json.dumps(
             {
                 "prompt_id": self.PROMPT_ID,

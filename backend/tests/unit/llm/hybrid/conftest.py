@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from app.llm.hybrid.models import ExtractedResidentFactsV1
+from app.llm.hybrid.models import ExtractedResidentFactsV2
 
 
-def empty_facts(**updates: object) -> ExtractedResidentFactsV1:
+def empty_facts(**updates: object) -> ExtractedResidentFactsV2:
     values: dict[str, object] = {
         "issue_description_present": False,
         "issue_category_evidence": (),
@@ -22,4 +22,4 @@ def empty_facts(**updates: object) -> ExtractedResidentFactsV1:
         "confidence_by_fact": (),
     }
     values.update(updates)
-    return ExtractedResidentFactsV1.model_validate(values)
+    return ExtractedResidentFactsV2.model_validate(values)

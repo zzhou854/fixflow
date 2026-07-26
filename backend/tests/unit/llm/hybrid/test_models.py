@@ -128,7 +128,7 @@ def test_fact_prompt_is_content_addressed_and_does_not_expose_final_intent() -> 
     second = FactPromptRegistry().resident_fact_extraction()
     assert first == second
     assert first.prompt_id == "resident_fact_extraction"
-    assert first.schema_version == "resident-facts-v1"
+    assert first.schema_version == "resident-facts-v2"
     properties = first.output_schema["properties"]
     assert isinstance(properties, dict)
     assert "utterance_intent" not in properties

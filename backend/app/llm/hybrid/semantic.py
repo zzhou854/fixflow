@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 
 from app.agent.models import InterpretMessageInput
 from app.llm.hybrid.models import NormalizedResidentFactsV1
@@ -24,7 +25,7 @@ _UNAVAILABLE_DATE = re.compile(
     r"几点.{0,4}(没确定|不知道|未定))"
 )
 _ACTIONABLE_TIME = re.compile(
-    r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上|早上|全天|"
+    r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上|明晚|早上|全天|"
     r"改到(明天|后天)|"
     r"(上门|到访).{0,6}(时间|日期|安排).{0,8}(周|星期|明天|后天)|"
     r"上门预约.{0,8}(周|星期)|"
@@ -59,6 +60,32 @@ class ResidentSemanticFeatures:
     current_safety_evidence: bool
     correction_present: bool
     system_owned_duration: bool
+
+
+class ResidentSemanticAct(StrEnum):
+    REPORT_NEW_REPAIR = "REPORT_NEW_REPAIR"
+    PROVIDE_REPAIR_DETAILS = "PROVIDE_REPAIR_DETAILS"
+    REQUEST_BOOKING = "REQUEST_BOOKING"
+    SELECT_SLOT = "SELECT_SLOT"
+    REQUEST_RESCHEDULE = "REQUEST_RESCHEDULE"
+    PROVIDE_AVAILABILITY = "PROVIDE_AVAILABILITY"
+    REQUEST_HUMAN = "REQUEST_HUMAN"
+    REQUEST_CALLBACK = "REQUEST_CALLBACK"
+    NEGATE_CANCELLATION = "NEGATE_CANCELLATION"
+    REQUEST_CANCELLATION = "REQUEST_CANCELLATION"
+    CORRECT_PREVIOUS_FACT = "CORRECT_PREVIOUS_FACT"
+    UNSUPPORTED_SERVICE = "UNSUPPORTED_SERVICE"
+    SMALL_TALK = "SMALL_TALK"
+
+
+@dataclass(frozen=True, slots=True)
+class ResidentSemanticActsV1:
+    """Closed semantic-act projection consumed by Architecture 3.0 decisions."""
+
+    acts: tuple[ResidentSemanticAct, ...]
+
+    def contains(self, act: ResidentSemanticAct) -> bool:
+        return act in self.acts
 
 
 def derive_semantic_features(
@@ -123,3 +150,45 @@ def derive_semantic_features(
         correction_present=facts.correction_present,
         system_owned_duration=system_duration,
     )
+
+
+def derive_semantic_acts(
+    facts: NormalizedResidentFactsV1,
+    *,
+    node_input: InterpretMessageInput,
+) -> ResidentSemanticActsV1:
+    features = derive_semantic_features(facts, node_input=node_input)
+    acts: set[ResidentSemanticAct] = set()
+    if features.explicit_human_request:
+        acts.add(ResidentSemanticAct.REQUEST_HUMAN)
+    if features.callback_request:
+        acts.add(ResidentSemanticAct.REQUEST_CALLBACK)
+    if features.reschedule_request:
+        acts.add(ResidentSemanticAct.REQUEST_RESCHEDULE)
+    if features.slot_selection_request:
+        acts.add(ResidentSemanticAct.SELECT_SLOT)
+    if features.new_booking_request:
+        acts.add(ResidentSemanticAct.REQUEST_BOOKING)
+    if features.availability_provided:
+        acts.add(ResidentSemanticAct.PROVIDE_AVAILABILITY)
+    if features.cancellation_request:
+        acts.add(ResidentSemanticAct.REQUEST_CANCELLATION)
+    if features.negated_cancellation:
+        acts.add(ResidentSemanticAct.NEGATE_CANCELLATION)
+    if features.correction_present:
+        acts.add(ResidentSemanticAct.CORRECT_PREVIOUS_FACT)
+    if features.unsupported_service_request:
+        acts.add(ResidentSemanticAct.UNSUPPORTED_SERVICE)
+    if facts.small_talk_only:
+        acts.add(ResidentSemanticAct.SMALL_TALK)
+    if (
+        features.generic_facility_failure
+        or facts.issue_description_present
+        or facts.issue_category_evidence
+    ):
+        acts.add(
+            ResidentSemanticAct.PROVIDE_REPAIR_DETAILS
+            if node_input.recent_conversation_messages
+            else ResidentSemanticAct.REPORT_NEW_REPAIR
+        )
+    return ResidentSemanticActsV1(acts=tuple(sorted(acts, key=lambda item: item.value)))
