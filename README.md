@@ -74,10 +74,10 @@ GLM-5.1 and DeepSeek-V4 Flash/Pro structured interpretation adapters are
 available behind explicit configuration. The historic DeepSeek direct-output
 architecture did not meet every frozen gate and remains recorded as
 `DEEPSEEK_V4_MODEL_CAPABILITY_BLOCKER`. The new deterministic hybrid
-architecture is a separate candidate: DeepSeek V4 Flash candidate 1.9.0 passed
+architecture is a separate candidate: DeepSeek V4 Flash candidate 2.0.0 passed
 two independent 120-case development repeats and every development stability
-gate. Challenge v1–v3 are consumed historical evidence; the independently
-authored Challenge v4 is frozen for clean-commit formal qualification. This is not
+gate. Challenge v1–v4 are consumed historical evidence; the independently
+authored Challenge v5 is frozen for clean-commit formal qualification. This is not
 yet a Baseline, Release Candidate, or activation.
 The first GLM live qualification result is `NOT_QUALIFIED`. The
 current qualified model candidate is **None**; no Baseline or Release Candidate

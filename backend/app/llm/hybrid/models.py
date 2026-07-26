@@ -17,12 +17,12 @@ EvidenceText = Annotated[
 FactName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{1,79}$")]
 
 ARCHITECTURE_ID = "hybrid_interpretation"
-ARCHITECTURE_VERSION = "1.9.0"
+ARCHITECTURE_VERSION = "2.0.0"
 FACT_SCHEMA_VERSION = "resident-facts-v1"
 DECISION_ENGINE_ID = "resident_interpretation_decision_engine"
-DECISION_ENGINE_VERSION = "1.2.0"
-SAFETY_POLICY_VERSION = "1.2.0"
-REQUIREMENTS_POLICY_VERSION = "1.2.0"
+DECISION_ENGINE_VERSION = "2.0.0"
+SAFETY_POLICY_VERSION = "2.0.0"
+REQUIREMENTS_POLICY_VERSION = "2.0.0"
 HYBRID_SCORER_ID = "resident_hybrid_interpretation_scorer"
 HYBRID_SCORER_VERSION = "1.1.0"
 
@@ -172,7 +172,7 @@ class DecisionTraceV1(HybridModel):
     engine_id: Literal["resident_interpretation_decision_engine"] = (
         "resident_interpretation_decision_engine"
     )
-    engine_version: Literal["1.2.0"] = "1.2.0"
+    engine_version: Literal["2.0.0"] = "2.0.0"
     entries: tuple[DecisionTraceEntry, ...] = Field(max_length=30)
 
 

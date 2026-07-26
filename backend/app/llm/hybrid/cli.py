@@ -33,7 +33,10 @@ HISTORICAL_CHALLENGE_V2_DATASET = (
 HISTORICAL_CHALLENGE_V3_DATASET = (
     ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v3.jsonl"
 )
-CHALLENGE_DATASET = ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v4.jsonl"
+HISTORICAL_CHALLENGE_V4_DATASET = (
+    ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v4.jsonl"
+)
+CHALLENGE_DATASET = ROOT / "evals" / "datasets" / "resident_interpretation_challenge_v5.jsonl"
 SMOKE_DEFINITION = ROOT / "evals" / "development" / "resident_interpretation_prompt_v2_smoke.json"
 
 
@@ -48,6 +51,7 @@ def parser() -> argparse.ArgumentParser:
             "historical-challenge-v1",
             "historical-challenge-v2",
             "historical-challenge-v3",
+            "historical-challenge-v4",
             "formal-regression",
             "formal-challenge",
         ),
@@ -165,6 +169,7 @@ def _dataset(stage: str, probe_count: int) -> EvaluationDataset:
         "historical-challenge-v1",
         "historical-challenge-v2",
         "historical-challenge-v3",
+        "historical-challenge-v4",
         "formal-challenge",
     }:
         historical_version = (
@@ -175,6 +180,8 @@ def _dataset(stage: str, probe_count: int) -> EvaluationDataset:
             else "3.0.0"
             if stage == "historical-challenge-v3"
             else "4.0.0"
+            if stage == "historical-challenge-v4"
+            else "5.0.0"
         )
         dataset_path = (
             HISTORICAL_CHALLENGE_V1_DATASET
@@ -183,6 +190,8 @@ def _dataset(stage: str, probe_count: int) -> EvaluationDataset:
             if historical_version == "2.0.0"
             else HISTORICAL_CHALLENGE_V3_DATASET
             if historical_version == "3.0.0"
+            else HISTORICAL_CHALLENGE_V4_DATASET
+            if historical_version == "4.0.0"
             else CHALLENGE_DATASET
         )
         challenge = load_dataset(dataset_path)

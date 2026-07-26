@@ -58,7 +58,10 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
         re.compile(r"(砸到|撞到).{0,3}(人|家人|住户)"),
     ),
     SafetySignal.PERSON_TRAPPED: (
-        re.compile(r"(孩子|小孩|人员|住户|儿童|老人|家人).{0,10}(被困|反锁|困在|锁在)"),
+        re.compile(
+            r"(孩子|小孩|幼儿|人员|住户|儿童|老人|家人).{0,10}"
+            r"(被困|反锁|困在|锁在)"
+        ),
         re.compile(
             r"(被困|反锁|困在|锁在).{0,10}"
             r"(阳台|卫生间|房间|卧室|次卧|储物间|电梯)"

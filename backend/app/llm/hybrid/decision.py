@@ -38,8 +38,9 @@ _STRONG_RESCHEDULE = re.compile(
     r"换个时间|换个日子|这个时间不行|不要原来的|调整.{0,4}到|"
     r"调整为.{0,6}(周|星期|上午|下午|晚上|明天|后天)|都可以改|"
     r"改到|就改到|还是改到|朋友家的预约|已约.{0,8}(改|换)|原来约|"
-    r"预约.{0,8}(挪到|调到|往后推)|上门(时间|日期).{0,8}(改|调|换)|"
-    r"(师傅|上门|到访).{0,8}改成|"
+    r"预约.{0,8}(挪到|调到|调整到|往后推|延迟|延后)|"
+    r"上门(时间|日期).{0,8}(改|调|换|更换)|"
+    r"(师傅|上门|到访).{0,8}改成|另约.{0,8}时间|"
     r"上门.{0,8}(延后|另约)|来的时间.{0,8}重新安排|新的时间还没定|重新约)"
 )
 _SLOT_SELECTION = re.compile(
@@ -47,9 +48,10 @@ _SLOT_SELECTION = re.compile(
     r"(选|确认).{0,10}(第[一二三四五六七八九十]|师傅|那一档|时间)|"
     r"(第[一二三四五六七八九十]|最后).{0,6}(个|项|档|时间).{0,4}(可以|就行)|"
     r"候选列表.{0,8}第[一二三四五六七八九十]项|"
-    r"(选|就定|确认).{0,12}(中间那个|那一个时间段|对应的那个时段|排在最前面))"
+    r"(选|就定|请定|确认).{0,12}(中间那个|那一个时间段|对应的那个时段|"
+    r"排在最前面|最后一个时间))"
 )
-_SUPPLEMENT = re.compile(r"(补充|情况有变化|再说明|位置是|日期是|时间是)")
+_SUPPLEMENT = re.compile(r"(补充|情况有变化|情况更新|再说明|位置是|日期是|时间是)")
 _PRECISE_TIME = re.compile(
     r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上).{0,12}"
     r"(周[一二三四五六日天]|星期[一二三四五六日天]|\d{4}年|\d{1,2}月|"
@@ -121,9 +123,6 @@ def _decide_intent(
     if facts.explicit_human_request:
         trace.append(DecisionTraceEntry(rule_id="INTENT_HUMAN_PRIORITY", outcome="REQUEST_HUMAN"))
         return AgentIntent.REQUEST_HUMAN
-    if facts.unsupported_request_evidence and not facts.issue_category_evidence:
-        trace.append(DecisionTraceEntry(rule_id="INTENT_UNSUPPORTED", outcome="UNKNOWN"))
-        return AgentIntent.UNKNOWN
     contextual_reschedule = "改成" in facts.source_text and any(
         marker in message.content
         for message in node_input.recent_conversation_messages
@@ -138,6 +137,9 @@ def _decide_intent(
             )
         )
         return AgentIntent.RESCHEDULE_APPOINTMENT
+    if facts.unsupported_request_evidence and not facts.issue_category_evidence:
+        trace.append(DecisionTraceEntry(rule_id="INTENT_UNSUPPORTED", outcome="UNKNOWN"))
+        return AgentIntent.UNKNOWN
     if facts.correction_present:
         trace.append(DecisionTraceEntry(rule_id="INTENT_CORRECTION", outcome="PROVIDE_INFORMATION"))
         return AgentIntent.PROVIDE_INFORMATION
@@ -189,7 +191,7 @@ def _decide_intent(
         )
         return AgentIntent.PROVIDE_INFORMATION
     if _SLOT_SELECTION.search(facts.source_text) and (
-        any(marker in facts.source_text for marker in ("候选", "列表", "师傅", "时段"))
+        any(marker in facts.source_text for marker in ("候选", "可选", "列表", "师傅", "时段"))
         or any(
             marker in message.content
             for message in node_input.recent_conversation_messages
@@ -307,7 +309,7 @@ def _decide_intent(
 class IntentRequirementPolicy:
     """Versioned deterministic missing-field policy for the frozen Agent enum."""
 
-    version: str = "1.2.0"
+    version: str = "2.0.0"
 
     def missing_fields(
         self,
