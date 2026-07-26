@@ -5,12 +5,12 @@
 Task 17 introduces an internal candidate architecture without activating it:
 
 ```text
-architecture       hybrid_interpretation@1.7.0
+architecture       hybrid_interpretation@1.8.0
 fact prompt        resident_fact_extraction@1.0.0
 fact schema        resident-facts-v1
-decision engine    resident_interpretation_decision_engine@1.0.0
-safety policy      1.0.0
-requirements       1.0.0
+decision engine    resident_interpretation_decision_engine@1.1.0
+safety policy      1.1.0
+requirements       1.1.0
 hybrid scorer      resident_hybrid_interpretation_scorer@1.1.0
 external schema    interpretation-result-v1
 ```
@@ -21,11 +21,11 @@ single-call architecture; they are not qualification evidence for this
 candidate.
 
 DeepSeek V4 Flash passed two independent 120-case development repeats and all
-frozen development stability gates for candidate 1.7.0. Challenge v1 was
-consumed by the earlier 1.4.0 formal attempt and is now historical regression
-evidence. The newly authored Challenge v2 has passed only offline identity,
-distribution, privacy, hash, and isolation checks; it has received zero online
-calls. No Baseline or Release Candidate exists yet. See
+frozen development stability gates for candidate 1.8.0. Challenge v1 and v2
+were consumed by failed formal attempts and are now immutable historical
+regression evidence. The independently authored Challenge v3 has passed only
+offline identity, privacy, hash, and isolation checks; it has received zero
+online calls. No Baseline or Release Candidate exists yet. See
 `HYBRID_DEVELOPMENT_EVIDENCE.md`.
 
 ## Responsibility boundary
@@ -71,7 +71,7 @@ Candidate 1.4 validates `small_talk_only` and unsupported-request evidence
 against deterministic boundaries. Those model fields cannot suppress required
 repair clarification without matching message evidence.
 
-Candidate 1.7 keeps the provider schema closed and strongly typed while moving
+Candidate 1.8 keeps the provider schema closed and strongly typed while moving
 cross-field consistency and time-window ordering to the deterministic
 normalizer. A conflicting boolean/evidence pair or an end-before-start provider
 window is rejected as an untrusted fact instead of invalidating the entire
@@ -117,6 +117,6 @@ unchanged. The client cannot select an internal architecture or prompt.
 
 Interpretation evaluation has no MCP calls, business mutations, Outbox writes,
 Checkpoint writes, Replay writes, business Trace writes, or business database
-writes. Challenge corpus v2 must not receive a live call until the candidate,
+writes. Challenge corpus v3 must not receive a live call until the candidate,
 model, policies, scorer, tests, and clean runtime commit are all frozen after
 two passing development repeats.

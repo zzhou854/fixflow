@@ -29,11 +29,20 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
     SafetySignal.ELECTRIC_SHOCK: (re.compile(r"(触电|漏电|带电)"),),
     SafetySignal.ACTIVE_FLOODING: (
         re.compile(r"(大量|不停|正在|爆裂|成股).{0,8}(漏水|淌水|涌出|积水|往下流)"),
-        re.compile(r"(水管爆|大量水|水正在涌|积水越来越多)"),
+        re.compile(
+            r"(水管爆|水管.{0,4}爆开|大量水|水正在涌|不断往下涌水|"
+            r"积水(越来越多|迅速增多))"
+        ),
     ),
     SafetySignal.WATER_NEAR_ELECTRICITY: (
-        re.compile(r"(水|积水|漏水|淌水|水滴).{0,16}(电线|插座|插排|插线板|电器|冰箱|灯)"),
-        re.compile(r"(电线|插座|插排|插线板|电器|灯).{0,16}(水|积水|漏水|淌水|水滴)"),
+        re.compile(
+            r"(水|积水|漏水|淌水|水滴).{0,16}"
+            r"(电线|插座|插排|插线板|电器|冰箱|灯|浴霸)"
+        ),
+        re.compile(
+            r"(电线|插座|插排|插线板|电器|灯|浴霸).{0,16}"
+            r"(水|积水|漏水|淌水|水滴)"
+        ),
     ),
     SafetySignal.ELEVATOR_ENTRAPMENT: (
         re.compile(r"(困|被困).{0,5}电梯"),
@@ -46,10 +55,14 @@ _SIGNAL_PATTERNS: dict[SafetySignal, tuple[re.Pattern[str], ...]] = {
     SafetySignal.PERSON_INJURED: (
         re.compile(r"(有人|人员|住户|孩子|家人|老人).{0,8}(受伤|流血)"),
         re.compile(r"(砸伤|摔伤|划伤).{0,5}(人|家人|住户)"),
+        re.compile(r"(砸到|撞到).{0,3}(人|家人|住户)"),
     ),
     SafetySignal.PERSON_TRAPPED: (
-        re.compile(r"(孩子|人员|住户|儿童|老人|家人).{0,10}(被困|反锁|困在|锁在)"),
-        re.compile(r"(被困|反锁|困在|锁在).{0,10}(阳台|卫生间|房间|电梯)"),
+        re.compile(r"(孩子|小孩|人员|住户|儿童|老人|家人).{0,10}(被困|反锁|困在|锁在)"),
+        re.compile(
+            r"(被困|反锁|困在|锁在).{0,10}"
+            r"(阳台|卫生间|房间|卧室|次卧|储物间|电梯)"
+        ),
     ),
 }
 

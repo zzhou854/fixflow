@@ -36,3 +36,35 @@ async def test_deterministic_hybrid_decisions_preserve_development_golden_contra
         if not scored.case_passed:
             failures.append(case.case_id)
     assert failures == []
+
+
+@pytest.mark.asyncio
+async def test_consumed_challenge_corpora_are_historical_regression_only() -> None:
+    node = HybridInterpretationNode(FactProvider(empty_facts()), model="empty-fact-fixture")
+    expected_failures = {
+        "resident_interpretation_challenge_v1.jsonl": set(),
+        # These v2 labels were copied incorrectly during corpus authoring and
+        # were frozen by the first formal call.  They remain immutable failure
+        # evidence rather than rules the architecture should imitate.
+        "resident_interpretation_challenge_v2.jsonl": {
+            "challenge2-missing-009",
+            "challenge2-correction-003",
+        },
+    }
+    for filename, expected in expected_failures.items():
+        dataset = load_dataset(Path("backend/evals/datasets") / filename)
+        failures: set[str] = set()
+        for case in dataset.cases:
+            result = await node(case.input.to_provider_input())
+            now = datetime.now(UTC)
+            scored = score_hybrid_success(
+                case,
+                repeat_index=0,
+                result=result,
+                started_at=now,
+                completed_at=now,
+                latency_ms=0,
+            )
+            if not scored.case_passed:
+                failures.add(case.case_id)
+        assert failures == expected, "\n".join(sorted(failures))

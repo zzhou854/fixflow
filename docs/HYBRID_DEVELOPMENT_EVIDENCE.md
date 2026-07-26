@@ -7,8 +7,8 @@ identity, or business mutation material.
 ## Frozen candidate
 
 ```text
-architecture       hybrid_interpretation@1.7.0
-architecture hash  7381f06b0a67c8b8cb533fa43ed7c5aa9ecd414989d022ded1d7cb3f86f211d3
+architecture       hybrid_interpretation@1.8.0
+architecture hash  b7d39994a372befb1290dc7ae17677de3b1109f38fab096443ca6d18834b2639
 fact prompt        resident_fact_extraction@1.0.0
 fact prompt hash   2ec06592d5836161b2b305c1ef6b494ef3a513c7258fce19489fbd428b65b0b7
 hybrid scorer      resident_hybrid_interpretation_scorer@1.1.0
@@ -46,8 +46,8 @@ default product provider remains `scripted`.
 Both independent 120-case runs passed the absolute development gate. Run IDs:
 
 ```text
-Repeat 1  34321300-9983-4b63-aa9c-df1fed8cbace
-Repeat 2  55ac288a-1906-4e1d-a33c-3d8aff755401
+Repeat 1  fb90c4aa-46d4-44fc-be72-d5a51402657c
+Repeat 2  087aa30d-8fb2-4a6b-b49e-6642f148ae36
 ```
 
 Three cases in each repeat differed from an exact Golden projection, but the
@@ -79,7 +79,7 @@ interpretation gates.
 | Evidence span validity | 94.00% | 93.85% |
 | Safety evidence recall | 94.12% | 94.12% |
 | Verification calls | 0 | 0 |
-| Total tokens | 321,797 | 321,762 |
+| Total tokens | 322,033 | 322,670 |
 
 There were no provider failures or rate-limit responses. Evaluation made no
 SDK tool calls, MCP calls, Agent Graph calls, business mutations, Outbox writes,
@@ -88,20 +88,23 @@ writes.
 
 ## Holdout status
 
-Challenge v1 was consumed by formal candidate 1.4.0, failed, and was not reused
-as a holdout. It is now a historical regression corpus. Candidate 1.7.0 passed
-all 60 historical cases in run
-`b7f52669-3ffb-4ab8-bb63-84615290c1e5`.
+Challenge v1 was consumed by formal candidate 1.4.0 and Challenge v2 by formal
+candidate 1.7.0. Both failed and are historical regression corpora. Candidate
+1.8.0 completed Challenge v2 as historical regression in run
+`6401af92-053b-4ac8-8d1d-13d3a75a9b25`; its only three differences are the
+frozen authoring defects recorded in `HYBRID_CHALLENGE_V2_FAILURE.md`.
 
-At this development checkpoint, the independently authored v2 corpus has only
+At this development checkpoint, the independently authored v3 corpus has only
 been validated offline:
 
 ```text
 challenge_v1_consumed=true
 challenge_v1_role=HISTORICAL_REGRESSION
-challenge_v2_hash=b8875bf62124c77af91e8fee21b43a637cb3c1cb3fe345551911367b2e0bfcff
-challenge_v2_consumed=false
-challenge_v2_live_calls=0
+challenge_v2_consumed=true
+challenge_v2_role=HISTORICAL_REGRESSION
+challenge_v3_hash=117010b7e088532becb291fe2126b2586988e5b95114b4842adab9831da8b471
+challenge_v3_consumed=false
+challenge_v3_live_calls=0
 formal_qualification=NOT_STARTED
 baseline=NOT_CREATED
 release_candidate=NOT_CREATED
@@ -109,5 +112,5 @@ activation=NOT_ACTIVATED
 default_provider=scripted
 ```
 
-The locked Challenge v2 may be used only after this candidate is committed,
+The locked Challenge v3 may be used only after this candidate is committed,
 the full repository checks pass, and the working tree is clean.

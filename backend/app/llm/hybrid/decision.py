@@ -33,14 +33,17 @@ _ISSUE_ACTION = re.compile(
 )
 _BOOKING_COMMAND = re.compile(r"(我想预约|请约|想约|直接约|能排|请安排上门|保证|只要.{0,10}来维修)")
 _STRONG_RESCHEDULE = re.compile(
-    r"(改期|预约.{0,8}(改|换)|原预约|之前的预约|上次约|"
-    r"换个时间|这个时间不行|不要原来的|调整到|都可以改|"
-    r"就改到|还是改到|改成|朋友家的预约|已约.{0,8}改|原来约|"
-    r"预约.{0,8}(挪到|往后推)|上门时间.{0,8}改|重新约)"
+    r"(改期|预约.{0,8}(改|换)|原预约|之前的预约|已经约好|上次约|"
+    r"换个时间|换个日子|这个时间不行|不要原来的|调整.{0,4}(到|为)|都可以改|"
+    r"改到|就改到|还是改到|改成|朋友家的预约|已约.{0,8}改|原来约|"
+    r"预约.{0,8}(挪到|往后推)|上门时间.{0,8}(改|调)|"
+    r"上门.{0,8}(延后|另约)|新的时间还没定|重新约)"
 )
 _SLOT_SELECTION = re.compile(
     r"(我选.{0,6}(第[一二三四五六七八九十]|最后)|选.{0,10}(师傅|那一档|时间)|"
-    r"(第[一二三四五六七八九十]|最后).{0,6}(个|档|时间).{0,4}(可以|就行))"
+    r"(第[一二三四五六七八九十]|最后).{0,6}(个|项|档|时间).{0,4}(可以|就行)|"
+    r"候选列表.{0,8}第[一二三四五六七八九十]项|"
+    r"(选|就定).{0,8}(中间那个|那一个时间段))"
 )
 _PRECISE_TIME = re.compile(
     r"(\d{1,2}:\d{2}|\d{1,2}点|两点|上午|下午|晚上).{0,12}"
@@ -59,6 +62,11 @@ def resolved_issue_category(facts: NormalizedResidentFactsV1) -> IssueCategory |
         if "冒烟风险" in facts.source_text:
             return IssueCategory.ELECTRICAL
         return None
+    categories = {item.category for item in facts.issue_category_evidence}
+    if IssueCategory.WATER_LEAK in categories and any(
+        marker in facts.source_text for marker in ("漏水", "渗水", "渗漏", "水管突然爆开", "水管爆")
+    ):
+        return IssueCategory.WATER_LEAK
     positions = [
         (facts.source_text.rfind(item.evidence.text), item.category)
         for item in facts.issue_category_evidence
@@ -77,7 +85,7 @@ def _time_is_actionable(
     if re.search(r"改到(明天|后天)", text):
         return True
     if re.search(
-        r"(改|换|挪).{0,6}(周[一二三四五六日天]|星期[一二三四五六日天]|"
+        r"(改|换|挪|调|调整).{0,6}(周[一二三四五六日天]|星期[一二三四五六日天]|"
         r"\d{1,2}号|[一二三四五六七八九十]{1,3}号)",
         text,
     ):
@@ -103,6 +111,7 @@ def _decide_intent(
     facts: NormalizedResidentFactsV1,
     node_input: InterpretMessageInput,
     trace: list[DecisionTraceEntry],
+    safety_flags: tuple[SafetyFlag, ...],
 ) -> AgentIntent:
     if facts.explicit_human_request:
         trace.append(DecisionTraceEntry(rule_id="INTENT_HUMAN_PRIORITY", outcome="REQUEST_HUMAN"))
@@ -141,10 +150,36 @@ def _decide_intent(
             DecisionTraceEntry(rule_id="INTENT_STATUS_QUERY", outcome="QUERY_TICKET_STATUS")
         )
         return AgentIntent.QUERY_TICKET_STATUS
+    if (
+        facts.time_expression_present
+        and not facts.issue_category_evidence
+        and not _BOOKING_COMMAND.search(facts.source_text)
+        and any(marker in facts.source_text for marker in ("有空", "方便上门", "家里有人"))
+    ):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_AVAILABILITY_SUPPLEMENT",
+                outcome="PROVIDE_INFORMATION",
+            )
+        )
+        return AgentIntent.PROVIDE_INFORMATION
+    if (
+        facts.location_mentioned
+        and not facts.issue_category_evidence
+        and not _ISSUE_ACTION.search(facts.source_text)
+        and not safety_flags
+    ):
+        trace.append(
+            DecisionTraceEntry(
+                rule_id="INTENT_LOCATION_SUPPLEMENT",
+                outcome="PROVIDE_INFORMATION",
+            )
+        )
+        return AgentIntent.PROVIDE_INFORMATION
     if _SLOT_SELECTION.search(facts.source_text) and any(
         marker in message.content
         for message in node_input.recent_conversation_messages
-        for marker in ("可选", "候选", "时间", "档")
+        for marker in ("可选", "候选", "时间", "时段", "档", "列表", "维修人员")
     ):
         trace.append(
             DecisionTraceEntry(
@@ -242,7 +277,7 @@ def _decide_intent(
 class IntentRequirementPolicy:
     """Versioned deterministic missing-field policy for the frozen Agent enum."""
 
-    version: str = "1.0.0"
+    version: str = "1.1.0"
 
     def missing_fields(
         self,
@@ -270,6 +305,12 @@ class IntentRequirementPolicy:
                 return (IssueField.ISSUE_CATEGORY, IssueField.ISSUE_DESCRIPTION)
             return () if _time_is_actionable(facts, node_input) else (IssueField.AVAILABILITY,)
         if intent in {AgentIntent.NEW_REPAIR, AgentIntent.UNKNOWN, AgentIntent.PROVIDE_INFORMATION}:
+            if (
+                intent is AgentIntent.PROVIDE_INFORMATION
+                and facts.time_expression_present
+                and any(marker in facts.source_text for marker in ("有空", "方便上门", "家里有人"))
+            ):
+                return ()
             if (
                 intent is AgentIntent.PROVIDE_INFORMATION
                 and facts.time_expression_present
@@ -353,7 +394,7 @@ class ResidentIntentDecisionEngine:
                 outcome=",".join(flag.value for flag in safety_flags) or "NONE",
             )
         )
-        intent = _decide_intent(facts, node_input, trace)
+        intent = _decide_intent(facts, node_input, trace, safety_flags)
         category = resolved_issue_category(facts)
         missing = self._requirements.missing_fields(
             intent=intent,

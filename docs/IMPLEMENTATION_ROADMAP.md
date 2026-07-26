@@ -1,9 +1,10 @@
 # FixFlow implementation roadmap
 
 Current reliability work: Task 17 has frozen
-`hybrid_interpretation@1.7.0` after DeepSeek V4 Flash passed two independent
+`hybrid_interpretation@1.8.0` after DeepSeek V4 Flash passed two independent
 120-case development repeats, every stability gate, and the consumed
-Challenge-v1 historical regression. Challenge v2 is a new zero-live-call
+Challenge-v2 historical regression,
+apart from its three frozen Golden defects. Challenge v3 is a new zero-live-call
 holdout awaiting clean-commit formal evaluation. This does not activate
 an online provider, change the default `scripted` provider, add a migration, or
 expand Agent/MCP business scope. Formal Regression and locked-Challenge
@@ -224,7 +225,7 @@ is still required. No row may be removed or weakened without explicit user appro
 | `UNKNOWN_COMMIT` recovery | C | implemented | `backend/app/reconciliation`, `docs/RECONCILIATION.md`, Task 11 review | Three Resident Agent mutations plus one Operator-only escalation share one coordinator; real committed, not-committed, and inconsistent vertical cases recover without duplicate mutation | No |
 | Fault injection | C | implemented | `backend/app/fault_injection`, `docs/FAULT_INJECTION.md`, Task 11 review | Eight closed delivery/reconciliation fault points and vertical recovery cases pass | No |
 | Replay | C | implemented | `backend/app/replay`, `docs/REPLAY.md`, Task 12 review | Checksummed typed tape, same Graph topology, zero business side effects, ten-run repeatability, and Recovery Console | No |
-| Evaluation suite | D | partial | `backend/evals`, `backend/app/llm/evaluation`, `backend/app/llm/hybrid`, Task 14–17 reports | 120-case development regression corpus, consumed Challenge v1, independently authored 60-case locked Challenge v2, versioned Prompt/Scorer semantics and release gates; historic direct-output results remain unchanged, while hybrid candidate 1.7.0 passed two complete development repeats, stability gates, and v1 historical regression; formal v2 qualification, Baseline, and Release Candidate remain pending | No |
+| Evaluation suite | D | partial | `backend/evals`, `backend/app/llm/evaluation`, `backend/app/llm/hybrid`, Task 14–17 reports | 120-case development regression corpus, consumed Challenge v1/v2, independently authored 60-case locked Challenge v3, versioned Prompt/Scorer semantics and release gates; historic direct-output results remain unchanged, while hybrid candidate 1.8.0 passed two complete development repeats and stability gates; formal v3 qualification, Baseline, and Release Candidate remain pending | No |
 | ReAct baseline | D | deferred | original project specification | Same-model/tool/data comparison is reproducible | No |
 | Core ablations | D | deferred | this roadmap | Three approved removals produce comparable metrics | No |
 | Resident frontend | B | partial | `frontend/src/pages/ResidentPage.tsx`, Task 9 review | Chat, status, typed interrupts, reschedule/human request work; cancellation and acceptance remain manual | No |
