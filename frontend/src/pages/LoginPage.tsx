@@ -1,6 +1,6 @@
 import { Alert, Button, Card, Form, Input, Segmented, Typography } from 'antd'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 

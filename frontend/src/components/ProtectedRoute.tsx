@@ -1,5 +1,5 @@
 import { Spin } from 'antd'
-import { Navigate } from 'react-router-dom'
+import { Navigate } from 'react-router'
 import type { ReactNode } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import type { ActorType } from '../types'
