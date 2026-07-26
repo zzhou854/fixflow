@@ -69,6 +69,17 @@ hash is
 The same external condition has therefore persisted across three consecutive
 Goal turns and across 20, 5, and 1 request-per-minute strategies.
 
+On 2026-07-26, after the DeepSeek comparison work, a fresh GLM blocker audit
+again used one request per minute, single concurrency and at most two Provider
+attempts. Run `75873c02-e88e-430c-a4ed-fdbfc9132d89` produced two consecutive
+`PROVIDER_FAILED / RATE_LIMITED` Case results. The audit was intentionally
+stopped when inspection showed that the current `probe-only` workflow completes
+all eight Probe Cases rather than failing after the first Case; continuing
+would have consumed additional waits and calls without changing the already
+repeated external-state conclusion. Because the process was stopped, this run
+has no final summary or artifact-index claim. Its two safe Case classifications
+remain ignored local evidence and are not committed as raw output.
+
 Safe evidence hashes:
 
 - development summary:
