@@ -1,5 +1,12 @@
 # Architecture
 
+> The scripted-provider product architecture is complete and
+> production-packaged. The container topology is PostgreSQL -> one-shot
+> Migration and Checkpoint initialization -> independent MCP -> API ->
+> frontend. Production startup validates database head, JWT secret, Debug,
+> CORS, Allowed Hosts, primary provider, and experimental-mode isolation before
+> accepting traffic.
+
 ## System boundary
 
 ```mermaid

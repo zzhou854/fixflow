@@ -1,5 +1,12 @@
 # FixFlow
 
+> **Project status: COMPLETE.** Core product:
+> `PRODUCTION_READY_WITH_SCRIPTED_PROVIDER`. The online model is
+> `EXPERIMENTAL_NOT_QUALIFIED`, isolation is enforced, Shadow mode is available
+> but off by default, activation is prohibited, and the default provider is
+> `scripted`. The frontend has zero known High npm vulnerabilities. See
+> `docs/FINAL_PROJECT_COMPLETION_REPORT.md`.
+
 The current model-quality work is a non-activated hybrid interpretation
 candidate: an LLM extracts evidence-backed language facts and deterministic code
 owns safety, intent, missing-field, and clarification decisions. The public
@@ -17,9 +24,9 @@ demo.
 
 ## Current status
 
-Stage A, Stage B, and Tasks 9–15 are committed. Task 16 has implemented Prompt
-v2 remediation and completed its development evaluation at the code-review
-gate:
+All planned product, reliability, deployment, and release-audit work is
+committed. Online-model qualification remains a separate, non-activated
+research track:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
@@ -70,29 +77,16 @@ gate:
   regression comparison, release policy, resumable Runner, and safe local artifacts;
 - the implementation roadmap and mandatory task-alignment gates.
 
-GLM-5.1 and DeepSeek-V4 Flash/Pro structured interpretation adapters are
-available behind explicit configuration. The historic DeepSeek direct-output
-architecture did not meet every frozen gate and remains recorded as
-`DEEPSEEK_V4_MODEL_CAPABILITY_BLOCKER`. The new deterministic hybrid
-architecture is a separate candidate. DeepSeek V4 Flash candidate 2.3.0 passed
-two independent 120-case formal Regression runs and every Regression stability
-gate. The one-time locked Challenge v7 run completed without infrastructure
-failures but failed clarification, missing-field, safety, and critical-safety
-gates. Challenge v7 is consumed and no second repeat was run. No Baseline or
-Release Candidate was created, and activation remains prohibited.
-The first GLM live qualification result is `NOT_QUALIFIED`. The
-current qualified model candidate is **None**; no Baseline or Release Candidate
-was published, and the default runtime remains Scripted. See
-`docs/GLM_5_1_QUALIFICATION_REPORT.md`. Prompt v2's historical development run
-is `EVALUATION_BLOCKED_INFRASTRUCTURE`, with quality `INCONCLUSIVE`, because the
-first 120-case repeat suffered 87 terminal rate-limit
-failures; the locked Challenge Corpus was not called. See
-`docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md`,
-`docs/DEEPSEEK_V4_CAPABILITY_REPORT.md`, and
-`docs/HYBRID_DEVELOPMENT_EVIDENCE.md` and
-`docs/HYBRID_2_3_FORMAL_QUALIFICATION_REPORT.md`. Formal hybrid qualification, online
-embedding, online free-text generation, the ReAct baseline, and Stage D
-ablations remain mandatory roadmap work, not cancelled scope.
+GLM-5.1 and DeepSeek-V4 Flash/Pro structured interpretation adapters remain
+available only behind explicit experimental configuration. Architecture 3.0
+passed Smoke, both development repeats, and both formal Regression repeats, but
+its only permitted locked engineering Holdout failed six absolute quality
+gates. Repeat 2 was not run; no Baseline or Release Candidate was created.
+Activation remains prohibited and the qualified online candidate is **None**.
+See `docs/HYBRID_3_0_QUALIFICATION_BLOCKER.md`. Online-model improvement,
+real-distribution Shadow evidence, drift monitoring, cost optimization, and
+optional activation remain research work; they do not block the complete
+scripted-provider product.
 Replay verifies control-plane determinism;
 it is not Event Sourcing, database time travel, or automatic repair.
 
@@ -110,7 +104,9 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy
-docker compose up -d postgres
+docker compose build
+docker compose up -d
+docker compose ps
 uv run alembic upgrade head
 $env:PYTHONPATH = "backend"; uv run python -m app.api.run
 uv run python -m mcp_server
