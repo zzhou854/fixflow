@@ -148,6 +148,37 @@ def test_prompt_development_accepts_deepseek_provider(tmp_path: Path) -> None:
     assert args.online_provider == "deepseek"
 
 
+def test_prompt_development_supports_smoke_only(tmp_path: Path) -> None:
+    args = build_parser().parse_args(
+        [
+            "develop-prompt-v2",
+            "--run-purpose",
+            "prompt-development",
+            "--output",
+            str(tmp_path / "smoke"),
+            "--smoke-only",
+        ]
+    )
+    assert args.smoke_only is True
+
+
+def test_prompt_development_rejects_conflicting_stage_flags(tmp_path: Path) -> None:
+    assert (
+        main(
+            [
+                "develop-prompt-v2",
+                "--run-purpose",
+                "prompt-development",
+                "--output",
+                str(tmp_path / "conflict"),
+                "--probe-only",
+                "--smoke-only",
+            ]
+        )
+        == EvaluationExitCode.INVALID_INPUT
+    )
+
+
 def test_validate_and_inspect_cli(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["validate-dataset"]) == EvaluationExitCode.SUCCESS
     assert "cases=120" in capsys.readouterr().out

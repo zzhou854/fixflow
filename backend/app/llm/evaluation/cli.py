@@ -127,6 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     develop.add_argument("--output", type=Path, required=True)
     develop.add_argument("--probe-only", action="store_true")
+    develop.add_argument("--smoke-only", action="store_true")
     develop.add_argument(
         "--online-provider",
         choices=("glm", "deepseek"),
@@ -237,6 +238,8 @@ def _scheduler_configuration(args: argparse.Namespace) -> EvaluationSchedulerCon
 
 
 async def _develop_prompt_v2(args: argparse.Namespace) -> int:
+    if args.probe_only and args.smoke_only:
+        raise ValueError("--probe-only and --smoke-only are mutually exclusive")
     online_provider = args.online_provider
     require_online_authorization(
         provider=online_provider,
@@ -311,7 +314,7 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
         )
         all_results = smoke_outcome.results
         smoke_gate = evaluate_smoke_gate(smoke_outcome.report.metrics)
-        if smoke_gate.passed:
+        if smoke_gate.passed and not args.smoke_only:
             first = await runner.run(
                 _development_request(
                     dataset=regression,
@@ -451,6 +454,8 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
     if status is DevelopmentStatus.EVALUATION_BLOCKED_INFRASTRUCTURE:
         return EvaluationExitCode.INFRASTRUCTURE_FAILED
     if args.probe_only and probe_outcome.report.metrics.completion_rate == 1:
+        return EvaluationExitCode.SUCCESS
+    if args.smoke_only and smoke_gate is not None and smoke_gate.passed:
         return EvaluationExitCode.SUCCESS
     if status is DevelopmentStatus.READY_FOR_REQUALIFICATION:
         return EvaluationExitCode.SUCCESS
