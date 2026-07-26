@@ -133,6 +133,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("glm", "deepseek"),
         default="glm",
     )
+    develop.add_argument(
+        "--candidate-prompt-version",
+        choices=PromptRegistry.SUPPORTED_VERSIONS,
+        default="2.0.0",
+    )
     _add_scheduler_arguments(develop)
     compare = commands.add_parser("compare")
     compare.add_argument("--baseline", type=Path, required=True)
@@ -249,13 +254,21 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
     )
     registry = PromptRegistry()
     prompt_v1 = registry.resident_interpretation("1.0.0")
-    prompt_v2 = registry.resident_interpretation("2.0.0")
-    regression = _validated_dataset(DEFAULT_DATASET, prompt_version="2.0.0")
-    challenge = _validated_dataset(CHALLENGE_DATASET, prompt_version="2.0.0")
+    candidate = registry.resident_interpretation(args.candidate_prompt_version)
+    if candidate.prompt_version == "1.0.0":
+        raise ValueError("prompt development requires a non-production candidate")
+    regression = _validated_dataset(
+        DEFAULT_DATASET,
+        prompt_version=candidate.prompt_version,
+    )
+    challenge = _validated_dataset(
+        CHALLENGE_DATASET,
+        prompt_version=candidate.prompt_version,
+    )
     validate_challenge_isolation(
         challenge,
         regression=regression,
-        prompts=(prompt_v1, prompt_v2),
+        prompts=(prompt_v1, candidate),
     )
     reject_challenge_for_prompt_development(
         challenge.metadata.dataset_id,
@@ -264,12 +277,12 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
     policy = load_policy(DEFAULT_POLICY)
     validate_policy(policy)
     fingerprint = _development_fingerprint(
-        prompt_hash=prompt_v2.prompt_hash,
+        prompt_hash=candidate.prompt_hash,
         challenge_hash=challenge.metadata.dataset_hash,
         policy_hash=policy.policy_hash,
     )
     provider_args = argparse.Namespace(allow_network=True, acknowledge_cost=True)
-    provider, configuration = _provider(online_provider, provider_args, prompt_v2)
+    provider, configuration = _provider(online_provider, provider_args, candidate)
     output = args.output
     output.mkdir(parents=True, exist_ok=False)
     all_results: tuple[EvaluationCaseResult, ...] = ()
@@ -291,6 +304,7 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
                 output=output / "raw-probe",
                 fingerprint=fingerprint,
                 scheduler_configuration=_scheduler_configuration(args),
+                prompt_version=candidate.prompt_version,
             )
         )
         probe_results = probe_outcome.results
@@ -310,6 +324,7 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
                 output=output / "raw-smoke",
                 fingerprint=fingerprint,
                 scheduler_configuration=_scheduler_configuration(args),
+                prompt_version=candidate.prompt_version,
             )
         )
         all_results = smoke_outcome.results
@@ -324,6 +339,7 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
                     output=output / "raw-repeat-1",
                     fingerprint=fingerprint,
                     scheduler_configuration=_scheduler_configuration(args),
+                    prompt_version=candidate.prompt_version,
                 )
             )
             all_results = (*all_results, *first.results)
@@ -338,6 +354,7 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
                         output=output / "raw-repeat-2",
                         fingerprint=fingerprint,
                         scheduler_configuration=_scheduler_configuration(args),
+                        prompt_version=candidate.prompt_version,
                     )
                 )
                 all_results = (*all_results, *second.results)
@@ -366,9 +383,9 @@ async def _develop_prompt_v2(args: argparse.Namespace) -> int:
     final_audit = stage_outcomes[-1].report.manifest.scheduler_audit if stage_outcomes else None
     summary = DevelopmentRunSummary(
         status=status,
-        prompt_id=prompt_v2.prompt_id,
-        prompt_version=prompt_v2.prompt_version,
-        prompt_hash=prompt_v2.prompt_hash,
+        prompt_id=candidate.prompt_id,
+        prompt_version=candidate.prompt_version,
+        prompt_hash=candidate.prompt_hash,
         dataset_id=regression.metadata.dataset_id,
         dataset_version=regression.metadata.dataset_version,
         dataset_hash=regression.metadata.dataset_hash,
@@ -471,6 +488,7 @@ def _development_request(
     output: Path,
     fingerprint: str,
     scheduler_configuration: EvaluationSchedulerConfiguration,
+    prompt_version: str,
     fail_fast: bool = False,
 ) -> EvaluationRunRequest:
     return EvaluationRunRequest(
@@ -482,7 +500,7 @@ def _development_request(
         concurrency=1,
         repeat_count=1,
         allow_dirty=True,
-        prompt_version="2.0.0",
+        prompt_version=prompt_version,
         scorer_version="2.0.0",
         run_purpose=EvaluationRunPurpose.PROMPT_DEVELOPMENT,
         development_source_fingerprint=fingerprint,

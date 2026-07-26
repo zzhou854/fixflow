@@ -29,6 +29,7 @@ from app.llm.validation.parser import StructuredInterpretationParser
 from app.trace.models import TracePayload
 
 Sleeper = Callable[[float], Awaitable[None]]
+SUPPORTED_DEEPSEEK_MODELS = frozenset({"deepseek-v4-flash", "deepseek-v4-pro"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,8 +64,8 @@ class DeepSeekStructuredInterpretationProvider:
         sleeper: Sleeper = asyncio.sleep,
         random_source: random.Random | None = None,
     ) -> None:
-        if config.model != "deepseek-v4-flash":
-            raise ValueError("DeepSeek provider supports only deepseek-v4-flash")
+        if config.model not in SUPPORTED_DEEPSEEK_MODELS:
+            raise ValueError("DeepSeek provider supports deepseek-v4-flash and deepseek-v4-pro")
         if config.thinking_mode != "disabled":
             raise ValueError("DeepSeek structured interpretation requires disabled thinking")
         self._prompt = prompt

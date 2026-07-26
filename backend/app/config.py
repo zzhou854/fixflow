@@ -62,8 +62,8 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_api_key: SecretStr | None = None
     deepseek_thinking_mode: str = "disabled"
-    deepseek_temperature: float = Field(default=0.1, ge=0, le=2)
-    deepseek_top_p: float = Field(default=0.8, gt=0, le=1)
+    deepseek_temperature: float = Field(default=0.0, ge=0, le=2)
+    deepseek_top_p: float = Field(default=1.0, gt=0, le=1)
     deepseek_max_tokens: int = Field(default=1600, gt=0, le=8000)
     deepseek_request_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     deepseek_total_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
@@ -86,8 +86,8 @@ class Settings(BaseSettings):
             raise ValueError("GLM_TOTAL_TIMEOUT_SECONDS must be at least request timeout")
         if self.glm_retry_max_delay_seconds < self.glm_retry_initial_delay_seconds:
             raise ValueError("GLM_RETRY_MAX_DELAY_SECONDS must be at least initial delay")
-        if self.deepseek_model != "deepseek-v4-flash":
-            raise ValueError("DEEPSEEK_MODEL must be deepseek-v4-flash")
+        if self.deepseek_model not in {"deepseek-v4-flash", "deepseek-v4-pro"}:
+            raise ValueError("DEEPSEEK_MODEL must be deepseek-v4-flash or deepseek-v4-pro")
         if self.deepseek_thinking_mode != "disabled":
             raise ValueError(
                 "DEEPSEEK_THINKING_MODE must be disabled for structured interpretation"

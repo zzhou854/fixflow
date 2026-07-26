@@ -148,6 +148,21 @@ def test_prompt_development_accepts_deepseek_provider(tmp_path: Path) -> None:
     assert args.online_provider == "deepseek"
 
 
+def test_prompt_development_accepts_versioned_candidate(tmp_path: Path) -> None:
+    args = build_parser().parse_args(
+        [
+            "develop-prompt-v2",
+            "--run-purpose",
+            "prompt-development",
+            "--candidate-prompt-version",
+            "2.1.0",
+            "--output",
+            str(tmp_path / "candidate"),
+        ]
+    )
+    assert args.candidate_prompt_version == "2.1.0"
+
+
 def test_prompt_development_supports_smoke_only(tmp_path: Path) -> None:
     args = build_parser().parse_args(
         [

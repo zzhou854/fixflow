@@ -1,0 +1,59 @@
+[
+  {
+    "name": "预约上下文仅补充宽泛可用时间",
+    "input": {
+      "current_message": "下周一下午我在家",
+      "current_task_intent": "SELECT_APPOINTMENT_SLOT"
+    },
+    "output": {
+      "utterance_intent": "PROVIDE_INFORMATION",
+      "model_suggested_missing_fields": []
+    }
+  },
+  {
+    "name": "改期上下文给出替代时段",
+    "input": {
+      "current_message": "把周五上午的预约换到周六下午",
+      "current_task_intent": "RESCHEDULE_APPOINTMENT"
+    },
+    "output": {
+      "utterance_intent": "RESCHEDULE_APPOINTMENT",
+      "model_suggested_missing_fields": []
+    }
+  },
+  {
+    "name": "燃气安全事件停止普通追问",
+    "input": {
+      "current_message": "设备间有很重的燃气味，正在扩散"
+    },
+    "output": {
+      "utterance_intent": "NEW_REPAIR",
+      "issue_description_update": "设备间有很重的燃气味，正在扩散",
+      "safety_flags": [
+        "IMMEDIATE_DANGER",
+        "OTHER_REVIEW_REQUIRED"
+      ],
+      "model_suggested_missing_fields": []
+    }
+  },
+  {
+    "name": "多轮追问仅补充位置",
+    "input": {
+      "current_message": "是在书房",
+      "recent_messages": [
+        {
+          "role": "ASSISTANT",
+          "content": "故障发生在哪里？"
+        }
+      ]
+    },
+    "output": {
+      "utterance_intent": "PROVIDE_INFORMATION",
+      "issue_location": "书房",
+      "model_suggested_missing_fields": [
+        "ISSUE_CATEGORY",
+        "ISSUE_DESCRIPTION"
+      ]
+    }
+  }
+]

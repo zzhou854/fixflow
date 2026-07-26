@@ -19,10 +19,13 @@ an online failure never falls back to the Scripted Provider.
 
 `FIXFLOW_LLM_PROVIDER=deepseek` selects the OpenAI-compatible DeepSeek adapter.
 It requires a non-placeholder `FIXFLOW_DEEPSEEK_API_KEY`, fixes the official
-model ID to `deepseek-v4-flash`, and uses `https://api.deepseek.com`. The
+model ID to the allowlisted `deepseek-v4-flash` (default) or
+`deepseek-v4-pro`, and uses `https://api.deepseek.com`. The
 adapter requests JSON Object output, disables thinking explicitly, sends no
 tool definitions, and does not use the model's tool-call capability. It reuses
 the existing `httpx` dependency; no second SDK or retry framework is added.
+Changing the model ID does not activate the Provider: the product runtime
+continues to use `scripted` unless explicitly configured otherwise.
 
 The production/default Prompt remains `resident_interpretation@1.0.0`.
 Prompt v2 can be injected only by controlled internal evaluation/DI; no client

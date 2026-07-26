@@ -46,6 +46,18 @@ def test_deepseek_provider_requires_non_placeholder_secret() -> None:
     assert secret not in repr(settings)
 
 
+def test_deepseek_pro_is_an_allowed_explicit_model() -> None:
+    settings = Settings.model_validate(
+        {
+            **BASE,
+            "llm_provider": "deepseek",
+            "deepseek_model": "deepseek-v4-pro",
+            "deepseek_api_key": "synthetic-deepseek-secret-that-must-not-appear",
+        }
+    )
+    assert settings.deepseek_model == "deepseek-v4-pro"
+
+
 @pytest.mark.parametrize(
     "overrides",
     [

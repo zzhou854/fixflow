@@ -53,16 +53,33 @@ class InterpretMessageNode:
             max_output_tokens=1400,
         )
         schema_json = json.dumps(prompt.output_schema, ensure_ascii=False, sort_keys=True)
-        compact_examples = prompt.prompt_version == "2.0.0"
+        compact_examples = prompt.prompt_version != "1.0.0"
+        example_payloads = [
+            example.model_dump(
+                mode="json",
+                exclude_none=compact_examples,
+                exclude_defaults=compact_examples,
+            )
+            for example in prompt.examples
+        ]
+        if prompt.prompt_version in {
+            "3.1.0",
+            "3.2.0",
+            "3.3.0",
+            "3.4.0",
+            "3.5.0",
+            "3.6.0",
+            "3.7.0",
+            "4.0.0",
+        }:
+            for example, payload in zip(prompt.examples, example_payloads, strict=True):
+                output = payload["output"]
+                assert isinstance(output, dict)
+                output["model_suggested_missing_fields"] = [
+                    item.value for item in example.output.model_suggested_missing_fields
+                ]
         examples_json = json.dumps(
-            [
-                example.model_dump(
-                    mode="json",
-                    exclude_none=compact_examples,
-                    exclude_defaults=compact_examples,
-                )
-                for example in prompt.examples
-            ],
+            example_payloads,
             ensure_ascii=False,
             sort_keys=True,
         )

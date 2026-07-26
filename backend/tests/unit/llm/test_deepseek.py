@@ -190,12 +190,19 @@ async def test_non_retryable_http_errors_are_safely_mapped(
     await provider.close()
 
 
-def test_provider_rejects_other_model_or_enabled_thinking() -> None:
+def test_provider_accepts_pro_and_rejects_other_model_or_enabled_thinking() -> None:
     transport = httpx.MockTransport(lambda _: httpx.Response(200, json=_success()))
     client = httpx.AsyncClient(transport=transport)
     prompt = PromptRegistry().resident_interpretation()
     parser = StructuredInterpretationParser(max_response_bytes=65_536)
-    with pytest.raises(ValueError, match="deepseek-v4-flash"):
+    pro = DeepSeekStructuredInterpretationProvider(
+        prompt=prompt,
+        parser=parser,
+        client=client,
+        config=_config(model="deepseek-v4-pro"),
+    )
+    assert pro.provider_name == "deepseek"
+    with pytest.raises(ValueError, match="deepseek-v4-flash and deepseek-v4-pro"):
         DeepSeekStructuredInterpretationProvider(
             prompt=prompt,
             parser=parser,

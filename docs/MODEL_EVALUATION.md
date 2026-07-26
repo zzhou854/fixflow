@@ -206,3 +206,20 @@ rate-limit failures and 27.50% completion. It stopped before repeat two and is
 historically `EVALUATION_BLOCKED_INFRASTRUCTURE`; its Prompt quality is
 `INCONCLUSIVE`, not a pass or model-quality failure. Details and safe evidence hashes are in
 `docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md`.
+
+## DeepSeek V4 development result
+
+After the user explicitly switched the remediation target, the same frozen
+development corpus, Scorer v2 and Policy v1 were evaluated through the
+production DeepSeek JSON-mode adapter. Flash and Pro both completed controlled
+single-concurrency runs without rate limits or Provider failures. Twelve
+complete 120-case Prompt/model combinations were evaluated. None passed every
+Intent, Clarification, Missing Fields and Safety threshold simultaneously, so
+Repeat 2, the locked Challenge Corpus, formal qualification, Baseline and
+Release Candidate stages were not entered.
+
+The current status is `DEEPSEEK_V4_MODEL_CAPABILITY_BLOCKER` for this
+non-thinking, single-pass structured interpretation configuration. The default
+runtime remains `scripted`; neither DeepSeek model is activated. Metrics,
+Prompt hashes and capability-boundary evidence are recorded in
+`docs/DEEPSEEK_V4_CAPABILITY_REPORT.md`.

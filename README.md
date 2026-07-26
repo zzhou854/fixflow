@@ -64,16 +64,19 @@ gate:
   regression comparison, release policy, resumable Runner, and safe local artifacts;
 - the implementation roadmap and mandatory task-alignment gates.
 
-GLM-5.1 and DeepSeek-V4-Flash structured interpretation adapters are available
-behind explicit configuration. DeepSeek has not yet been evaluated or
-activated. The first GLM live qualification result is `NOT_QUALIFIED`. The
+GLM-5.1 and DeepSeek-V4 Flash/Pro structured interpretation adapters are
+available behind explicit configuration. DeepSeek V4 completed controlled
+development evaluation but did not meet every frozen gate; its current result
+is `DEEPSEEK_V4_MODEL_CAPABILITY_BLOCKER`, not qualification or activation.
+The first GLM live qualification result is `NOT_QUALIFIED`. The
 current qualified model candidate is **None**; no Baseline or Release Candidate
 was published, and the default runtime remains Scripted. See
 `docs/GLM_5_1_QUALIFICATION_REPORT.md`. Prompt v2's historical development run
 is `EVALUATION_BLOCKED_INFRASTRUCTURE`, with quality `INCONCLUSIVE`, because the
 first 120-case repeat suffered 87 terminal rate-limit
 failures; the locked Challenge Corpus was not called. See
-`docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md`. A future remediation or
+`docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md` and
+`docs/DEEPSEEK_V4_CAPABILITY_REPORT.md`. A future remediation or
 requalification, online
 embedding, online free-text generation, the ReAct baseline, and Stage D
 ablations remain mandatory roadmap work, not cancelled scope.
@@ -185,6 +188,7 @@ and never maintained manually.
 - [Model Evaluation](docs/MODEL_EVALUATION.md)
 - [Model Release Gate](docs/MODEL_RELEASE_GATE.md)
 - [GLM-5.1 Prompt v2 remediation](docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md)
+- [DeepSeek V4 capability report](docs/DEEPSEEK_V4_CAPABILITY_REPORT.md)
 
 ## Week-1 delivery order
 
