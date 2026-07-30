@@ -9,6 +9,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from app.agent.ports import LLMProvider
 from app.config import Settings
 from app.llm.evaluation.challenge import (
     validate_challenge_isolation,
@@ -19,6 +20,8 @@ from app.llm.evaluation.models import EvaluationCaseResult, EvaluationDataset
 from app.llm.hybrid.evaluation import HybridStage, run_hybrid_evaluation
 from app.llm.hybrid.pipeline import HybridInterpretationNode
 from app.llm.hybrid.prompts import FactPromptRegistry
+from app.llm.online.factory import build_deepseek_online_candidate
+from app.llm.online.gate import ProviderPurpose
 from app.llm.providers.deepseek import (
     DeepSeekConfig,
     DeepSeekStructuredInterpretationProvider,
@@ -72,7 +75,7 @@ def parser() -> argparse.ArgumentParser:
     )
     root.add_argument(
         "--model",
-        choices=("deepseek-v4-flash", "deepseek-v4-pro"),
+        choices=("deepseek-v4-flash", "deepseek-v4-pro", "flash-to-pro"),
         required=True,
     )
     root.add_argument("--output", type=Path, required=True)
@@ -94,28 +97,51 @@ def main(argv: list[str] | None = None) -> int:
 
 async def _run(args: argparse.Namespace) -> int:
     runtime_commit, source_clean = _formal_source_identity(args.stage, args.runtime_commit)
-    settings = Settings(llm_provider="deepseek", deepseek_model=args.model)
+    selected_model = "deepseek-v4-flash" if args.model == "flash-to-pro" else args.model
+    settings = Settings(
+        llm_provider="deepseek",
+        deepseek_model=selected_model,
+        llm_online_enabled=True,
+        llm_online_runtime_mode="development",
+    )
+    if not settings.enable_live_provider_tests:
+        raise SystemExit(
+            "online hybrid evaluation is disabled; "
+            "set FIXFLOW_ENABLE_LIVE_PROVIDER_TESTS=true explicitly"
+        )
     assert settings.deepseek_api_key is not None
     dataset = _dataset(args.stage, args.probe_count)
     prompt = FactPromptRegistry().resident_fact_extraction()
-    provider = DeepSeekStructuredInterpretationProvider(
-        prompt=prompt,
-        parser=StructuredInterpretationParser(max_response_bytes=settings.llm_max_response_bytes),
-        config=DeepSeekConfig(
-            model=args.model,
-            base_url=settings.deepseek_base_url,
-            thinking_mode="disabled",
-            temperature=0,
-            top_p=1,
-            max_tokens=settings.deepseek_max_tokens,
-            request_timeout_seconds=max(30, settings.deepseek_request_timeout_seconds),
-            total_timeout_seconds=max(45, settings.deepseek_total_timeout_seconds),
-            max_attempts=1,
-            max_concurrency=1,
-        ),
-        api_key=settings.deepseek_api_key.get_secret_value(),
-    )
-    node = HybridInterpretationNode(provider, model=args.model)
+    provider: LLMProvider
+    if args.model == "flash-to-pro":
+        provider = build_deepseek_online_candidate(
+            settings,
+            purpose=ProviderPurpose.TEST,
+        )
+    else:
+        provider = DeepSeekStructuredInterpretationProvider(
+            prompt=prompt,
+            parser=StructuredInterpretationParser(
+                max_response_bytes=settings.llm_max_response_bytes
+            ),
+            config=DeepSeekConfig(
+                model=args.model,
+                base_url=settings.deepseek_base_url,
+                thinking_mode="disabled",
+                temperature=0,
+                top_p=1,
+                max_tokens=settings.deepseek_max_tokens,
+                request_timeout_seconds=min(
+                    settings.llm_model_budget_seconds,
+                    settings.deepseek_request_timeout_seconds,
+                ),
+                total_timeout_seconds=settings.llm_model_budget_seconds,
+                max_attempts=1,
+                max_concurrency=1,
+            ),
+            api_key=settings.deepseek_api_key.get_secret_value(),
+        )
+    node = HybridInterpretationNode(provider, model=selected_model)
     try:
         stage: HybridStage
         if args.stage == "probe":

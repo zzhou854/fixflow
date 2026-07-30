@@ -1,7 +1,10 @@
+from app.llm.errors import LLMProviderErrorCode
+from app.llm.hybrid.evaluation import _routing_metrics
 from app.llm.online.regression import (
     DevelopmentCaseResult,
     summarize_development_regression,
 )
+from app.llm.online.routing import RoutingObservation
 
 
 def test_development_regression_report_keeps_flash_pro_and_system_metrics_separate() -> None:
@@ -22,3 +25,49 @@ def test_development_regression_report_keeps_flash_pro_and_system_metrics_separa
     assert report.average_latency_ms == 25
     assert report.p95_latency_ms == 40
     assert report.error_counts == {"TIMEOUT": 1, "SCHEMA_VALIDATION_FAILED": 1}
+
+
+def test_routing_evidence_separates_retry_repair_and_pro_recovery() -> None:
+    observations = (
+        RoutingObservation(
+            "deepseek",
+            "deepseek-v4-flash",
+            "flash",
+            False,
+            LLMProviderErrorCode.TIMEOUT,
+        ),
+        RoutingObservation(
+            "deepseek",
+            "deepseek-v4-flash",
+            "flash",
+            True,
+            None,
+        ),
+        RoutingObservation(
+            "deepseek",
+            "deepseek-v4-flash",
+            "flash",
+            False,
+            LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED,
+        ),
+        RoutingObservation(
+            "deepseek",
+            "deepseek-v4-flash",
+            "flash_schema_repair",
+            False,
+            LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED,
+        ),
+        RoutingObservation(
+            "deepseek",
+            "deepseek-v4-pro",
+            "pro",
+            True,
+            None,
+        ),
+    )
+    metrics = _routing_metrics(observations, ())
+    assert metrics is not None
+    assert metrics.flash_transport_failure_count == 2
+    assert metrics.flash_schema_repair_trigger_count == 1
+    assert metrics.pro_fallback_count == 1
+    assert metrics.pro_recovery_count == 1

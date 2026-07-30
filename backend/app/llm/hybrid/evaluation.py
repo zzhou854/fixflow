@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
-from app.agent.errors import StructuredOutputInvalid
+from app.agent.errors import ProviderExhausted, StructuredOutputInvalid
 from app.llm.errors import LLMProviderError
 from app.llm.evaluation.artifacts import atomic_write_text
 from app.llm.evaluation.development import (
@@ -33,6 +33,7 @@ from app.llm.evaluation.scorer_v2 import score_failure
 from app.llm.hybrid.models import HybridInterpretationMetadata, NormalizedResidentFactsV1
 from app.llm.hybrid.pipeline import HybridInterpretationNode
 from app.llm.hybrid.scorer import calculate_hybrid_metrics, score_hybrid_success
+from app.llm.online.routing import RoutingObservation
 
 
 class HybridFactMetrics(EvaluationModel):
@@ -71,6 +72,20 @@ class HybridSafeCaseSummary(EvaluationModel):
     missing_fields: tuple[str, ...] = ()
     safety_flags: tuple[str, ...] = ()
     requested_human: bool | None = None
+    selected_model: str | None = None
+
+
+class HybridRoutingMetrics(EvaluationModel):
+    observation_count: int = Field(ge=0)
+    flash_first_success_count: int = Field(ge=0)
+    flash_transport_failure_count: int = Field(ge=0)
+    flash_schema_repair_trigger_count: int = Field(ge=0)
+    flash_schema_repair_success_count: int = Field(ge=0)
+    pro_fallback_count: int = Field(ge=0)
+    pro_recovery_count: int = Field(ge=0)
+    provider_exhausted_count: int = Field(ge=0)
+    budget_exhausted_count: int = Field(ge=0)
+    circuit_rejected_count: int = Field(ge=0)
 
 
 class HybridEvaluationReport(EvaluationModel):
@@ -103,6 +118,7 @@ class HybridEvaluationReport(EvaluationModel):
     fact_metrics: HybridFactMetrics
     gate: DevelopmentGateResult
     provider_failure_counts: dict[str, int]
+    routing_metrics: HybridRoutingMetrics | None = None
     cases: tuple[HybridSafeCaseSummary, ...]
 
 
@@ -159,10 +175,12 @@ async def run_hybrid_evaluation(
             last_started = time.monotonic()
             result_started = datetime.now(UTC)
             monotonic_started = time.monotonic()
+            selected_model: str | None = None
             try:
                 node_result, diagnostics = await node.interpret_with_diagnostics(
                     case.input.to_provider_input()
                 )
+                selected_model = node_result.metadata.model
                 completed = datetime.now(UTC)
                 latency_ms = int((time.monotonic() - monotonic_started) * 1000)
                 scored = score_hybrid_success(
@@ -177,10 +195,17 @@ async def run_hybrid_evaluation(
                 rejected = diagnostics.facts.rejected_evidence_count
                 evidence_count = _evidence_count(diagnostics.facts)
                 verification_count = diagnostics.metadata.verification_call_count
-            except (LLMProviderError, StructuredOutputInvalid) as exc:
+            except (LLMProviderError, ProviderExhausted, StructuredOutputInvalid) as exc:
                 completed = datetime.now(UTC)
                 latency_ms = int((time.monotonic() - monotonic_started) * 1000)
-                code = exc.code.value if isinstance(exc, LLMProviderError) else "INVALID_OUTPUT"
+                provider_error = _provider_error(exc)
+                code = (
+                    provider_error.code.value
+                    if provider_error is not None
+                    else "PROVIDER_EXHAUSTED"
+                    if isinstance(exc, ProviderExhausted)
+                    else "INVALID_OUTPUT"
+                )
                 scored = score_failure(
                     case,
                     repeat_index=repeat_index,
@@ -194,15 +219,17 @@ async def run_hybrid_evaluation(
                     completed_at=completed,
                     latency_ms=latency_ms,
                     error_code=code,
-                    invalid_output=not isinstance(exc, LLMProviderError)
+                    invalid_output=isinstance(exc, StructuredOutputInvalid)
                     or code
                     in {
                         "INVALID_JSON",
                         "SCHEMA_VALIDATION_FAILED",
                         "INVARIANT_VIOLATION",
                     },
-                    attempt_count=getattr(exc, "attempt_count", 1),
-                    provider_retry_after_seconds=getattr(exc, "retry_after_seconds", None),
+                    attempt_count=getattr(provider_error or exc, "attempt_count", 1),
+                    provider_retry_after_seconds=getattr(
+                        provider_error or exc, "retry_after_seconds", None
+                    ),
                 )
                 rejected = evidence_count = verification_count = 0
             results.append(scored)
@@ -260,6 +287,7 @@ async def run_hybrid_evaluation(
                         if scored.interpretation is not None
                         else None
                     ),
+                    selected_model=selected_model,
                 )
             )
             if progress is not None:
@@ -303,6 +331,10 @@ async def run_hybrid_evaluation(
                     if item.provider_error_code is not None
                 ).items()
             )
+        ),
+        routing_metrics=_routing_metrics(
+            node.routing_observations,
+            result_tuple,
         ),
         cases=tuple(safe_cases),
     )
@@ -477,3 +509,50 @@ def _expected_bool(case: EvaluationCase, path: str) -> bool:
 def _expected_set(case: EvaluationCase, path: str) -> set[str]:
     value = _expected_value(case, path)
     return set(value) if isinstance(value, tuple) else set()
+
+
+def _provider_error(exc: Exception) -> LLMProviderError | None:
+    candidate: BaseException | None = exc
+    while candidate is not None:
+        if isinstance(candidate, LLMProviderError):
+            return candidate
+        candidate = candidate.__cause__
+    return None
+
+
+def _routing_metrics(
+    observations: tuple[RoutingObservation, ...],
+    results: tuple[EvaluationCaseResult, ...],
+) -> HybridRoutingMetrics | None:
+    if not observations:
+        return None
+    errors = Counter(item.error_code.value for item in observations if item.error_code is not None)
+    first_successes = 0
+    at_case_start = True
+    for item in observations:
+        if item.phase == "flash" and item.success and at_case_start:
+            first_successes += 1
+        if item.success:
+            at_case_start = True
+        else:
+            at_case_start = False
+    return HybridRoutingMetrics(
+        observation_count=len(observations),
+        flash_first_success_count=first_successes,
+        flash_transport_failure_count=sum(
+            not item.success and item.phase == "flash" for item in observations
+        ),
+        flash_schema_repair_trigger_count=sum(
+            item.phase == "flash_schema_repair" for item in observations
+        ),
+        flash_schema_repair_success_count=sum(
+            item.phase == "flash_schema_repair" and item.success for item in observations
+        ),
+        pro_fallback_count=sum(item.phase == "pro" for item in observations),
+        pro_recovery_count=sum(item.phase == "pro" and item.success for item in observations),
+        provider_exhausted_count=sum(
+            item.provider_error_code == "PROVIDER_EXHAUSTED" for item in results
+        ),
+        budget_exhausted_count=errors["BUDGET_EXHAUSTED"],
+        circuit_rejected_count=errors["CIRCUIT_OPEN"],
+    )

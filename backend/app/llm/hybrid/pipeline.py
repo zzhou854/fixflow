@@ -43,7 +43,7 @@ from app.llm.hybrid.models import (
 from app.llm.hybrid.normalizer import ResidentFactNormalizer
 from app.llm.hybrid.prompts import FactPromptRegistry
 from app.llm.hybrid.semantic import ResidentSemanticActsV1, derive_semantic_acts
-from app.llm.online.routing import ProviderExhaustedError
+from app.llm.online.routing import ProviderExhaustedError, RoutingObservation
 from app.llm.sanitizer import InterpretationInputLimits, build_sanitized_interpretation_input
 
 Verifier = Callable[
@@ -83,6 +83,11 @@ class HybridInterpretationNode:
         self._conflicts = InterpretationConflictDetector()
         self._verifier = verifier
         self.last_diagnostics: HybridInterpretationDiagnostics | None = None
+
+    @property
+    def routing_observations(self) -> tuple[RoutingObservation, ...]:
+        observations = getattr(self._provider, "observations", ())
+        return tuple(observations) if isinstance(observations, list | tuple) else ()
 
     async def __call__(self, node_input: InterpretMessageInput) -> InterpretationNodeResult:
         result, diagnostics = await self.interpret_with_diagnostics(node_input)

@@ -96,9 +96,14 @@ class GroundedResponseProvider:
         if request.template_id in CRITICAL_TEMPLATE_IDS:
             return self._render(request, ResponseTone.CONCISE, (), used_model=False)
         prompt = (
-            "Choose only tone and fact identifiers. Do not write prose or change outcome/action. "
-            f"template_id={request.template_id}; outcome={request.message_outcome}; "
-            f"allowed_fact_ids={[fact.fact_id for fact in request.facts]}"
+            "Return one JSON object with exactly these keys: "
+            '"template_id", "tone", "included_fact_ids". '
+            f'template_id must equal "{request.template_id}". '
+            'tone must be one of "WARM", "CONCISE", or "REASSURING". '
+            "included_fact_ids must be an array containing only identifiers from "
+            f"{[fact.fact_id for fact in request.facts]}. "
+            "Choose presentation only. Do not write prose, add keys, change the outcome, "
+            f"or change the required action. The fixed outcome is {request.message_outcome}."
         )
         try:
             raw = await self._provider.generate_structured(

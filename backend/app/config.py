@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     llm_online_enabled: bool = False
     llm_shadow_enabled: bool = False
     llm_grounded_response_enabled: bool = False
+    enable_live_provider_tests: bool = False
     llm_online_runtime_mode: str = "demo_safe"
     llm_online_qualification_status: str = "NOT_ACTIVATED"
     llm_model_budget_seconds: float = Field(default=25.0, gt=0, le=25)
