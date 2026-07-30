@@ -1043,19 +1043,25 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     )
                     assert started_replay.status_code == 200
                     assert started_replay.json() == body
-                    resumed = await http.post(
-                        f"/api/v1/agent/threads/{body['thread_id']}/resume",
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Idempotency-Key": "vertical-resume-thread",
-                        },
-                        json={
-                            "kind": "SELECT_APPOINTMENT_SLOT",
-                            "intent_version": body["interrupt"]["intent_version"],
-                            "candidates_fingerprint": body["interrupt"]["candidates_fingerprint"],
-                            "rank": 1,
-                        },
-                    )
+                    async with events.subscribe(UUID(body["thread_id"])) as event_queue:
+                        resumed = await http.post(
+                            f"/api/v1/agent/threads/{body['thread_id']}/resume",
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Idempotency-Key": "vertical-resume-thread",
+                            },
+                            json={
+                                "kind": "SELECT_APPOINTMENT_SLOT",
+                                "intent_version": body["interrupt"]["intent_version"],
+                                "candidates_fingerprint": body["interrupt"][
+                                    "candidates_fingerprint"
+                                ],
+                                "rank": 1,
+                            },
+                        )
+                        delivered = []
+                        while not event_queue.empty():
+                            delivered.append(await event_queue.get())
                     final = resumed.json()
                     assert resumed.status_code == 200
                     assert final["run_status"] == "COMPLETED"
@@ -1066,6 +1072,14 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     assert (
                         final["conversation_messages"][-1]["content"] == final["assistant_message"]
                     )
+                    public_terminal = [
+                        item
+                        for item in delivered
+                        if item.event_type in SSEEventBus.TERMINAL_EVENT_TYPES
+                    ]
+                    assert len(public_terminal) == 1
+                    assert public_terminal[0].event_type == "message.completed"
+                    assert str(public_terminal[0].run_id) == final["run_id"]
                     resumed_replay = await http.post(
                         f"/api/v1/agent/threads/{body['thread_id']}/resume",
                         headers={
@@ -1149,27 +1163,41 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                         category_body = category_started.json()
                         assert category_body["structured_issue"]["issue_category"] == category
                         assert category_body["interrupt"]["kind"] == "APPOINTMENT_SLOT_SELECTION"
-                        category_resumed = await http.post(
-                            f"/api/v1/agent/threads/{category_body['thread_id']}/resume",
-                            headers={
-                                "Authorization": f"Bearer {token}",
-                                "Idempotency-Key": f"{request_key}-resume",
-                            },
-                            json={
-                                "kind": "SELECT_APPOINTMENT_SLOT",
-                                "intent_version": category_body["interrupt"]["intent_version"],
-                                "candidates_fingerprint": category_body["interrupt"][
-                                    "candidates_fingerprint"
-                                ],
-                                "rank": 1,
-                            },
-                        )
+                        async with events.subscribe(
+                            UUID(category_body["thread_id"])
+                        ) as category_queue:
+                            category_resumed = await http.post(
+                                f"/api/v1/agent/threads/{category_body['thread_id']}/resume",
+                                headers={
+                                    "Authorization": f"Bearer {token}",
+                                    "Idempotency-Key": f"{request_key}-resume",
+                                },
+                                json={
+                                    "kind": "SELECT_APPOINTMENT_SLOT",
+                                    "intent_version": category_body["interrupt"]["intent_version"],
+                                    "candidates_fingerprint": category_body["interrupt"][
+                                        "candidates_fingerprint"
+                                    ],
+                                    "rank": 1,
+                                },
+                            )
+                            category_events = []
+                            while not category_queue.empty():
+                                category_events.append(await category_queue.get())
                         assert category_resumed.status_code == 200, category_resumed.text
                         category_final = category_resumed.json()
                         assert category_final["message_outcome"] == "COMPLETED"
                         assert category_final["active_ticket"]["issue_category"] == category
                         assert category_final["active_ticket"]["ticket_status"] == "SCHEDULED"
                         assert category_final["active_appointment"]["status"] == "BOOKED"
+                        category_terminal = [
+                            item
+                            for item in category_events
+                            if item.event_type in SSEEventBus.TERMINAL_EVENT_TYPES
+                        ]
+                        assert len(category_terminal) == 1
+                        assert category_terminal[0].event_type == "message.completed"
+                        assert str(category_terminal[0].run_id) == category_final["run_id"]
                         category_refreshed = await http.get(
                             f"/api/v1/agent/threads/{category_body['thread_id']}",
                             headers={"Authorization": f"Bearer {token}"},
