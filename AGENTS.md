@@ -119,3 +119,13 @@ Prompts without changing the formal Schema or frozen corpora, complete formal
 requalification, and create a verified Initial Baseline and Release Candidate.
 Production activation remains forbidden: the default Provider stays scripted,
 the model cannot call MCP, and no migration after `20260723_0006` is authorized.
+
+### Current-phase override (later approved)
+
+Commercial-hardening phase 1A is committed at tag
+`commercial-hardening-phase-1a`. Phase 1B is authorized to add only controlled
+online-provider infrastructure and revision `20260730_0008` for sanitized
+Shadow-ready evidence. This later instruction supersedes the stale migration
+limit above. The default Provider remains `scripted`; online business traffic,
+a new Holdout, formal Shadow, Canary, and production activation remain
+forbidden until separately approved and evidenced.

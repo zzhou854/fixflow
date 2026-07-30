@@ -193,3 +193,10 @@ partial unique public-terminal Trace index. All new enums remain
 `VARCHAR + named CHECK`; timestamps are timezone-aware and foreign keys use
 `ON DELETE RESTRICT`. Historical thread backfill accepts only one unambiguous
 resident and at most one non-null property per thread.
+
+Revision `20260730_0008` adds `llm_shadow_runs`, RESTRICT-linked to
+`agent_runs`. It is non-authoritative evaluation evidence: provider/model,
+prompt/schema version, result status, latency, safe error code, structured
+result hash, and timestamp. A named CHECK enforces that success has a hash and
+no error while failure has an error and no hash. It stores no input/output
+text, prompt, credential, token, business decision, or mutation payload.

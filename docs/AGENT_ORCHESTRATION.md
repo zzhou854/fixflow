@@ -188,3 +188,10 @@ topology with recorded dependencies and an in-memory saver. Resume is primed
 inside that disposable saver before the recorded strict Resume union is
 applied. Formal PostgreSQL Checkpoint tables and current domain state are not
 read or written. See `docs/REPLAY.md`.
+
+Phase 1B does not add a second Graph. An optional interpretation-node injection
+point lets the existing topology use the hybrid fact extractor or a
+zero-influence Shadow wrapper. The default node remains Scripted. One
+request-scoped 25-second model budget is bound outside the Graph invocation;
+provider exhaustion becomes `PROVIDER_EXHAUSTED` and is finalized through the
+existing human-review reliability transaction.

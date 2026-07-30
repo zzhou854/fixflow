@@ -177,6 +177,14 @@ Operator human-review queue, and reconciles stale `RUNNING` executions without
 replaying mutations. The online providers remain non-activated; the product
 default is still `scripted`.
 
+Commercial-hardening phase 1B adds an inactive controlled DeepSeek candidate:
+Flash-first structured fact extraction, one bounded repair, Pro fallback, a
+single 25-second request budget, independent circuit breakers, deterministic
+grounded-response templates, explicit qualification gates, and sanitized
+Shadow-ready evidence. Revision `20260730_0008` stores only non-authoritative
+shadow metadata and hashes. No new Holdout, formal Shadow run, Canary,
+activation, or DeepSeek business traffic has been performed.
+
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
 Do not commit `.env`. `uv.lock` is the committed dependency lock file and is the
@@ -206,6 +214,7 @@ and never maintained manually.
 - [Model Release Gate](docs/MODEL_RELEASE_GATE.md)
 - [GLM-5.1 Prompt v2 remediation](docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md)
 - [DeepSeek V4 capability report](docs/DEEPSEEK_V4_CAPABILITY_REPORT.md)
+- [Controlled online-provider boundary](docs/ONLINE_PROVIDER.md)
 
 ## Week-1 delivery order
 

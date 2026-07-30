@@ -9,8 +9,18 @@ secret placeholder. At minimum set `POSTGRES_PASSWORD` and a random
 ```text
 FIXFLOW_LLM_PROVIDER=scripted
 FIXFLOW_LLM_EXPERIMENTAL_ENABLED=false
+FIXFLOW_LLM_ONLINE_ENABLED=false
+FIXFLOW_LLM_SHADOW_ENABLED=false
+FIXFLOW_LLM_GROUNDED_RESPONSE_ENABLED=false
+FIXFLOW_LLM_ONLINE_QUALIFICATION_STATUS=NOT_ACTIVATED
 FIXFLOW_DEBUG=false
 ```
+
+Phase 1B does not authorize changing these defaults. A future controlled Shadow
+requires an explicit reviewed configuration and qualification state; a future
+business activation additionally requires a fresh Holdout, Shadow, Canary, and
+approval. Never use Scripted as a production-candidate fallback after online
+activation; the approved future chain is Flash, Pro, then human review.
 
 For a non-local host, use `docker-compose.production.yml` and set explicit
 `FIXFLOW_PRODUCTION_CORS_ORIGINS` and `FIXFLOW_PRODUCTION_ALLOWED_HOSTS`.

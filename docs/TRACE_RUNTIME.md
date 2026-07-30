@@ -98,3 +98,9 @@ terminal Replay status event. The terminal Replay Execution row and terminal
 Trace event share a transaction. These diagnostic events reference the
 original Run ID in sanitized payload metadata but are never appended to the
 terminal original Run.
+
+Online-provider routing exposes only sanitized operational metadata: provider,
+model, phase/attempt, latency, stable error code, remaining budget, and circuit
+state. Raw user text, Prompt text, credentials, and raw provider responses are
+not Trace payloads. `llm_shadow_runs` is separate non-authoritative evidence and
+does not replace Business Trace.

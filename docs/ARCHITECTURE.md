@@ -302,3 +302,12 @@ PostgreSQL transaction before responding or publishing SSE. A separate thread
 registry owns listing and recoverable archive state; it never stores or deletes
 LangGraph Checkpoint data. A lifespan-owned monitor reconciles stale RUNNING
 runs from persisted facts without replaying MCP or Application mutations.
+
+Commercial-hardening phase 1B keeps the Single Orchestrator and adds two narrow
+language ports. Structured Understanding extracts facts into the deterministic
+hybrid decision pipeline; Grounded Response can only select presentation over
+server-owned templates and allowlisted facts. A Flash/Pro router owns the shared
+deadline, bounded repair/fallback, and independent circuits. Provider exhaustion
+becomes a typed Agent failure; the existing reliability transaction, not the
+provider, creates the human-review case. Optional Shadow execution is
+zero-influence and commits sanitized evidence independently.
