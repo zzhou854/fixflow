@@ -6,6 +6,13 @@ from fastapi.responses import JSONResponse
 from app.api.dependencies import ApiServices, get_services, require_operator
 from app.api.errors import ApiError
 from app.api.schemas.agent import OperatorThreadResponse
+from app.api.schemas.human_review import (
+    HumanReviewCasePage,
+    HumanReviewCaseResponse,
+    HumanReviewEventPage,
+    HumanReviewEventResponse,
+    HumanReviewTransitionRequest,
+)
 from app.api.schemas.reconciliation import ReconciliationCasePage, ReconciliationCaseResponse
 from app.api.schemas.replay import (
     ReplayBundleResponse,
@@ -27,6 +34,10 @@ from app.api.schemas.trace import (
     TraceEventPageResponse,
 )
 from app.api.services.operator import OperatorEscalationExecution, OperatorMutationNotSent
+from app.application.agent_reliability_models import (
+    HumanReviewStatus,
+    HumanReviewTransition,
+)
 from app.application.auth import AuthenticatedIdentity
 from app.application.query_models import QueryActor
 from app.domain.enums import IssueCategory, Severity, TicketStatus
@@ -38,6 +49,76 @@ from app.infrastructure.database.models.reconciliation import (
 from app.replay.repository import ReplayConflict, ReplayIdempotencyConflict
 
 router = APIRouter(prefix="/api/v1/operator", tags=["operator"])
+
+
+@router.get("/human-review-cases", response_model=HumanReviewCasePage)
+async def list_human_review_cases(
+    status: HumanReviewStatus | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> HumanReviewCasePage:
+    if services.agent_reliability is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "人工处理队列暂不可用。", retryable=True)
+    rows = await services.agent_reliability.list_human_review_cases(
+        actor_type=identity.actor_type,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return HumanReviewCasePage(
+        items=tuple(HumanReviewCaseResponse.model_validate(row) for row in rows),
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/human-review-cases/{case_id}/transition",
+    response_model=HumanReviewCaseResponse,
+)
+async def transition_human_review_case(
+    case_id: UUID,
+    request: HumanReviewTransitionRequest,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> HumanReviewCaseResponse:
+    if services.agent_reliability is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "人工处理队列暂不可用。", retryable=True)
+    row = await services.agent_reliability.transition_human_review(
+        HumanReviewTransition(
+            case_id=case_id,
+            actor_type=identity.actor_type,
+            actor_id=identity.actor_id,
+            trace_id=uuid4(),
+            expected_version=request.expected_version,
+            target_status=request.target_status,
+            resolution_code=request.resolution_code,
+            resolution_note=request.resolution_note,
+        )
+    )
+    return HumanReviewCaseResponse.model_validate(row)
+
+
+@router.get(
+    "/human-review-cases/{case_id}/events",
+    response_model=HumanReviewEventPage,
+)
+async def list_human_review_case_events(
+    case_id: UUID,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> HumanReviewEventPage:
+    if services.agent_reliability is None:
+        raise ApiError(503, "SERVICE_UNAVAILABLE", "人工处理队列暂不可用。", retryable=True)
+    rows = await services.agent_reliability.list_human_review_events(
+        actor_type=identity.actor_type,
+        case_id=case_id,
+    )
+    return HumanReviewEventPage(
+        items=tuple(HumanReviewEventResponse.model_validate(row) for row in rows)
+    )
 
 
 @router.get("/threads/{thread_id}/replay-runs", response_model=ReplayRunPageResponse)

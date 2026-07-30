@@ -16,6 +16,11 @@ from app.api.schemas.agent import ProvideInformationResumeRequest, SSEEvent
 from app.api.services.agent import AgentApiService
 from app.api.services.idempotency import ApiIdempotencyStore
 from app.api.services.sse import SSEEventBus
+from app.application.agent_reliability import (
+    AgentReliabilityService,
+    HumanReviewPersistenceFailed,
+)
+from app.application.agent_reliability_models import FinalizeAgentRun
 from app.application.auth import AuthenticatedIdentity
 from app.application.services import FixFlowApplicationService
 from app.domain.enums import ActorType, WorkflowStage
@@ -81,6 +86,23 @@ class FlakyTrace:
         return ":".join(str(part) for part in parts)
 
 
+class ReviewPersistenceFailure:
+    def __init__(self) -> None:
+        self.commands: list[FinalizeAgentRun] = []
+
+    async def finalize_run(self, command: FinalizeAgentRun) -> None:
+        self.commands.append(command)
+        if len(self.commands) == 1:
+            raise HumanReviewPersistenceFailed
+
+    async def list_messages(self, **kwargs: object) -> tuple[()]:
+        del kwargs
+        return ()
+
+    async def require_active_thread(self, **kwargs: object) -> None:
+        del kwargs
+
+
 def _service(result: AgentRunResult, events: SSEEventBus) -> AgentApiService:
     return AgentApiService(
         cast(AgentOrchestrator, FakeOrchestrator(result)),
@@ -125,7 +147,7 @@ async def test_completed_turn_publishes_assistant_and_workflow_events() -> None:
             "run_started",
             "workflow_updated",
             "assistant_delta",
-            "assistant_completed",
+            "message.completed",
         ]
 
 
@@ -157,7 +179,8 @@ async def test_interrupted_turn_publishes_interrupt_required() -> None:
         assert await _event_types(queue) == [
             "run_started",
             "workflow_updated",
-            "interrupt_required",
+            "assistant_delta",
+            "message.completed",
         ]
 
 
@@ -181,13 +204,51 @@ async def test_failed_safe_turn_publishes_only_safe_failure() -> None:
             reference_time=datetime.now(UTC),
             timezone_name="UTC",
         )
-        queued = [await queue.get(), await queue.get(), await queue.get()]
+        queued = [await queue.get(), await queue.get(), await queue.get(), await queue.get()]
         assert [event.event_type for event in queued] == [
             "run_started",
             "workflow_updated",
-            "run_failed",
+            "assistant_delta",
+            "message.failed",
         ]
-        assert queued[-1].data == {"code": "SERVICE_UNAVAILABLE"}
+        assert queued[-1].data["error_code"] == "SERVICE_UNAVAILABLE"
+        assert queued[-1].data["message_outcome"] == "FAILED"
+
+
+@pytest.mark.asyncio
+async def test_escalation_is_changed_to_failed_when_review_case_cannot_persist() -> None:
+    thread_id, trace_id = uuid4(), uuid4()
+    events = SSEEventBus()
+    reliability = ReviewPersistenceFailure()
+    result = AgentRunResult(
+        thread_id=thread_id,
+        trace_id=trace_id,
+        run_status=RunStatus.NEEDS_HUMAN_REVIEW,
+        assistant_message="已转交物业处理。",
+        workflow_stage=WorkflowStage.HUMAN_REVIEW,
+        error_code="POLICY_REVIEW_REQUIRED",
+    )
+    service = AgentApiService(
+        cast(AgentOrchestrator, FakeOrchestrator(result)),
+        cast(FixFlowApplicationService, object()),
+        events,
+        reliability=cast(AgentReliabilityService, reliability),
+    )
+    response = await service.send_message(
+        _identity(),
+        thread_id=thread_id,
+        message="继续",
+        message_id=uuid4(),
+        reference_time=datetime.now(UTC),
+        timezone_name="UTC",
+    )
+    assert response.message_outcome.value == "FAILED"
+    assert response.required_user_action.value == "RETRY"
+    assert response.error_code == "HUMAN_REVIEW_PERSISTENCE_FAILED"
+    assert [item.outcome.value for item in reliability.commands] == [
+        "ESCALATED",
+        "FAILED",
+    ]
 
 
 @pytest.mark.asyncio

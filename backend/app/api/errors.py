@@ -10,6 +10,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent_runtime.errors import ThreadIdentityConflict
+from app.application.agent_reliability import (
+    AgentReliabilityConflict,
+    AgentThreadNotFound,
+    AgentThreadPermissionDenied,
+)
 from app.application.auth import AuthenticationError
 from app.application.errors import ApplicationError
 
@@ -92,6 +97,24 @@ def install_error_handlers(app: FastAPI) -> None:
         return _response(
             request, _APPLICATION_STATUS.get(code, 400), code.upper(), "请求未通过业务校验。"
         )
+
+    @app.exception_handler(AgentThreadNotFound)
+    async def agent_reliability_not_found(
+        request: Request, exc: AgentThreadNotFound
+    ) -> JSONResponse:
+        return _response(request, 404, exc.code, "未找到对应记录。")
+
+    @app.exception_handler(AgentThreadPermissionDenied)
+    async def agent_reliability_permission(
+        request: Request, exc: AgentThreadPermissionDenied
+    ) -> JSONResponse:
+        return _response(request, 403, exc.code, "无权执行该操作。")
+
+    @app.exception_handler(AgentReliabilityConflict)
+    async def agent_reliability_conflict(
+        request: Request, exc: AgentReliabilityConflict
+    ) -> JSONResponse:
+        return _response(request, 409, exc.code, "记录已更新，请刷新后重试。")
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

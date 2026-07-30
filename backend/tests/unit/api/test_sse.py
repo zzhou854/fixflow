@@ -34,10 +34,10 @@ async def test_terminal_event_evicts_non_terminal_and_is_not_lost_to_late_delta(
     async with bus.subscribe(thread_id) as queue:
         await bus.publish(thread_id, trace_id, "workflow_updated", {"version": 1})
         await bus.publish(thread_id, trace_id, "assistant_delta", {"text": "partial"})
-        await bus.publish(thread_id, trace_id, "assistant_completed", {"text": "done"})
+        await bus.publish(thread_id, trace_id, "message.completed", {"text": "done"})
         await bus.publish(thread_id, trace_id, "assistant_delta", {"text": "late"})
         events = [await queue.get(), await queue.get()]
-    assert [item.event_type for item in events] == ["assistant_completed", "assistant_delta"]
+    assert [item.event_type for item in events] == ["message.completed", "assistant_delta"]
 
 
 @pytest.mark.asyncio
@@ -63,3 +63,28 @@ async def test_close_clears_subscriber_registry() -> None:
     await bus.close()
     assert await bus.subscriber_count(thread_id) == 0
     await context.__aexit__(None, None, None)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_public_terminal_for_same_run_is_not_redelivered() -> None:
+    bus = SSEEventBus()
+    thread_id, trace_id, run_id = uuid4(), uuid4(), uuid4()
+    async with bus.subscribe(thread_id) as queue:
+        await bus.publish(
+            thread_id,
+            trace_id,
+            "message.completed",
+            {"text": "done"},
+            run_id=run_id,
+        )
+        await bus.publish(
+            thread_id,
+            trace_id,
+            "message.failed",
+            {"text": "late"},
+            run_id=run_id,
+        )
+        events = []
+        while not queue.empty():
+            events.append(await queue.get())
+    assert [item.event_type for item in events] == ["message.completed"]

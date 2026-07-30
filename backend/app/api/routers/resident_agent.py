@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, Request, Response
@@ -17,7 +18,10 @@ from app.api.schemas.agent import (
     ResumeRequest,
     SendMessageRequest,
     SSEEvent,
+    ThreadLifecycleRequest,
+    ThreadLifecycleResponse,
 )
+from app.application.agent_reliability_models import ThreadLifecycleStatus
 from app.application.auth import AuthenticatedIdentity
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
@@ -25,14 +29,58 @@ router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 @router.get("/threads", response_model=ResidentThreadListResponse)
 async def list_threads(
-    limit: int = 20,
+    limit: int = 5,
     offset: int = 0,
+    archive_status: Literal["active", "archived", "all"] = "active",
     identity: AuthenticatedIdentity = Depends(require_resident),
     services: ApiServices = Depends(get_services),
 ) -> ResidentThreadListResponse:
     if not 1 <= limit <= 50 or offset < 0:
         raise ApiError(422, "VALIDATION_ERROR", "分页参数无效。")
-    return await services.agent.list_threads(identity, limit=limit, offset=offset)
+    return await services.agent.list_threads(
+        identity,
+        limit=limit,
+        offset=offset,
+        lifecycle_status=(
+            None if archive_status == "all" else ThreadLifecycleStatus(archive_status.upper())
+        ),
+    )
+
+
+@router.post(
+    "/threads/{thread_id}/archive",
+    response_model=ThreadLifecycleResponse,
+)
+async def archive_thread(
+    thread_id: UUID,
+    request: ThreadLifecycleRequest,
+    identity: AuthenticatedIdentity = Depends(require_resident),
+    services: ApiServices = Depends(get_services),
+) -> ThreadLifecycleResponse:
+    return await services.agent.set_thread_lifecycle(
+        identity,
+        thread_id=thread_id,
+        lifecycle_status=ThreadLifecycleStatus.ARCHIVED,
+        expected_version=request.expected_version,
+    )
+
+
+@router.post(
+    "/threads/{thread_id}/restore",
+    response_model=ThreadLifecycleResponse,
+)
+async def restore_thread(
+    thread_id: UUID,
+    request: ThreadLifecycleRequest,
+    identity: AuthenticatedIdentity = Depends(require_resident),
+    services: ApiServices = Depends(get_services),
+) -> ThreadLifecycleResponse:
+    return await services.agent.set_thread_lifecycle(
+        identity,
+        thread_id=thread_id,
+        lifecycle_status=ThreadLifecycleStatus.ACTIVE,
+        expected_version=request.expected_version,
+    )
 
 
 @router.post("/threads", response_model=AgentThreadResponse)
@@ -193,6 +241,8 @@ async def stream_events(
                         event_type="heartbeat",
                         thread_id=thread_id,
                         trace_id=uuid4(),
+                        run_id=None,
+                        sequence=0,
                         timestamp=datetime.now(UTC),
                         data={},
                     )

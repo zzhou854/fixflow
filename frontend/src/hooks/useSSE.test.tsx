@@ -24,3 +24,26 @@ test('uses a bearer header rather than a URL token and aborts on disconnect', as
   await waitFor(() => expect(signal?.aborted).toBe(true))
   vi.unstubAllGlobals()
 })
+
+test('deduplicates repeated terminal projections by run and event identity', async () => {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const event = JSON.stringify({
+        event_id: 'event-1',
+        run_id: 'run-1',
+        event_type: 'message.completed',
+      })
+      controller.enqueue(encoder.encode(
+        `id: event-1\nevent: message.completed\ndata: ${event}\n\n` +
+        `id: event-1\nevent: message.completed\ndata: ${event}\n\n`,
+      ))
+    },
+  })
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, body: stream }) as Response))
+  const reconcile = vi.fn(async () => undefined)
+  const view = render(<Probe reconcile={reconcile} />)
+  await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(2))
+  view.unmount()
+  vi.unstubAllGlobals()
+})

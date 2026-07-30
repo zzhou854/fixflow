@@ -18,10 +18,15 @@ from app.api.services.operator_replay import OperatorReplayService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
+from app.api.services.stalled_runs import StalledAgentRunMonitor
+from app.application.agent_reliability import AgentReliabilityService
 from app.application.auth import AuthService
 from app.application.ports import UnitOfWork
 from app.application.services import FixFlowApplicationService
 from app.config import Settings
+from app.infrastructure.database.agent_reliability_uow import (
+    SqlAlchemyAgentReliabilityUnitOfWork,
+)
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
 from app.llm.factory import build_structured_interpretation_provider
@@ -64,6 +69,8 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
         ),
     )
     reconciliation = UnknownCommitCoordinator(SqlAlchemyReconciliationRepository(sessions))
+    reliability = AgentReliabilityService(lambda: SqlAlchemyAgentReliabilityUnitOfWork(sessions))
+    stalled_runs = StalledAgentRunMonitor(reliability)
     replay_repository = ReplayRepository(
         sessions,
         max_steps=settings.replay_max_steps,
@@ -76,6 +83,7 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
         graph_schema_version=settings.graph_schema_version,
     )
     try:
+        await stalled_runs.start()
         scripted_llm = DemoScriptedLLMProvider()
         interpretation_provider: LLMProvider = scripted_llm
         if settings.llm_experimental_enabled:
@@ -119,8 +127,9 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
                     orchestrator,
                     application,
                     events,
-                    trace,
+                    trace=trace,
                     replay=replay_capture,
+                    reliability=reliability,
                 ),
                 operator_actions=OperatorActionService(
                     application,
@@ -138,11 +147,13 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
                     trace,
                     application,
                 ),
+                agent_reliability=reliability,
                 idempotency=idempotency,
                 events=events,
                 runtime_mode=settings.runtime_mode,
             )
     finally:
+        await stalled_runs.close()
         await idempotency.close()
         await events.close()
         await engine.dispose()

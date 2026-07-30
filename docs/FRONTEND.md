@@ -18,8 +18,10 @@ details, ticket and appointment histories, and the latest Worker Event. A known
 Agent thread can be inspected by the Operator Thread API only when its Agent
 State ticket link is revalidated against the database resident/property ticket
 snapshot. The UI never guesses a relation or fabricates policy or workflow
-data. Pre-ticket human-review discovery remains unavailable. For an authorized,
-ticket-linked thread the workbench shows a paged, source-filterable persistent
+data. The pre-ticket human-review queue is now available through the Operator
+API; its commercial workbench presentation remains part of the later Operator
+UI phase. For an authorized, ticket-linked thread the workbench shows a paged,
+source-filterable persistent
 execution timeline. It labels business histories and Agent Trace as separate
 views and renders a safe summary rather than raw JSON.
 
@@ -34,6 +36,19 @@ authenticated `fetch` with a Bearer header and an `AbortController`, not native
 reconciliation. The frontend never submits `actor_id` or `actor_type`, and route guards
 are presentation only—the API enforces permission. React default escaping is
 used; no `dangerouslySetInnerHTML` rendering exists.
+
+## Conversation delivery
+
+The resident API returns the five most recently active conversations by
+default. Archive and restore are recoverable operations: they never delete
+Checkpoint, Trace, Replay, ticket, appointment, or audit facts. The current UI
+client and types understand these contracts; the recent-five drawer and
+commercial archive controls remain part of the resident UI phase.
+
+The public SSE terminal events are `message.completed`, `message.failed`, and
+`message.escalated`. HTTP and the refreshed Thread State remain authoritative;
+the browser de-duplicates events by Run/event identity and falls back to state
+refresh after a malformed or disconnected stream.
 
 ## Local commands
 

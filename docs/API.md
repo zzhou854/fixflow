@@ -51,6 +51,9 @@ allow-list. Wildcard origins are rejected and CORS is not authentication.
 | POST | `/api/v1/agent/threads` | resident | create a verified thread |
 | POST | `/api/v1/agent/threads/{thread_id}/messages` | resident | continue a thread |
 | POST | `/api/v1/agent/threads/{thread_id}/resume` | resident | strict typed resume |
+| GET | `/api/v1/agent/threads?archive_status=active|archived|all` | resident | recent/all thread registry |
+| POST | `/api/v1/agent/threads/{thread_id}/archive` | resident | recoverable soft archive |
+| POST | `/api/v1/agent/threads/{thread_id}/restore` | resident | restore archived thread |
 | GET | `/api/v1/agent/threads/{thread_id}` | resident | sanitised state view |
 | GET | `/api/v1/agent/threads/{thread_id}/events` | resident | authenticated SSE |
 | GET | `/api/v1/operator/tickets` | operator | filtered paged work list |
@@ -60,6 +63,9 @@ allow-list. Wildcard origins are rejected and CORS is not authentication.
 | GET | `/api/v1/operator/runs/{run_id}` | operator | one authorized run |
 | GET | `/api/v1/operator/runs/{run_id}/events` | operator | paged/filterable trace events |
 | POST | `/api/v1/operator/tickets/{ticket_id}/escalate` | operator | formal escalation service |
+| GET | `/api/v1/operator/human-review-cases` | operator | pre-ticket review queue |
+| POST | `/api/v1/operator/human-review-cases/{case_id}/transition` | operator | typed optimistic transition |
+| GET | `/api/v1/operator/human-review-cases/{case_id}/events` | operator | immutable case history |
 
 The resume variants are `PROVIDE_INFORMATION`, `SELECT_DUPLICATE_TICKET`, and
 `SELECT_APPOINTMENT_SLOT`. They form a discriminated Pydantic union; arbitrary
@@ -83,8 +89,9 @@ Operator thread review is a dedicated read-only projection. An active Operator
 may inspect only a thread whose `active_ticket_id` resolves to a real ticket
 matching the thread resident and property. Ordinary Resident `get_state`, raw
 checkpoints, conversation messages, pending-operation hashes, and internal
-policy score/text structures are unavailable. A pre-ticket human-review thread
-is not discoverable in the first operator work queue.
+policy score/text structures are unavailable. Pre-ticket failures are exposed
+only through the sanitized human-review queue; they are not made visible by
+inventing a ticket or bypassing thread ownership.
 
 ## SSE
 
@@ -92,15 +99,15 @@ The browser uses `fetch()` with `Authorization: Bearer ...` and reads its
 `ReadableStream`; it does not use native `EventSource` or a query token. `GET
 /api/v1/agent/threads/{thread_id}/events` authenticates and rechecks
 thread/property ownership before registering a subscriber. Events contain
-`event_id`, `event_type`, `thread_id`, `trace_id`,
+`event_id`, `run_id`, `sequence`, `event_type`, `thread_id`, `trace_id`,
 `timestamp`, and safe `data`. Types are `run_started`, `assistant_delta`,
-`assistant_completed`, `interrupt_required`, `workflow_updated`, `run_failed`,
-and `heartbeat`.
+`workflow_updated`, `message.completed`, `message.failed`,
+`message.escalated`, and `heartbeat`.
 
 Task 9 uses a per-thread bounded, live in-memory event bus. It does not cache
 without subscribers or promise restart replay. A run publishes `run_started`,
-zero or more workflow/delta events, then exactly one of `assistant_completed`,
-`interrupt_required`, or `run_failed`. On overflow stale non-terminal events
+zero or more workflow/delta events, then exactly one public `message.*`
+terminal. On overflow stale non-terminal events
 are evicted first, the latest workflow update replaces an older one, and
 terminal events take priority. `assistant_delta` is a
 demonstration chunk, not provider token streaming. SSE is not a business fact

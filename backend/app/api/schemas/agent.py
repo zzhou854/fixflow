@@ -8,6 +8,11 @@ from app.agent.enums import AgentIntent, AgentReconciliationStatus, IssueField, 
 from app.agent_runtime.models import RunStatus
 from app.api.schemas.common import ApiModel
 from app.api.schemas.tickets import AppointmentResponse, TicketListItemResponse
+from app.application.agent_reliability_models import (
+    MessageOutcome,
+    RequiredUserAction,
+    ThreadLifecycleStatus,
+)
 from app.domain.enums import IssueCategory, Severity, WorkflowStage
 from app.policy.enums import EvidenceSufficiency
 
@@ -119,13 +124,16 @@ class ResidentConversationMessageResponse(ApiModel):
 
 class ResidentThreadSummaryResponse(ApiModel):
     thread_id: UUID
-    property_id: UUID
+    property_id: UUID | None
     workflow_stage: WorkflowStage
     run_status: RunStatus
+    lifecycle_status: ThreadLifecycleStatus
     issue_category: IssueCategory | None
     issue_location: str | None
     active_ticket_id: UUID | None
     updated_at: datetime
+    archived_at: datetime | None
+    version: int
 
 
 class ResidentThreadListResponse(ApiModel):
@@ -141,6 +149,8 @@ class AgentThreadResponse(ApiModel):
     message_id: UUID | None = None
     workflow_stage: WorkflowStage
     run_status: RunStatus
+    message_outcome: MessageOutcome = MessageOutcome.COMPLETED
+    required_user_action: RequiredUserAction = RequiredUserAction.NONE
     assistant_message: str | None
     interrupt: InterruptResponse | None
     active_ticket: TicketListItemResponse | None
@@ -152,6 +162,17 @@ class AgentThreadResponse(ApiModel):
     development_mode: Literal[True] = True
     reconciliation: "ResidentReconciliationResponse | None" = None
     conversation_messages: tuple[ResidentConversationMessageResponse, ...] = ()
+
+
+class ThreadLifecycleResponse(ApiModel):
+    thread_id: UUID
+    lifecycle_status: ThreadLifecycleStatus
+    archived_at: datetime | None
+    version: int
+
+
+class ThreadLifecycleRequest(ApiModel):
+    expected_version: int = Field(ge=1)
 
 
 class ResidentReconciliationResponse(ApiModel):
@@ -184,13 +205,16 @@ class SSEEvent(ApiModel):
     event_type: Literal[
         "run_started",
         "assistant_delta",
-        "assistant_completed",
-        "interrupt_required",
+        "message.completed",
+        "message.failed",
+        "message.escalated",
         "workflow_updated",
         "run_failed",
         "heartbeat",
     ]
     thread_id: UUID
     trace_id: UUID
+    run_id: UUID | None = None
+    sequence: int = 0
     timestamp: datetime
     data: dict[str, object]

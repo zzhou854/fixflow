@@ -55,7 +55,13 @@ export const api = {
     }),
   }),
   getThread: (token: string, threadId: string) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}`, token),
-  residentThreads: (token: string) => apiRequest<{ items: ResidentThreadSummary[]; limit: number; offset: number }>('/api/v1/agent/threads?limit=20&offset=0', token),
+  residentThreads: (token: string, archiveStatus: 'active'|'archived'|'all' = 'active', limit = 5, offset = 0) => apiRequest<{ items: ResidentThreadSummary[]; limit: number; offset: number }>(`/api/v1/agent/threads?archive_status=${archiveStatus}&limit=${limit}&offset=${offset}`, token),
+  archiveThread: (token: string, threadId: string, expectedVersion: number) => apiRequest<{thread_id: string; lifecycle_status: 'ARCHIVED'; archived_at: string; version: number}>(`/api/v1/agent/threads/${threadId}/archive`, token, {
+    method: 'POST', body: JSON.stringify({ expected_version: expectedVersion }),
+  }),
+  restoreThread: (token: string, threadId: string, expectedVersion: number) => apiRequest<{thread_id: string; lifecycle_status: 'ACTIVE'; archived_at: null; version: number}>(`/api/v1/agent/threads/${threadId}/restore`, token, {
+    method: 'POST', body: JSON.stringify({ expected_version: expectedVersion }),
+  }),
   createThread: (token: string, property_id: string, initial_message: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>('/api/v1/agent/threads', token, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },

@@ -29,12 +29,26 @@ from app.api.schemas.agent import (
     ResidentThreadSummaryResponse,
     ResumeRequest,
     StructuredIssueResponse,
+    ThreadLifecycleResponse,
 )
 from app.api.schemas.tickets import TicketListItemResponse
 from app.api.services.sse import SSEEventBus
+from app.application.agent_reliability import (
+    AgentReliabilityError,
+    AgentReliabilityService,
+)
+from app.application.agent_reliability_models import (
+    FinalizeAgentRun,
+    HumanReviewFailureStage,
+    HumanReviewSafetyLevel,
+    MessageOutcome,
+    RequiredUserAction,
+    ThreadLifecycleStatus,
+)
 from app.application.auth import AuthenticatedIdentity
 from app.application.query_models import QueryActor
 from app.application.services import FixFlowApplicationService
+from app.domain.enums import WorkflowStage
 from app.infrastructure.database.models.observability import (
     AgentRunStatus,
     AgentRunTrigger,
@@ -66,10 +80,12 @@ class AgentApiService:
         events: SSEEventBus,
         trace: TraceRuntime | None = None,
         replay: ReplayCaptureService | None = None,
+        reliability: AgentReliabilityService | None = None,
     ) -> None:
         self._orchestrator = orchestrator
         self._application = application
         self.events = events
+        self._reliability = reliability
         self._trace = trace
         self._replay = replay
 
@@ -83,7 +99,13 @@ class AgentApiService:
         timezone_name: str,
     ) -> AgentThreadResponse:
         thread_id, trace_id, message_id = uuid4(), uuid4(), uuid4()
-        result, run_id = await self._run_turn(
+        if self._reliability is not None:
+            await self._reliability.register_thread(
+                thread_id=thread_id,
+                resident_id=identity.user_id,
+                property_id=None,
+            )
+        result, run_id, outcome, required_action = await self._run_turn(
             identity,
             thread_id=thread_id,
             trace_id=trace_id,
@@ -93,7 +115,14 @@ class AgentApiService:
             timezone_name=timezone_name,
             message_id=message_id,
         )
-        return await self._response(identity, result, message_id=message_id, run_id=run_id)
+        return await self._response(
+            identity,
+            result,
+            message_id=message_id,
+            run_id=run_id,
+            message_outcome=outcome,
+            required_user_action=required_action,
+        )
 
     async def send_message(
         self,
@@ -105,9 +134,14 @@ class AgentApiService:
         reference_time: datetime,
         timezone_name: str,
     ) -> AgentThreadResponse:
+        if self._reliability is not None:
+            await self._reliability.require_active_thread(
+                thread_id=thread_id,
+                resident_id=identity.user_id,
+            )
         stable_message_id = message_id or uuid4()
         trace_id = uuid5(NAMESPACE_URL, f"fixflow:api-message:{thread_id}:{stable_message_id}")
-        result, run_id = await self._run_turn(
+        result, run_id, outcome, required_action = await self._run_turn(
             identity,
             thread_id=thread_id,
             trace_id=trace_id,
@@ -117,11 +151,23 @@ class AgentApiService:
             timezone_name=timezone_name,
             message_id=stable_message_id,
         )
-        return await self._response(identity, result, message_id=stable_message_id, run_id=run_id)
+        return await self._response(
+            identity,
+            result,
+            message_id=stable_message_id,
+            run_id=run_id,
+            message_outcome=outcome,
+            required_user_action=required_action,
+        )
 
     async def resume(
         self, identity: AuthenticatedIdentity, *, thread_id: UUID, request: ResumeRequest
     ) -> AgentThreadResponse:
+        if self._reliability is not None:
+            await self._reliability.require_active_thread(
+                thread_id=thread_id,
+                resident_id=identity.user_id,
+            )
         trace_id = uuid4()
         run_id = uuid4()
         await self._start_trace(
@@ -140,17 +186,50 @@ class AgentApiService:
             trigger=AgentRunTrigger.RESUME,
             input_envelope=self._resume_replay_input(request, trace_id),
         )
-        await self.events.publish(thread_id, trace_id, "run_started", {"resume_kind": request.kind})
+        await self.events.publish(
+            thread_id,
+            trace_id,
+            "run_started",
+            {"resume_kind": request.kind},
+            run_id=run_id,
+        )
         try:
             with bind_execution_context(run_id, thread_id, trace_id, self._trace, capture):
                 result = await self._orchestrator.resume(thread_id, self._caller(identity), resume)
         except Exception:
-            await self._finish_trace(run_id, AgentRunStatus.FAILED, error_code="INTERNAL_ERROR")
-            raise
-        await capture.finalize(result)
-        await self._finish_trace_for_result(run_id, result)
+            result = self._safe_failure_result(thread_id, trace_id)
+        try:
+            await capture.finalize(result)
+        except Exception:
+            pass
+        state = await self._safe_state(identity, thread_id, trace_id, result)
+        user_message = request.user_message if request.kind == "PROVIDE_INFORMATION" else None
+        user_message_id = (
+            uuid5(NAMESPACE_URL, f"fixflow:resume-message:{run_id}")
+            if user_message is not None
+            else None
+        )
+        result, outcome, required_action = await self._persist_result(
+            identity,
+            result,
+            run_id=run_id,
+            state=state,
+            property_id=state.property_id if state and state.property_context_verified else None,
+            user_message_id=user_message_id,
+            user_message=user_message,
+            user_message_created_at=(
+                request.reference_time if request.kind == "PROVIDE_INFORMATION" else None
+            ),
+        )
         self._raise_resume_error(result)
-        response = await self._response(identity, result, run_id=run_id)
+        response = await self._response(
+            identity,
+            result,
+            run_id=run_id,
+            state=state,
+            message_outcome=outcome,
+            required_user_action=required_action,
+        )
         return response
 
     async def get_thread(
@@ -169,7 +248,25 @@ class AgentApiService:
             active_ticket_id=state.active_ticket_id,
             active_appointment_id=state.active_appointment_id,
         )
-        return await self._response(identity, result, state=state, publish=False)
+        latest = (
+            await self._reliability.latest_public_result(
+                thread_id=thread_id,
+                resident_id=identity.user_id,
+            )
+            if self._reliability is not None
+            else None
+        )
+        return await self._response(
+            identity,
+            result,
+            state=state,
+            publish=False,
+            run_id=latest.run_id if latest else None,
+            message_outcome=(latest.message_outcome if latest else self._message_outcome(result)),
+            required_user_action=(
+                latest.required_user_action if latest else self._required_user_action(result)
+            ),
+        )
 
     async def list_threads(
         self,
@@ -177,11 +274,15 @@ class AgentApiService:
         *,
         limit: int,
         offset: int,
+        lifecycle_status: ThreadLifecycleStatus | None = ThreadLifecycleStatus.ACTIVE,
     ) -> ResidentThreadListResponse:
-        if self._trace is None:
+        if self._reliability is None:
             return ResidentThreadListResponse(items=(), limit=limit, offset=offset)
-        records = await self._trace.list_resident_threads(
-            identity.user_id, limit=limit, offset=offset
+        records = await self._reliability.list_threads(
+            resident_id=identity.user_id,
+            lifecycle_status=lifecycle_status,
+            limit=limit,
+            offset=offset,
         )
         items: list[ResidentThreadSummaryResponse] = []
         for record in records:
@@ -191,7 +292,9 @@ class AgentApiService:
                 )
             except ThreadIdentityConflict:
                 continue
-            if state is None or state.property_id != record.property_id:
+            if state is None or (
+                record.property_id is not None and state.property_id != record.property_id
+            ):
                 continue
             items.append(
                 ResidentThreadSummaryResponse(
@@ -203,9 +306,36 @@ class AgentApiService:
                     issue_location=state.issue_location,
                     active_ticket_id=state.active_ticket_id,
                     updated_at=state.updated_at or record.updated_at,
+                    lifecycle_status=record.lifecycle_status,
+                    archived_at=record.archived_at,
+                    version=record.version,
                 )
             )
         return ResidentThreadListResponse(items=tuple(items), limit=limit, offset=offset)
+
+    async def set_thread_lifecycle(
+        self,
+        identity: AuthenticatedIdentity,
+        *,
+        thread_id: UUID,
+        lifecycle_status: ThreadLifecycleStatus,
+        expected_version: int,
+    ) -> ThreadLifecycleResponse:
+        if self._reliability is None:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "会话归档服务暂不可用。")
+        record = await self._reliability.set_thread_lifecycle(
+            thread_id=thread_id,
+            resident_id=identity.user_id,
+            lifecycle_status=lifecycle_status,
+            actor_id=identity.actor_id,
+            expected_version=expected_version,
+        )
+        return ThreadLifecycleResponse(
+            thread_id=record.thread_id,
+            lifecycle_status=record.lifecycle_status,
+            archived_at=record.archived_at,
+            version=record.version,
+        )
 
     async def record_api_replay(
         self,
@@ -262,7 +392,7 @@ class AgentApiService:
         reference_time: datetime,
         timezone_name: str,
         message_id: UUID,
-    ) -> tuple[AgentRunResult, UUID]:
+    ) -> tuple[AgentRunResult, UUID, MessageOutcome, RequiredUserAction]:
         run_id = uuid4()
         trigger = (
             AgentRunTrigger.THREAD_CREATED if property_id is not None else AgentRunTrigger.MESSAGE
@@ -275,7 +405,7 @@ class AgentApiService:
             trigger=trigger,
             property_id=property_id,
         )
-        await self.events.publish(thread_id, trace_id, "run_started", {})
+        await self.events.publish(thread_id, trace_id, "run_started", {}, run_id=run_id)
         metadata = ReplayMessageMetadata(
             message_id=message_id,
             content_hash=message_hash(message),
@@ -320,11 +450,23 @@ class AgentApiService:
                     )
                 )
         except Exception:
-            await self._finish_trace(run_id, AgentRunStatus.FAILED, error_code="INTERNAL_ERROR")
-            raise
-        await capture.finalize(result)
-        await self._finish_trace_for_result(run_id, result)
-        return result, run_id
+            result = self._safe_failure_result(thread_id, trace_id)
+        try:
+            await capture.finalize(result)
+        except Exception:
+            pass
+        state = await self._safe_state(identity, thread_id, trace_id, result)
+        result, outcome, required_action = await self._persist_result(
+            identity,
+            result,
+            run_id=run_id,
+            state=state,
+            property_id=state.property_id if state and state.property_context_verified else None,
+            user_message_id=message_id,
+            user_message=message,
+            user_message_created_at=reference_time,
+        )
+        return result, run_id, outcome, required_action
 
     async def _start_replay_capture(
         self,
@@ -343,6 +485,203 @@ class AgentApiService:
             original_trace_id=trace_id,
             trigger_type=trigger,
             input_envelope=input_envelope,  # type: ignore[arg-type]
+        )
+
+    async def _safe_state(
+        self,
+        identity: AuthenticatedIdentity,
+        thread_id: UUID,
+        trace_id: UUID,
+        result: AgentRunResult,
+    ) -> AgentStateView | None:
+        if result.error_code == "THREAD_IDENTITY_CONFLICT":
+            return None
+        try:
+            return await self._orchestrator.get_state(
+                thread_id,
+                self._caller(identity),
+                trace_id,
+            )
+        except ThreadIdentityConflict:
+            return None
+
+    async def _persist_result(
+        self,
+        identity: AuthenticatedIdentity,
+        result: AgentRunResult,
+        *,
+        run_id: UUID,
+        state: AgentStateView | None,
+        property_id: UUID | None,
+        user_message_id: UUID | None,
+        user_message: str | None,
+        user_message_created_at: datetime | None,
+    ) -> tuple[AgentRunResult, MessageOutcome, RequiredUserAction]:
+        outcome = self._message_outcome(result)
+        required_action = self._required_user_action(result)
+        assistant_message = result.assistant_message or self._default_assistant_message(outcome)
+        result = result.model_copy(update={"assistant_message": assistant_message})
+        stage = self._failure_stage(result) if outcome is MessageOutcome.ESCALATED else None
+        command = FinalizeAgentRun(
+            run_id=run_id,
+            thread_id=result.thread_id,
+            trace_id=result.trace_id,
+            resident_id=identity.user_id,
+            property_id=property_id,
+            intent_version=state.intent_version if state else 1,
+            user_message_id=user_message_id,
+            user_message=user_message,
+            user_message_created_at=user_message_created_at,
+            assistant_message=assistant_message,
+            outcome=outcome,
+            required_user_action=required_action,
+            agent_run_status=self._agent_run_status(result).value,
+            agent_run_terminal_event_type=self._agent_run_terminal_event(result),
+            message_event_type=f"message.{outcome.value.casefold()}",
+            error_code=result.error_code,
+            failure_stage=stage,
+            reason_code=(result.error_code or stage.value) if stage else None,
+            safety_level=(
+                HumanReviewSafetyLevel.EMERGENCY
+                if result.workflow_stage is WorkflowStage.EMERGENCY_REVIEW
+                else HumanReviewSafetyLevel.ELEVATED
+                if stage
+                in {
+                    HumanReviewFailureStage.PROPERTY_AUTHORIZATION,
+                    HumanReviewFailureStage.MUTATION_RECONCILIATION,
+                }
+                else HumanReviewSafetyLevel.STANDARD
+            ),
+            active_ticket_id=result.active_ticket_id,
+        )
+        if self._reliability is None:
+            await self._finish_trace_for_result(run_id, result)
+            return result, outcome, required_action
+        try:
+            await self._reliability.finalize_run(command)
+            return result, outcome, required_action
+        except AgentReliabilityError:
+            if outcome is not MessageOutcome.ESCALATED:
+                raise
+            failed_message = "本次请求未能完成，人工处理任务也未成功创建，请稍后重试。"
+            failed_result = result.model_copy(
+                update={
+                    "run_status": RunStatus.FAILED_SAFE,
+                    "assistant_message": failed_message,
+                    "error_code": "HUMAN_REVIEW_PERSISTENCE_FAILED",
+                }
+            )
+            await self._reliability.finalize_run(
+                FinalizeAgentRun(
+                    run_id=run_id,
+                    thread_id=result.thread_id,
+                    trace_id=result.trace_id,
+                    resident_id=identity.user_id,
+                    property_id=property_id,
+                    intent_version=state.intent_version if state else 1,
+                    user_message_id=user_message_id,
+                    user_message=user_message,
+                    user_message_created_at=user_message_created_at,
+                    assistant_message=failed_message,
+                    outcome=MessageOutcome.FAILED,
+                    required_user_action=RequiredUserAction.RETRY,
+                    agent_run_status=AgentRunStatus.FAILED_SAFE.value,
+                    agent_run_terminal_event_type="run_failed_safe",
+                    message_event_type="message.failed",
+                    error_code="HUMAN_REVIEW_PERSISTENCE_FAILED",
+                )
+            )
+            return failed_result, MessageOutcome.FAILED, RequiredUserAction.RETRY
+
+    @staticmethod
+    def _message_outcome(result: AgentRunResult) -> MessageOutcome:
+        if result.error_code == "THREAD_IDENTITY_CONFLICT":
+            return MessageOutcome.FAILED
+        if result.run_status is RunStatus.NEEDS_HUMAN_REVIEW:
+            return MessageOutcome.ESCALATED
+        if result.run_status is RunStatus.FAILED_SAFE:
+            if result.error_code in {
+                "LANGUAGE_INTERPRETATION_FAILED",
+                "POLICY_RESULT_STALE",
+                "RECONCILIATION_PENDING",
+                "MANUAL_REVIEW",
+            }:
+                return MessageOutcome.ESCALATED
+            return MessageOutcome.FAILED
+        return MessageOutcome.COMPLETED
+
+    @staticmethod
+    def _required_user_action(result: AgentRunResult) -> RequiredUserAction:
+        if result.interrupt is not None:
+            return {
+                "NEED_INFORMATION": RequiredUserAction.PROVIDE_DETAILS,
+                "DUPLICATE_TICKET_SELECTION": RequiredUserAction.CONFIRM_ACTION,
+                "APPOINTMENT_SLOT_SELECTION": RequiredUserAction.SELECT_SLOT,
+            }[result.interrupt.kind]
+        outcome = AgentApiService._message_outcome(result)
+        if outcome is MessageOutcome.ESCALATED:
+            return RequiredUserAction.CONTACT_OPERATOR
+        if outcome is MessageOutcome.FAILED:
+            return RequiredUserAction.RETRY
+        return RequiredUserAction.NONE
+
+    @staticmethod
+    def _failure_stage(result: AgentRunResult) -> HumanReviewFailureStage:
+        code = result.error_code or ""
+        if result.workflow_stage is WorkflowStage.EMERGENCY_REVIEW:
+            return HumanReviewFailureStage.SAFETY_REVIEW
+        if code in {"POLICY_REVIEW_REQUIRED", "POLICY_RESULT_STALE"}:
+            return HumanReviewFailureStage.POLICY_REVIEW
+        if code in {
+            "PERMISSION_DENIED",
+            "PROPERTY_CONTEXT_REQUIRED",
+            "PROPERTY_CONTEXT_CONFLICT",
+        }:
+            return HumanReviewFailureStage.PROPERTY_AUTHORIZATION
+        if code in {"RECONCILIATION_PENDING", "MANUAL_REVIEW"}:
+            return HumanReviewFailureStage.MUTATION_RECONCILIATION
+        if code in {"UNSUPPORTED_AUTOMATION", "RESIDENT_MANUAL_REQUEST"}:
+            return HumanReviewFailureStage.UNSUPPORTED_REQUEST
+        if result.workflow_stage in {
+            WorkflowStage.FINDING_SLOTS,
+            WorkflowStage.AWAITING_SLOT_CONFIRMATION,
+        }:
+            return HumanReviewFailureStage.SCHEDULING
+        return HumanReviewFailureStage.INTERPRETATION
+
+    @staticmethod
+    def _agent_run_status(result: AgentRunResult) -> AgentRunStatus:
+        if result.run_status is RunStatus.FAILED_SAFE:
+            return AgentRunStatus.FAILED_SAFE
+        if result.interrupt is not None:
+            return AgentRunStatus.INTERRUPTED
+        return AgentRunStatus.COMPLETED
+
+    @staticmethod
+    def _agent_run_terminal_event(result: AgentRunResult) -> str:
+        return {
+            AgentRunStatus.FAILED_SAFE: "run_failed_safe",
+            AgentRunStatus.INTERRUPTED: "run_interrupted",
+            AgentRunStatus.COMPLETED: "run_completed",
+        }[AgentApiService._agent_run_status(result)]
+
+    @staticmethod
+    def _default_assistant_message(outcome: MessageOutcome) -> str:
+        return {
+            MessageOutcome.COMPLETED: "本次请求已处理完成。",
+            MessageOutcome.ESCALATED: "本次请求已转交物业人工处理。",
+            MessageOutcome.FAILED: "本次请求暂时未能完成，请稍后重试。",
+        }[outcome]
+
+    @staticmethod
+    def _safe_failure_result(thread_id: UUID, trace_id: UUID) -> AgentRunResult:
+        return AgentRunResult(
+            thread_id=thread_id,
+            trace_id=trace_id,
+            run_status=RunStatus.FAILED_SAFE,
+            assistant_message="本次请求暂时未能完成，请稍后重试。",
+            workflow_stage=WorkflowStage.HUMAN_REVIEW,
+            error_code="INTERNAL_ERROR",
         )
 
     @staticmethod
@@ -382,6 +721,8 @@ class AgentApiService:
         state: AgentStateView | None = None,
         publish: bool = True,
         run_id: UUID | None = None,
+        message_outcome: MessageOutcome | None = None,
+        required_user_action: RequiredUserAction | None = None,
     ) -> AgentThreadResponse:
         if state is None and result.run_status is not RunStatus.FAILED_SAFE:
             state = await self._orchestrator.get_state(
@@ -423,6 +764,29 @@ class AgentApiService:
                 action=case_action,
                 retry_allowed=False,
             )
+        durable_messages = (
+            await self._reliability.list_messages(
+                thread_id=result.thread_id,
+                resident_id=identity.user_id,
+            )
+            if self._reliability is not None
+            else ()
+        )
+        conversation_messages = tuple(
+            ResidentConversationMessageResponse(
+                role=item.role.value,
+                content=item.content,
+                created_at=item.created_at,
+            )
+            for item in durable_messages
+        ) or tuple(
+            ResidentConversationMessageResponse(
+                role=item.role.value,
+                content=item.content,
+                created_at=item.created_at,
+            )
+            for item in (state.conversation_messages if state else ())
+        )
         response = AgentThreadResponse(
             thread_id=result.thread_id,
             trace_id=result.trace_id,
@@ -430,6 +794,8 @@ class AgentApiService:
             message_id=message_id,
             workflow_stage=result.workflow_stage,
             run_status=result.run_status,
+            message_outcome=message_outcome or self._message_outcome(result),
+            required_user_action=required_user_action or self._required_user_action(result),
             assistant_message=result.assistant_message,
             interrupt=result.interrupt.model_dump(mode="json") if result.interrupt else None,
             active_ticket=ticket,
@@ -439,14 +805,7 @@ class AgentApiService:
             safety_review_required=state.safety_review_required if state else False,
             error_code=result.error_code,
             reconciliation=reconciliation,
-            conversation_messages=tuple(
-                ResidentConversationMessageResponse(
-                    role=item.role.value,
-                    content=item.content,
-                    created_at=item.created_at,
-                )
-                for item in (state.conversation_messages if state else ())
-            ),
+            conversation_messages=conversation_messages,
         )
         if publish:
             await self._publish_result(response)
@@ -523,35 +882,29 @@ class AgentApiService:
             response.trace_id,
             "workflow_updated",
             {"workflow_stage": response.workflow_stage.value},
+            run_id=response.run_id,
         )
-        if response.run_status is RunStatus.FAILED_SAFE:
-            await self.events.publish(
-                response.thread_id,
-                response.trace_id,
-                "run_failed",
-                {"code": response.error_code or "INTERNAL_ERROR"},
-            )
-            return
         if response.assistant_message:
             await self.events.publish(
                 response.thread_id,
                 response.trace_id,
                 "assistant_delta",
                 {"text": response.assistant_message},
+                run_id=response.run_id,
             )
-        if response.interrupt:
-            await self.events.publish(
-                response.thread_id,
-                response.trace_id,
-                "interrupt_required",
-                {"kind": response.interrupt.kind},
-            )
-            return
+        event_type = f"message.{response.message_outcome.value.casefold()}"
         await self.events.publish(
             response.thread_id,
             response.trace_id,
-            "assistant_completed",
-            {"text": response.assistant_message or ""},
+            event_type,
+            {
+                "text": response.assistant_message or "",
+                "message_outcome": response.message_outcome.value,
+                "required_user_action": response.required_user_action.value,
+                "interrupt_kind": response.interrupt.kind if response.interrupt else None,
+                "error_code": response.error_code,
+            },
+            run_id=response.run_id,
         )
 
     @staticmethod

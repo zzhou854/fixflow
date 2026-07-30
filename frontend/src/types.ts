@@ -54,14 +54,17 @@ export interface ConversationMessage {
   role: 'USER' | 'ASSISTANT'; content: string; created_at: string
 }
 export interface ResidentThreadSummary {
-  thread_id: string; property_id: string; workflow_stage: WorkflowStage
+  thread_id: string; property_id: string | null; workflow_stage: WorkflowStage
   run_status: 'COMPLETED' | 'INTERRUPTED' | 'NEEDS_HUMAN_REVIEW' | 'FAILED_SAFE'
   issue_category: string | null; issue_location: string | null
   active_ticket_id: string | null; updated_at: string
+  lifecycle_status: 'ACTIVE' | 'ARCHIVED'; archived_at: string | null; version: number
 }
 export interface AgentThread {
   thread_id: string; trace_id: string; run_id?: string | null; message_id: string | null; workflow_stage: WorkflowStage
   run_status: 'COMPLETED' | 'INTERRUPTED' | 'NEEDS_HUMAN_REVIEW' | 'FAILED_SAFE'
+  message_outcome: 'COMPLETED' | 'FAILED' | 'ESCALATED'
+  required_user_action: 'NONE' | 'PROVIDE_DETAILS' | 'SELECT_SLOT' | 'CONFIRM_ACTION' | 'CONTACT_OPERATOR' | 'RETRY'
   assistant_message: string | null; interrupt: Interrupt | null
   active_ticket: Ticket | null; active_appointment: Appointment | null
   policy_status: { sufficiency: string | null; conflict: boolean; evidence_ids: string[] }

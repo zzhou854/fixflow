@@ -16,6 +16,7 @@ from app.api.services.operator_replay import OperatorReplayService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
+from app.application.agent_reliability import AgentReliabilityService
 from app.application.auth import AuthenticatedIdentity, AuthService
 from app.application.services import FixFlowApplicationService
 from app.domain.enums import ActorType
@@ -35,6 +36,7 @@ class ApiServices:
     operator_trace: OperatorTraceQueryService | None = None
     operator_reconciliation: OperatorReconciliationService | None = None
     operator_replay: OperatorReplayService | None = None
+    agent_reliability: AgentReliabilityService | None = None
 
 
 _bearer = HTTPBearer(auto_error=False)
