@@ -2,8 +2,8 @@
 
 ## Status
 
-Commercial-hardening phase 1B supplies a candidate integration, not an
-activation:
+Commercial-hardening phases 1B and 1C supply a candidate integration and
+development evidence, not an activation:
 
 ```text
 Default provider: scripted
@@ -97,8 +97,13 @@ payload, or business idempotency material is stored.
 
 ## Development evidence
 
-Contract and deterministic Development Regression tests use fake providers,
-MockTransport, and fake clocks; they do not call a real DeepSeek endpoint.
-Metrics keep Flash first-pass, schema repair, Pro fallback, routed success,
-human escalation, latency, and errors separate. They prove integration behavior,
-not model quality or formal qualification.
+Phase 1C adds an explicitly gated real-provider Smoke and three complete
+120-case synthetic Development Regression runs (Flash, Pro, and Flash-to-Pro).
+All passed the pre-existing frozen development gate. A 24-case two-repeat
+sample passed all control-plane stability thresholds. See
+`docs/DEVELOPMENT_REGRESSION.md`.
+
+This supports a future human decision about `DEV_REGRESSION_PASSED`; it does
+not set that status automatically and does not establish Holdout, Shadow,
+Canary, or production qualification. New Holdout sealing tools and the
+no-reuse protocol are documented in `docs/HOLDOUT_PROTOCOL.md`.

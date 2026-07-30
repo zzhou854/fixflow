@@ -185,6 +185,13 @@ Shadow-ready evidence. Revision `20260730_0008` stores only non-authoritative
 shadow metadata and hashes. No new Holdout, formal Shadow run, Canary,
 activation, or DeepSeek business traffic has been performed.
 
+Commercial-hardening phase 1C adds explicit, default-off real-provider Smoke,
+complete synthetic Development Regression for Flash, Pro, and Flash-to-Pro,
+stability sampling, and offline tooling for a future sealed Holdout. These
+development gates passed, but qualification remains `NOT_ACTIVATED`; no new
+Holdout, formal Shadow campaign, Canary, activation, or DeepSeek business
+traffic was performed.
+
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
 Do not commit `.env`. `uv.lock` is the committed dependency lock file and is the
@@ -215,6 +222,8 @@ and never maintained manually.
 - [GLM-5.1 Prompt v2 remediation](docs/GLM_5_1_PROMPT_V2_REMEDIATION_REPORT.md)
 - [DeepSeek V4 capability report](docs/DEEPSEEK_V4_CAPABILITY_REPORT.md)
 - [Controlled online-provider boundary](docs/ONLINE_PROVIDER.md)
+- [DeepSeek development regression evidence](docs/DEVELOPMENT_REGRESSION.md)
+- [Future locked Holdout protocol](docs/HOLDOUT_PROTOCOL.md)
 
 ## Week-1 delivery order
 
