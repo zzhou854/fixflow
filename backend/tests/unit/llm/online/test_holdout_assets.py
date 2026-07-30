@@ -211,6 +211,24 @@ def test_internal_assisted_review_is_advisory_and_call_free() -> None:
     assert report["online_provider_calls"] == 0
 
 
+def test_frozen_qualification_runtime_matches_sealed_identity() -> None:
+    report = json.loads(
+        (ASSETS / "reports" / "qualification_runtime.revised.json").read_text(encoding="utf-8")
+    )
+
+    assert report["runtime_commit"] == "990bbfcbf0c03e40c4b339be71b959a0065a30ba"
+    assert report["runtime_tag"] == ("qualification-runtime-structured-2.1.0-grounded-1.1.0")
+    assert report["structured_identity_matches_manifest"] is True
+    assert report["grounded_identity_matches_manifest"] is True
+    assert report["worktree_clean"] is True
+    assert report["default_provider"] == "scripted"
+    assert report["online_provider_status"] == "NOT_ACTIVATED"
+    assert report["formal_holdout_live_call_count"] == 0
+    assert report["formal_shadow_status"] == "NOT_EXECUTED"
+    assert report["canary_status"] == "NOT_EXECUTED"
+    assert report["approval"] == "PENDING_HUMAN_SIGNATURE"
+
+
 def test_original_manifest_content_identities_remain_frozen() -> None:
     structured = HoldoutManifest.model_validate_json(
         (MANIFESTS / "resident_interpretation_holdout_v2.manifest.json").read_text(encoding="utf-8")

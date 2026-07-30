@@ -166,6 +166,22 @@ This assistance is not independent review. The human-signature request remains
 cases still require a fresh independent human decision. No Provider or
 qualification call was made.
 
+## Frozen qualification runtime
+
+Future one-time execution is pinned to:
+
+```text
+Commit: 990bbfcbf0c03e40c4b339be71b959a0065a30ba
+Tag: qualification-runtime-structured-2.1.0-grounded-1.1.0
+```
+
+The detached Worktree was created with checkout line-ending conversion
+disabled. Both recomputed identities exactly match the sealed manifests and
+the Worktree is clean. This matters because scorer, gate, and normalization
+identities hash source bytes; an ordinary Windows CRLF checkout would otherwise
+produce a different identity. The frozen copy remains `scripted` with online
+execution disabled.
+
 ## Explicit non-claims
 
 This packet does not mean:
