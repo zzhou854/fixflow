@@ -31,6 +31,7 @@ from app.api.services.operator_replay import OperatorReplayService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.operator_trace import OperatorTraceQueryService
 from app.api.services.sse import SSEEventBus
+from app.application.agent_reliability import AgentReliabilityService
 from app.application.auth import AuthService
 from app.domain.enums import (
     AppointmentPurpose,
@@ -41,6 +42,9 @@ from app.domain.enums import (
 )
 from app.fault_injection import FaultAction, FaultInjector, FaultPoint
 from app.fault_injection.injector import InjectedFault
+from app.infrastructure.database.agent_reliability_uow import (
+    SqlAlchemyAgentReliabilityUnitOfWork,
+)
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
 from app.infrastructure.database.models import (
     AgentRun,
@@ -206,11 +210,20 @@ async def _open_reconciliation_vertical(
             password_hasher=password_hasher,
         )
         review = OperatorThreadReviewService(orchestrator)
+        reliability = AgentReliabilityService(
+            lambda: SqlAlchemyAgentReliabilityUnitOfWork(mcp_env.sessions)
+        )
         services = ApiServices(
             auth=auth,
             application=mcp_env.application,
             orchestrator=orchestrator,
-            agent=AgentApiService(orchestrator, mcp_env.application, events, trace),
+            agent=AgentApiService(
+                orchestrator,
+                mcp_env.application,
+                events,
+                trace,
+                reliability=reliability,
+            ),
             operator_actions=OperatorActionService(
                 mcp_env.application,
                 trace,
@@ -223,6 +236,7 @@ async def _open_reconciliation_vertical(
             runtime_mode="demo",
             operator_trace=OperatorTraceQueryService(review, trace),
             operator_reconciliation=OperatorReconciliationService(mcp_env.sessions),
+            agent_reliability=reliability,
         )
         http = await stack.enter_async_context(
             AsyncClient(transport=ASGITransport(app=create_app(services)), base_url="http://test")
@@ -953,6 +967,9 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     graph_schema_version=1,
                     timeout_seconds=15,
                 )
+                reliability = AgentReliabilityService(
+                    lambda: SqlAlchemyAgentReliabilityUnitOfWork(mcp_env.sessions)
+                )
                 services = ApiServices(
                     auth=auth,
                     application=mcp_env.application,
@@ -963,6 +980,7 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                         events,
                         trace,
                         replay=replay_capture,
+                        reliability=reliability,
                     ),
                     operator_actions=OperatorActionService(
                         mcp_env.application, trace, replay=replay_capture
@@ -979,6 +997,7 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                         trace,
                         mcp_env.application,
                     ),
+                    agent_reliability=reliability,
                 )
                 app = create_app(services)
                 async with AsyncClient(
@@ -1040,8 +1059,13 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     final = resumed.json()
                     assert resumed.status_code == 200
                     assert final["run_status"] == "COMPLETED"
+                    assert final["message_outcome"] == "COMPLETED"
+                    assert final["required_user_action"] == "NONE"
                     assert final["active_ticket"]["ticket_status"] == "SCHEDULED"
                     assert final["active_appointment"]["status"] == "BOOKED"
+                    assert (
+                        final["conversation_messages"][-1]["content"] == final["assistant_message"]
+                    )
                     resumed_replay = await http.post(
                         f"/api/v1/agent/threads/{body['thread_id']}/resume",
                         headers={
@@ -1057,6 +1081,105 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                     )
                     assert resumed_replay.status_code == 200
                     assert resumed_replay.json() == final
+                    refreshed = await http.get(
+                        f"/api/v1/agent/threads/{body['thread_id']}",
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    assert refreshed.status_code == 200
+                    assert (
+                        refreshed.json()["conversation_messages"] == final["conversation_messages"]
+                    )
+                    recent = await http.get(
+                        "/api/v1/agent/threads",
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    assert recent.status_code == 200
+                    summary = recent.json()["items"][0]
+                    assert summary["thread_id"] == body["thread_id"]
+                    archived = await http.post(
+                        f"/api/v1/agent/threads/{body['thread_id']}/archive",
+                        headers={"Authorization": f"Bearer {token}"},
+                        json={"expected_version": summary["version"]},
+                    )
+                    assert archived.status_code == 200
+                    assert archived.json()["lifecycle_status"] == "ARCHIVED"
+                    active_after_archive = await http.get(
+                        "/api/v1/agent/threads",
+                        headers={"Authorization": f"Bearer {token}"},
+                    )
+                    assert active_after_archive.json()["items"] == []
+                    restored = await http.post(
+                        f"/api/v1/agent/threads/{body['thread_id']}/restore",
+                        headers={"Authorization": f"Bearer {token}"},
+                        json={"expected_version": archived.json()["version"]},
+                    )
+                    assert restored.status_code == 200
+                    assert restored.json()["lifecycle_status"] == "ACTIVE"
+
+                    # The three frozen repair categories must all traverse the real
+                    # HTTP -> graph -> MCP -> application -> PostgreSQL path.  They
+                    # use distinct worker skills, so selecting the same ranked time
+                    # does not weaken the scheduling-conflict assertions.
+                    for category, message, request_key in (
+                        (
+                            IssueCategory.ELECTRICAL,
+                            "客厅插座坏了，希望后天上午维修",
+                            "vertical-electrical",
+                        ),
+                        (
+                            IssueCategory.DOOR_LOCK,
+                            "入户门锁坏了，希望后天上午维修",
+                            "vertical-lock",
+                        ),
+                    ):
+                        category_started = await http.post(
+                            "/api/v1/agent/threads",
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Idempotency-Key": f"{request_key}-create",
+                            },
+                            json={
+                                "property_id": str(mcp_env.property_id),
+                                "initial_message": message,
+                                "reference_time": (mcp_env.slot - timedelta(days=2)).isoformat(),
+                                "timezone_name": "UTC",
+                            },
+                        )
+                        assert category_started.status_code == 200, category_started.text
+                        category_body = category_started.json()
+                        assert category_body["structured_issue"]["issue_category"] == category
+                        assert category_body["interrupt"]["kind"] == "APPOINTMENT_SLOT_SELECTION"
+                        category_resumed = await http.post(
+                            f"/api/v1/agent/threads/{category_body['thread_id']}/resume",
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Idempotency-Key": f"{request_key}-resume",
+                            },
+                            json={
+                                "kind": "SELECT_APPOINTMENT_SLOT",
+                                "intent_version": category_body["interrupt"]["intent_version"],
+                                "candidates_fingerprint": category_body["interrupt"][
+                                    "candidates_fingerprint"
+                                ],
+                                "rank": 1,
+                            },
+                        )
+                        assert category_resumed.status_code == 200, category_resumed.text
+                        category_final = category_resumed.json()
+                        assert category_final["message_outcome"] == "COMPLETED"
+                        assert category_final["active_ticket"]["issue_category"] == category
+                        assert category_final["active_ticket"]["ticket_status"] == "SCHEDULED"
+                        assert category_final["active_appointment"]["status"] == "BOOKED"
+                        category_refreshed = await http.get(
+                            f"/api/v1/agent/threads/{category_body['thread_id']}",
+                            headers={"Authorization": f"Bearer {token}"},
+                        )
+                        assert category_refreshed.status_code == 200
+                        assert (
+                            category_refreshed.json()["conversation_messages"]
+                            == category_final["conversation_messages"]
+                        )
+
                     operator_login = await http.post(
                         "/api/v1/auth/login",
                         json={

@@ -36,6 +36,7 @@ class MCPIntegrationEnvironment:
     property_id: UUID
     worker_ids: tuple[UUID, UUID]
     wrong_skill_worker_id: UUID
+    locksmith_worker_id: UUID
     inactive_worker_id: UUID
     wrong_area_worker_id: UUID
     slot: datetime
@@ -52,6 +53,7 @@ async def mcp_env(migrated_database_url: str) -> AsyncIterator[MCPIntegrationEnv
     property_id = uuid4()
     worker_ids = (uuid4(), uuid4())
     wrong_skill_worker_id = uuid4()
+    locksmith_worker_id = uuid4()
     inactive_worker_id = uuid4()
     wrong_area_worker_id = uuid4()
     slot = datetime(2031, 2, 3, 9, tzinfo=UTC)
@@ -92,6 +94,7 @@ async def mcp_env(migrated_database_url: str) -> AsyncIterator[MCPIntegrationEnv
             (worker_ids[0], WorkerSkillType.PLUMBING, community_name, True),
             (worker_ids[1], WorkerSkillType.PLUMBING, f"  {community_name.upper()}  ", True),
             (wrong_skill_worker_id, WorkerSkillType.ELECTRICAL, community_name, True),
+            (locksmith_worker_id, WorkerSkillType.LOCKSMITH, community_name, True),
             (inactive_worker_id, WorkerSkillType.PLUMBING, community_name, False),
             (wrong_area_worker_id, WorkerSkillType.PLUMBING, "Other Community", True),
         )
@@ -129,6 +132,7 @@ async def mcp_env(migrated_database_url: str) -> AsyncIterator[MCPIntegrationEnv
         property_id=property_id,
         worker_ids=worker_ids,
         wrong_skill_worker_id=wrong_skill_worker_id,
+        locksmith_worker_id=locksmith_worker_id,
         inactive_worker_id=inactive_worker_id,
         wrong_area_worker_id=wrong_area_worker_id,
         slot=slot,

@@ -66,7 +66,14 @@ from tests.fakes.llm import ScriptedLLMProvider
 
 
 class FakePropertyOperationsClient:
-    def __init__(self, resident_id: UUID, property_id: UUID, *, authorized: bool = True) -> None:
+    def __init__(
+        self,
+        resident_id: UUID,
+        property_id: UUID,
+        *,
+        authorized: bool = True,
+        issue_category: IssueCategory = IssueCategory.WATER_LEAK,
+    ) -> None:
         self.resident_id = resident_id
         self.property_id = property_id
         self.ticket_id = uuid4()
@@ -74,6 +81,7 @@ class FakePropertyOperationsClient:
         self.worker_id = uuid4()
         self.booked = False
         self.authorized = authorized
+        self.issue_category = issue_category
         self.duplicate_tickets: tuple[OpenRepairTicketItem, ...] = ()
         self.calls: list[tuple[str, object]] = []
 
@@ -160,7 +168,7 @@ class FakePropertyOperationsClient:
                 ticket_version=2 if self.booked else 1,
                 resident_id=self.resident_id,
                 property_id=self.property_id,
-                issue_category=IssueCategory.WATER_LEAK,
+                issue_category=self.issue_category,
                 issue_location="厨房水槽下",
                 severity=Severity.MEDIUM,
                 ticket_status=TicketStatus.SCHEDULED if self.booked else TicketStatus.OPEN,
@@ -183,7 +191,11 @@ class FakePropertyOperationsClient:
                     AvailableSlotItem(
                         worker_id=self.worker_id,
                         worker_name="维修员",
-                        skill_type="PLUMBING",
+                        skill_type={
+                            IssueCategory.WATER_LEAK: "PLUMBING",
+                            IssueCategory.ELECTRICAL: "ELECTRICAL",
+                            IssueCategory.DOOR_LOCK: "LOCKSMITH",
+                        }[self.issue_category],
                         service_area="FixFlow小区",
                         service_area_matched=True,
                         scheduled_start=datetime(2026, 7, 21, 13, tzinfo=UTC),
@@ -354,16 +366,32 @@ async def test_interpretation_provider_failure_stops_before_business_mutation() 
 
 
 @pytest.mark.asyncio
-async def test_new_repair_interrupt_resume_books_once_with_system_duration() -> None:
+@pytest.mark.parametrize(
+    ("category", "location", "description"),
+    [
+        (IssueCategory.WATER_LEAK, "厨房水槽下", "厨房水槽下漏水"),
+        (IssueCategory.ELECTRICAL, "客厅插座", "客厅插座没有电"),
+        (IssueCategory.DOOR_LOCK, "入户门", "入户门锁损坏"),
+    ],
+)
+async def test_three_category_repair_interrupt_resume_books_once_with_system_duration(
+    category: IssueCategory,
+    location: str,
+    description: str,
+) -> None:
     resident_id, property_id = uuid4(), uuid4()
-    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    mcp = FakePropertyOperationsClient(
+        resident_id,
+        property_id,
+        issue_category=category,
+    )
     orchestrator = _orchestrator(
         mcp,
         {
             "utterance_intent": "NEW_REPAIR",
-            "issue_category": "WATER_LEAK",
-            "issue_location": "厨房水槽下",
-            "issue_description_update": "厨房水槽下漏水",
+            "issue_category": category.value,
+            "issue_location": location,
+            "issue_description_update": description,
             "user_availability_windows": [
                 {
                     "starts_at": "2026-07-21T12:00:00Z",
@@ -457,6 +485,12 @@ async def test_safety_signal_routes_review_without_business_mutations() -> None:
     result = await orchestrator.start_turn(_turn(resident_id, property_id))
     assert result.run_status is RunStatus.NEEDS_HUMAN_REVIEW
     assert result.workflow_stage is WorkflowStage.EMERGENCY_REVIEW
+    state = await orchestrator._stored_state(result.thread_id)
+    assert state is not None
+    assistant_messages = [
+        item.content for item in state.conversation_messages if item.role is LLMRole.ASSISTANT
+    ]
+    assert assistant_messages[-1] == result.assistant_message
     names = [name for name, _ in mcp.calls]
     assert names == ["get_resident_property"]
 
@@ -496,6 +530,17 @@ async def test_insufficient_or_late_policy_never_reaches_ticket_creation(
     )
     result = await orchestrator.start_turn(_turn(resident_id, property_id))
     assert result.run_status in {RunStatus.NEEDS_HUMAN_REVIEW, RunStatus.FAILED_SAFE}
+    if result.assistant_message is not None:
+        state = await orchestrator._stored_state(result.thread_id)
+        assert state is not None
+        assistant_messages = [
+            item.content for item in state.conversation_messages if item.role is LLMRole.ASSISTANT
+        ]
+        # Graph-owned terminal replies are mirrored into state where the node owns
+        # the final response. Late async failures are persisted by the API's
+        # durable message boundary instead of mutating an already-finished graph.
+        if assistant_messages:
+            assert assistant_messages[-1] == result.assistant_message
     assert all(name != "create_repair_ticket" for name, _ in mcp.calls)
     assert all(name != "list_available_slots" for name, _ in mcp.calls)
 
@@ -908,20 +953,36 @@ async def test_database_change_wins_over_interrupted_slot_checkpoint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_information_resume_keeps_intent_version_and_continues() -> None:
+@pytest.mark.parametrize(
+    ("category", "description", "location"),
+    [
+        (IssueCategory.WATER_LEAK, "厨房水槽下方漏水", "厨房水槽下"),
+        (IssueCategory.ELECTRICAL, "客厅插座没有电", "客厅插座"),
+        (IssueCategory.DOOR_LOCK, "入户门锁损坏", "入户门"),
+    ],
+)
+async def test_missing_information_resume_keeps_intent_version_and_continues(
+    category: IssueCategory,
+    description: str,
+    location: str,
+) -> None:
     resident_id, property_id = uuid4(), uuid4()
-    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    mcp = FakePropertyOperationsClient(
+        resident_id,
+        property_id,
+        issue_category=category,
+    )
     orchestrator = _orchestrator(
         mcp,
         (
             {
                 "utterance_intent": "NEW_REPAIR",
-                "issue_category": "WATER_LEAK",
-                "issue_description_update": "水槽下方漏水",
+                "issue_category": category.value,
+                "issue_description_update": description,
             },
             {
                 "utterance_intent": "PROVIDE_INFORMATION",
-                "issue_location": "厨房水槽下",
+                "issue_location": location,
                 "user_availability_windows": [
                     {
                         "starts_at": "2026-07-21T12:00:00Z",
