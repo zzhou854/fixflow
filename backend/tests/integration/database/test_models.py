@@ -41,6 +41,7 @@ def test_metadata_contains_exact_core_tables() -> None:
         "agent_messages",
         "human_review_cases",
         "human_review_case_events",
+        "llm_shadow_runs",
     }
 
 
@@ -67,6 +68,32 @@ def test_business_times_are_timezone_aware_and_ranges_are_tstzrange() -> None:
     assert policy_documents.c.effective_from.type.timezone is True
     assert isinstance(policy_chunks.c.embedding.type, Vector)
     assert policy_chunks.c.embedding.type.dim == 384
+
+
+def test_shadow_evidence_schema_is_sanitized_and_non_authoritative() -> None:
+    table = Base.metadata.tables["llm_shadow_runs"]
+    assert set(table.c.keys()) == {
+        "id",
+        "source_run_id",
+        "provider",
+        "model",
+        "prompt_version",
+        "schema_version",
+        "result_status",
+        "latency_ms",
+        "error_code",
+        "structured_result_hash",
+        "created_at",
+    }
+    assert isinstance(table.c.result_status.type, Enum)
+    assert table.c.result_status.type.native_enum is False
+    assert not {
+        "raw_input",
+        "raw_output",
+        "prompt",
+        "api_key",
+        "authorization",
+    }.intersection(table.c.keys())
 
 
 def test_orm_models_define_no_domain_transition_methods() -> None:

@@ -24,6 +24,7 @@ from app.infrastructure.database.models.observability import (
     OutboxStatus,
     TraceSource,
 )
+from app.infrastructure.database.models.online import LLMShadowResultStatus, LLMShadowRun
 from app.infrastructure.database.models.policy import PolicyChunk, PolicyDocument
 from app.infrastructure.database.models.reconciliation import (
     EvidenceStatus,
@@ -58,6 +59,8 @@ __all__ = [
     "HumanReviewCaseRow",
     "OutboxEvent",
     "OutboxStatus",
+    "LLMShadowResultStatus",
+    "LLMShadowRun",
     "OperationReconciliationCase",
     "ReconciliationAction",
     "ReconciliationStatus",

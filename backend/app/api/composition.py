@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.agent.nodes.interpret_message import InterpretMessageNode
 from app.agent.ports import LLMProvider
 from app.agent_runtime.composition import open_agent_orchestrator
 from app.api.demo_providers import DemoDeterministicEmbeddingProvider, DemoScriptedLLMProvider
@@ -29,8 +30,15 @@ from app.infrastructure.database.agent_reliability_uow import (
 )
 from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserRepository
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
-from app.llm.factory import build_structured_interpretation_provider
-from app.llm.shadow import InMemoryShadowEvaluationSink, ShadowingLLMProvider
+from app.llm.hybrid.pipeline import HybridInterpretationNode
+from app.llm.hybrid.prompts import FactPromptRegistry
+from app.llm.online.factory import build_deepseek_online_candidate
+from app.llm.online.gate import ProviderPurpose
+from app.llm.online.shadow import (
+    ShadowingInterpretationNode,
+    SqlAlchemyShadowEvidenceSink,
+)
+from app.llm.sanitizer import InterpretationInputLimits
 from app.reconciliation.coordinator import UnknownCommitCoordinator
 from app.reconciliation.repository import SqlAlchemyReconciliationRepository
 from app.replay.capture import ReplayCaptureService
@@ -86,18 +94,34 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
         await stalled_runs.start()
         scripted_llm = DemoScriptedLLMProvider()
         interpretation_provider: LLMProvider = scripted_llm
-        if settings.llm_experimental_enabled:
-            shadow_settings = settings.model_copy(
-                update={"llm_provider": settings.llm_experimental_provider}
+        interpretation_node = None
+        if settings.llm_shadow_enabled:
+            candidate = build_deepseek_online_candidate(
+                settings,
+                purpose=ProviderPurpose.SHADOW,
             )
-            shadow_provider = build_structured_interpretation_provider(
-                shadow_settings,
-                scripted_provider=scripted_llm,
+            limits = InterpretationInputLimits(
+                max_input_characters=settings.llm_max_input_characters,
+                max_context_messages=settings.llm_max_context_messages,
+                max_message_characters=settings.llm_max_message_characters,
             )
-            interpretation_provider = ShadowingLLMProvider(
-                primary=scripted_llm,
-                shadow=shadow_provider,
-                sink=InMemoryShadowEvaluationSink(),
+            prompt = FactPromptRegistry().resident_fact_extraction()
+            interpretation_node = ShadowingInterpretationNode(
+                primary=InterpretMessageNode(
+                    scripted_llm,
+                    model="fixflow-demo-scripted-v1",
+                    input_limits=limits,
+                ),
+                shadow=HybridInterpretationNode(
+                    candidate,
+                    model="deepseek-v4-flash",
+                    input_limits=limits,
+                ),
+                sink=SqlAlchemyShadowEvidenceSink(sessions),
+                provider="deepseek",
+                model="deepseek-v4-flash",
+                prompt_version=prompt.prompt_version,
+                schema_version=prompt.schema_version,
             )
         async with open_agent_orchestrator(
             settings,
@@ -105,6 +129,7 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
             response_provider=scripted_llm,
             embedding_provider=DemoDeterministicEmbeddingProvider(),
             language_model_name="fixflow-demo-scripted-v1",
+            interpretation_node=interpretation_node,
         ) as orchestrator:
             operator_review = OperatorThreadReviewService(orchestrator)
             operator_trace = OperatorTraceQueryService(operator_review, trace)
@@ -130,6 +155,7 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
                     trace=trace,
                     replay=replay_capture,
                     reliability=reliability,
+                    model_budget_seconds=settings.llm_model_budget_seconds,
                 ),
                 operator_actions=OperatorActionService(
                     application,
