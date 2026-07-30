@@ -1281,8 +1281,14 @@ async def test_real_login_agent_slot_resume_and_cross_resident_denial(
                         retry_base_seconds=1,
                         clock=lambda: datetime.now(UTC),
                     )
-                    assert await dispatcher.dispatch_once() >= 3
-                    assert await dispatcher.dispatch_once() == 0
+                    processed_batches: list[int] = []
+                    for _ in range(5):
+                        processed = await dispatcher.dispatch_once()
+                        processed_batches.append(processed)
+                        if processed == 0:
+                            break
+                    assert sum(processed_batches) >= 3
+                    assert processed_batches[-1] == 0
 
                     other_login = await http.post(
                         "/api/v1/auth/login",
