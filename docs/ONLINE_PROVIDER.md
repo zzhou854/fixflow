@@ -2,8 +2,8 @@
 
 ## Status
 
-Commercial-hardening phases 1B and 1C supply a candidate integration and
-development evidence, not an activation:
+Commercial-hardening phases 1B through 1D-A supply a candidate integration,
+development evidence and sealed qualification materials, not an activation:
 
 ```text
 Default provider: scripted
@@ -11,8 +11,11 @@ Online provider: NOT_ACTIVATED
 DeepSeek production traffic: false
 ```
 
-The consumed qualification corpus is not reusable as a new Holdout. This phase
-runs no new Holdout, formal Shadow campaign, Canary, or production activation.
+Historical qualification corpora are not reusable as new Holdouts. Phase 1D-A
+adds two newly authored, externally stored Suites whose manifests are
+`SEALED`, whose approval is `PENDING_APPROVAL`, and whose live-call count is
+zero. It runs no Holdout inference, formal Shadow campaign, Canary, or
+production activation.
 
 ## Capability split
 
@@ -107,3 +110,8 @@ This supports a future human decision about `DEV_REGRESSION_PASSED`; it does
 not set that status automatically and does not establish Holdout, Shadow,
 Canary, or production qualification. New Holdout sealing tools and the
 no-reuse protocol are documented in `docs/HOLDOUT_PROTOCOL.md`.
+
+Phase 1D-A extends that protocol with independent approval, Golden review,
+Prompt/Schema/scorer/gate/code binding, one-time concurrent execution locking,
+append-only aggregate results, and separate Structured/Grounded scorers. It
+prepares but does not execute or pass the Holdout.

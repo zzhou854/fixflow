@@ -192,6 +192,14 @@ development gates passed, but qualification remains `NOT_ACTIVATED`; no new
 Holdout, formal Shadow campaign, Canary, activation, or DeepSeek business
 traffic was performed.
 
+Commercial-hardening phase 1D-A prepares two new independent qualification
+Suites outside the Git worktree: 180 Structured Understanding cases and 60
+Grounded Response cases. Their data, Golden, scorer, gate, Prompt, Schema,
+normalization, router and runtime identities are sealed; duplicate and privacy
+checks pass. The Golden still requires independent human review and the
+approval packet is `PENDING_APPROVAL`. No Holdout call has occurred, so this is
+preparation evidence, not a passing qualification.
+
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
 Do not commit `.env`. `uv.lock` is the committed dependency lock file and is the
@@ -223,7 +231,8 @@ and never maintained manually.
 - [DeepSeek V4 capability report](docs/DEEPSEEK_V4_CAPABILITY_REPORT.md)
 - [Controlled online-provider boundary](docs/ONLINE_PROVIDER.md)
 - [DeepSeek development regression evidence](docs/DEVELOPMENT_REGRESSION.md)
-- [Future locked Holdout protocol](docs/HOLDOUT_PROTOCOL.md)
+- [Independent Holdout protocol](docs/HOLDOUT_PROTOCOL.md)
+- [Holdout approval packet](docs/HOLDOUT_APPROVAL_PACKET.md)
 
 ## Week-1 delivery order
 

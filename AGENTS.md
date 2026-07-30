@@ -126,6 +126,10 @@ Commercial-hardening phase 1A is committed at tag
 `commercial-hardening-phase-1a`. Phase 1B is authorized to add only controlled
 online-provider infrastructure and revision `20260730_0008` for sanitized
 Shadow-ready evidence. This later instruction supersedes the stale migration
-limit above. The default Provider remains `scripted`; online business traffic,
-a new Holdout, formal Shadow, Canary, and production activation remain
-forbidden until separately approved and evidenced.
+limit above. Phase 1C development evidence is committed at
+`commercial-hardening-phase-1c`. The current boundary is phase 1D-A: build and
+seal two external Holdout suites, freeze Golden/scorer/gate/Prompt/Schema/code
+identities, and prepare independent approval and one-time execution locks.
+The default Provider remains `scripted`; Holdout inference, online business
+traffic, formal Shadow, Canary, and production activation remain forbidden
+until separately approved and evidenced.
