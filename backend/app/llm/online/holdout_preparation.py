@@ -77,10 +77,11 @@ def prepare_structured_suite(
     output_manifest_path: Path,
     dataset_version: str = "2.0.0",
     near_duplicate_threshold: float = 0.88,
+    duplicate_scan: DuplicateScanResult | None = None,
     now: datetime | None = None,
 ) -> HoldoutPreparationSummary:
     validation, counts = validate_structured_assets(dataset_path, golden_path)
-    duplicates = scan_duplicates(
+    duplicates = duplicate_scan or scan_duplicates(
         dataset_path,
         reference_paths=reference_jsonl_paths,
         reference_text_paths=reference_text_paths,
@@ -123,10 +124,11 @@ def prepare_grounded_suite(
     output_manifest_path: Path,
     dataset_version: str = "1.0.0",
     near_duplicate_threshold: float = 0.88,
+    duplicate_scan: DuplicateScanResult | None = None,
     now: datetime | None = None,
 ) -> HoldoutPreparationSummary:
     validation, counts = validate_grounded_assets(dataset_path, golden_path)
-    duplicates = scan_duplicates(
+    duplicates = duplicate_scan or scan_duplicates(
         dataset_path,
         reference_paths=reference_jsonl_paths,
         reference_text_paths=reference_text_paths,

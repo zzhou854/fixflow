@@ -509,6 +509,12 @@ def scan_duplicates(
             reference_normalized = _punctuationless(reference.text)
             if not candidate_normalized or not reference_normalized:
                 continue
+            if not _can_reach_similarity(
+                candidate_normalized,
+                reference_normalized,
+                near_duplicate_threshold,
+            ):
+                continue
             similarity = SequenceMatcher(
                 None,
                 candidate_normalized,
@@ -527,6 +533,12 @@ def scan_duplicates(
         for other in candidate_units[candidate_index + 1 :]:
             other_normalized = _punctuationless(other.text)
             if not candidate_normalized or not other_normalized:
+                continue
+            if not _can_reach_similarity(
+                candidate_normalized,
+                other_normalized,
+                near_duplicate_threshold,
+            ):
                 continue
             similarity = SequenceMatcher(
                 None,
@@ -870,6 +882,12 @@ def _joined_turn_text(value: str) -> str:
 
 def _is_punctuation(value: str) -> bool:
     return unicodedata.category(value).startswith(("P", "S"))
+
+
+def _can_reach_similarity(left: str, right: str, threshold: float) -> bool:
+    """Use SequenceMatcher's length upper bound without dropping valid matches."""
+
+    return (2 * min(len(left), len(right)) / (len(left) + len(right))) >= threshold
 
 
 __all__ = [
