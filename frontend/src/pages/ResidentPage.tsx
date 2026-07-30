@@ -1,12 +1,18 @@
-import { LogoutOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
+import {
+  CustomerServiceOutlined,
+  LogoutOutlined,
+  MenuOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SendOutlined,
+} from '@ant-design/icons'
 import {
   Alert,
   Button,
   Card,
-  Empty,
+  Drawer,
   Input,
   Layout,
-  List,
   Select,
   Space,
   Spin,
@@ -14,13 +20,15 @@ import {
   Typography,
   message as toast,
 } from 'antd'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, shanghaiReferenceTime } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { DemoBanner } from '../components/DemoBanner'
 import { InterruptPanel } from '../components/InterruptPanel'
+import { ResidentConversationList } from '../components/ResidentConversationList'
 import { TicketSummary } from '../components/TicketSummary'
 import { useSSE } from '../hooks/useSSE'
+import { progressLabel, residentStageLabel } from '../residentDisplay'
 import type { AgentThread, Property, ResidentThreadSummary } from '../types'
 
 interface ChatMessage {
@@ -28,11 +36,7 @@ interface ChatMessage {
   text: string
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  WATER_LEAK: '漏水报修',
-  ELECTRICAL: '电气报修',
-  DOOR_LOCK: '门锁报修',
-}
+type FailedAction = { label: string; retry: () => Promise<void> }
 
 function conversation(thread: AgentThread): ChatMessage[] {
   return (thread.conversation_messages ?? []).map((item) => ({
@@ -41,11 +45,9 @@ function conversation(thread: AgentThread): ChatMessage[] {
   }))
 }
 
-function threadTitle(item: ResidentThreadSummary): string {
-  const category = item.issue_category
-    ? (CATEGORY_LABELS[item.issue_category] ?? item.issue_category)
-    : '新报修会话'
-  return item.issue_location ? `${category} · ${item.issue_location}` : category
+function friendlyError(reason: unknown): string {
+  if (reason instanceof ApiError) return reason.body.message
+  return '服务暂时没有响应，请稍后重试或转交物业工作人员。'
 }
 
 export function ResidentPage() {
@@ -53,22 +55,45 @@ export function ResidentPage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [propertyId, setPropertyId] = useState<string>()
   const [threads, setThreads] = useState<ResidentThreadSummary[]>([])
+  const [allThreads, setAllThreads] = useState<ResidentThreadSummary[]>([])
   const [thread, setThread] = useState<AgentThread | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [allLoading, setAllLoading] = useState(false)
+  const [conversationDrawerOpen, setConversationDrawerOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [failedAction, setFailedAction] = useState<FailedAction | null>(null)
+  const messageListRef = useRef<HTMLDivElement>(null)
 
   const apply = useCallback((next: AgentThread) => {
     setThread(next)
     setMessages(conversation(next))
+    setFailedAction(null)
     sessionStorage.setItem('fixflow.demo.thread_id', next.thread_id)
   }, [])
 
   const refreshThreads = useCallback(async () => {
     if (!token) return
-    const result = await api.residentThreads(token)
+    const result = await api.residentThreads(token, 'active', 5, 0)
     setThreads(result.items)
   }, [token])
+
+  const loadAllThreads = useCallback(
+    async (archiveStatus: 'active' | 'archived' | 'all' = 'all') => {
+      if (!token) return
+      setAllLoading(true)
+      try {
+        const result = await api.residentThreads(token, archiveStatus, 100, 0)
+        setAllThreads(result.items)
+      } catch (reason) {
+        toast.error(friendlyError(reason))
+      } finally {
+        setAllLoading(false)
+      }
+    },
+    [token],
+  )
 
   const reconcile = useCallback(
     async (threadId: string) => {
@@ -78,6 +103,7 @@ export function ResidentPage() {
     },
     [apply, refreshThreads, token],
   )
+
   const sse = useSSE(thread?.thread_id ?? null, token, reconcile)
   const reconciliationBlocked = ['PENDING', 'PROCESSING', 'MANUAL_REVIEW'].includes(
     thread?.reconciliation?.status ?? '',
@@ -86,10 +112,11 @@ export function ResidentPage() {
   const awaitingSelection =
     thread?.interrupt?.kind === 'DUPLICATE_TICKET_SELECTION' ||
     thread?.interrupt?.kind === 'APPOINTMENT_SLOT_SELECTION'
+  const progress = progressLabel(thread, busy)
 
   useEffect(() => {
     if (!token) return
-    void Promise.all([api.properties(token), api.residentThreads(token)]).then(
+    void Promise.all([api.properties(token), api.residentThreads(token, 'active', 5, 0)]).then(
       ([propertyItems, threadResult]) => {
         setProperties(propertyItems)
         setPropertyId(propertyItems[0]?.property_id)
@@ -107,13 +134,20 @@ export function ResidentPage() {
       .catch(() => sessionStorage.removeItem('fixflow.demo.thread_id'))
   }, [apply, token])
 
+  useEffect(() => {
+    const element = messageListRef.current
+    if (element) element.scrollTop = element.scrollHeight
+  }, [messages, busy, thread?.interrupt])
+
   const selectThread = async (threadId: string) => {
     if (!token) return
     setBusy(true)
     try {
       apply(await api.getThread(token, threadId))
+      setConversationDrawerOpen(false)
+      setMobileMenuOpen(false)
     } catch (reason) {
-      toast.error(reason instanceof ApiError ? reason.body.message : '会话加载失败')
+      toast.error(friendlyError(reason))
     } finally {
       setBusy(false)
     }
@@ -121,44 +155,82 @@ export function ResidentPage() {
 
   const resume = async (body: object) => {
     if (!token || !thread) return
-    setBusy(true)
-    try {
-      apply(await api.resume(token, thread.thread_id, body))
-      await refreshThreads()
-    } catch (reason) {
-      toast.error(reason instanceof ApiError ? reason.body.message : '补充信息提交失败')
-    } finally {
-      setBusy(false)
+    const run = async () => {
+      setBusy(true)
+      try {
+        apply(await api.resume(token, thread.thread_id, body))
+        await refreshThreads()
+      } catch (reason) {
+        setFailedAction({ label: '重新提交', retry: run })
+        toast.error(friendlyError(reason))
+      } finally {
+        setBusy(false)
+      }
     }
+    await run()
   }
 
   const send = async (text: string) => {
     const trimmed = text.trim()
     if (!token || !propertyId || !trimmed || awaitingSelection) return
+    const existingThread = thread
     setMessages((current) => [...current, { role: 'user', text: trimmed }])
     setBusy(true)
     setInput('')
-    try {
-      let next: AgentThread
-      if (thread && awaitingInformation) {
-        next = await api.resume(token, thread.thread_id, {
-          kind: 'PROVIDE_INFORMATION',
-          intent_version: thread.interrupt!.intent_version,
-          user_message: trimmed,
-          reference_time: shanghaiReferenceTime(),
-          timezone_name: 'Asia/Shanghai',
-        })
-      } else if (thread) {
-        next = await api.sendMessage(token, thread.thread_id, trimmed)
-      } else {
-        next = await api.createThread(token, propertyId, trimmed)
+    setFailedAction(null)
+    const run = async () => {
+      setBusy(true)
+      try {
+        let next: AgentThread
+        if (existingThread && awaitingInformation) {
+          next = await api.resume(token, existingThread.thread_id, {
+            kind: 'PROVIDE_INFORMATION',
+            intent_version: existingThread.interrupt!.intent_version,
+            user_message: trimmed,
+            reference_time: shanghaiReferenceTime(),
+            timezone_name: 'Asia/Shanghai',
+          })
+        } else if (existingThread) {
+          next = await api.sendMessage(token, existingThread.thread_id, trimmed)
+        } else {
+          next = await api.createThread(token, propertyId, trimmed)
+        }
+        apply(next)
+        await refreshThreads()
+      } catch (reason) {
+        setFailedAction({ label: '重试这条消息', retry: run })
+        toast.error(friendlyError(reason))
+      } finally {
+        setBusy(false)
       }
-      apply(next)
-      await refreshThreads()
+    }
+    await run()
+  }
+
+  const archiveThread = async (item: ResidentThreadSummary) => {
+    if (!token) return
+    try {
+      await api.archiveThread(token, item.thread_id, item.version)
+      if (thread?.thread_id === item.thread_id) {
+        sessionStorage.removeItem('fixflow.demo.thread_id')
+        setThread(null)
+        setMessages([])
+      }
+      await Promise.all([refreshThreads(), loadAllThreads('all')])
+      toast.success('会话已归档，之后可以随时恢复。')
     } catch (reason) {
-      toast.error(reason instanceof ApiError ? reason.body.message : '请求失败')
-    } finally {
-      setBusy(false)
+      toast.error(friendlyError(reason))
+    }
+  }
+
+  const restoreThread = async (item: ResidentThreadSummary) => {
+    if (!token) return
+    try {
+      await api.restoreThread(token, item.thread_id, item.version)
+      await Promise.all([refreshThreads(), loadAllThreads('all')])
+      toast.success('会话已恢复到最近列表。')
+    } catch (reason) {
+      toast.error(friendlyError(reason))
     }
   }
 
@@ -167,157 +239,226 @@ export function ResidentPage() {
     setThread(null)
     setMessages([])
     setInput('')
+    setFailedAction(null)
+    setMobileMenuOpen(false)
   }
 
+  const sidebar = (renderConversationDrawer: boolean) => (
+    <div className="resident-sidebar-content">
+      <Card title="服务房屋" className="resident-home-card">
+        <Select
+          aria-label="房屋选择"
+          value={propertyId}
+          onChange={setPropertyId}
+          options={properties.map((item) => ({
+            value: item.property_id,
+            label: item.address_text,
+          }))}
+        />
+        <Button block type="primary" icon={<PlusOutlined />} onClick={newThread}>
+          新建报修会话
+        </Button>
+      </Card>
+      <Card
+        title="最近会话"
+        className="thread-history-card"
+        extra={<span className="recent-limit">最近 5 条</span>}
+      >
+        <ResidentConversationList
+          currentThreadId={thread?.thread_id}
+          recentThreads={threads}
+          allThreads={allThreads}
+          allThreadsLoading={allLoading}
+          drawerOpen={conversationDrawerOpen}
+          renderDrawer={renderConversationDrawer}
+          onDrawerOpen={() => {
+            setConversationDrawerOpen(true)
+            void loadAllThreads('all')
+          }}
+          onDrawerClose={() => setConversationDrawerOpen(false)}
+          onFilterChange={(filter) => void loadAllThreads(filter)}
+          onSelect={selectThread}
+          onArchive={archiveThread}
+          onRestore={restoreThread}
+        />
+      </Card>
+      {thread?.active_ticket && <TicketSummary ticket={thread.active_ticket} />}
+    </div>
+  )
+
   return (
-    <Layout className="app-shell">
+    <Layout className="app-shell resident-app-shell">
       <DemoBanner />
-      <Layout.Header className="app-header">
-        <Typography.Title level={3}>住户维修助手</Typography.Title>
+      <Layout.Header className="app-header resident-header">
         <Space>
-          <Tag color={sse === 'connected' ? 'green' : 'default'}>SSE {sse}</Tag>
-          <span>{user?.username}</span>
+          <Button
+            className="mobile-menu-button"
+            type="text"
+            icon={<MenuOutlined />}
+            aria-label="打开会话菜单"
+            onClick={() => setMobileMenuOpen(true)}
+          />
+          <div>
+            <Typography.Title level={3}>住户维修助手</Typography.Title>
+            <Typography.Text type="secondary">报修、约时间，一步一步帮您处理</Typography.Text>
+          </div>
+        </Space>
+        <Space>
+          <Tag color={sse === 'connected' ? 'success' : 'default'}>
+            {sse === 'connected' ? '服务连接正常' : '正在连接服务'}
+          </Tag>
+          <span className="resident-username">{user?.username}</span>
           <Button icon={<LogoutOutlined />} onClick={logout}>
             退出
           </Button>
         </Space>
       </Layout.Header>
       <Layout.Content className="resident-grid">
-        <aside>
-          <Card title="服务房屋">
-            <Select
-              aria-label="房屋选择"
-              value={propertyId}
-              onChange={setPropertyId}
-              options={properties.map((item) => ({
-                value: item.property_id,
-                label: item.address_text,
-              }))}
-            />
-            <Button block icon={<PlusOutlined />} onClick={newThread}>
-              新建会话
-            </Button>
-          </Card>
-          <Card title="历史会话" className="thread-history-card">
-            {threads.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有历史会话" />
-            ) : (
-              <List
-                size="small"
-                dataSource={threads}
-                renderItem={(item) => (
-                  <List.Item>
-                    <button
-                      type="button"
-                      className={`thread-history-item ${
-                        item.thread_id === thread?.thread_id ? 'active' : ''
-                      }`}
-                      onClick={() => void selectThread(item.thread_id)}
-                    >
-                      <strong>{threadTitle(item)}</strong>
-                      <span>
-                        {item.workflow_stage} ·{' '}
-                        {new Date(item.updated_at).toLocaleString()}
-                      </span>
-                    </button>
-                  </List.Item>
-                )}
+        <aside className="resident-sidebar">{sidebar(true)}</aside>
+        <Drawer
+          placement="left"
+          width="min(88vw, 360px)"
+          title="我的报修"
+          open={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+          className="mobile-sidebar-drawer"
+        >
+          {sidebar(false)}
+        </Drawer>
+        <section className="chat-panel">
+          <div className="chat-context-bar">
+            <div>
+              <strong>{thread ? residentStageLabel(thread.workflow_stage) : '准备开始新的报修'}</strong>
+              <span>
+                {thread?.active_ticket
+                  ? '工单进展以物业系统的最新记录为准'
+                  : '告诉我发生了什么，我会继续引导您'}
+              </span>
+            </div>
+            {thread?.run_status === 'NEEDS_HUMAN_REVIEW' && (
+              <Tag color="warning">物业人工处理中</Tag>
+            )}
+          </div>
+          <div className="chat-scroll-region">
+            {thread?.reconciliation && (
+              <Alert
+                showIcon
+                type={thread.reconciliation.status === 'MANUAL_REVIEW' ? 'warning' : 'info'}
+                message={
+                  thread.reconciliation.status === 'MANUAL_REVIEW'
+                    ? '物业工作人员正在核实这次操作。'
+                    : thread.reconciliation.status === 'RESOLVED_NOT_COMMITTED'
+                      ? '上次操作没有提交，可以安全重试。'
+                      : '系统正在核对处理结果，请不要重复提交。'
+                }
               />
             )}
-          </Card>
-          {thread?.active_ticket && <TicketSummary ticket={thread.active_ticket} />}
-          <Card title="当前阶段">
-            <Tag color="blue">{thread?.workflow_stage ?? 'INTAKE'}</Tag>
-            {thread?.run_status === 'NEEDS_HUMAN_REVIEW' && (
-              <Alert type="warning" message="当前需要物业人工处理" />
-            )}
-          </Card>
-        </aside>
-        <section className="chat-panel">
-          {thread?.reconciliation && (
-            <Alert
-              type={thread.reconciliation.status === 'MANUAL_REVIEW' ? 'warning' : 'info'}
-              message={
-                thread.reconciliation.status === 'MANUAL_REVIEW'
-                  ? '该操作需要物业人工核查。'
-                  : thread.reconciliation.status === 'RESOLVED_NOT_COMMITTED'
-                    ? '上次操作确认未提交，可以继续。'
-                    : '系统正在核对本次操作是否已经完成，请勿重复提交。'
-              }
-            />
-          )}
-          {awaitingInformation && (
-            <Alert
-              showIcon
-              type="warning"
-              message="请先补充报修信息"
-              description="可以在下方补充卡片或聊天输入框中直接说明，不需要填写英文代码。"
-            />
-          )}
-          {awaitingSelection && (
-            <Alert
-              showIcon
-              type="info"
-              message="请先完成上方选择"
-              description="完成工单或预约时间选择后，才能继续发送新消息。"
-            />
-          )}
-          <div className="message-list" aria-label="消息列表">
-            {messages.length === 0 && (
-              <div className="empty-chat">
-                请描述漏水、电气或门锁问题，以及您方便的时间。
-              </div>
-            )}
-            {messages.map((item, index) => (
-              <div key={`${item.role}-${index}`} className={`message ${item.role}`}>
-                {item.text}
-              </div>
-            ))}
-            {busy && <Spin />}
+            <div className="message-list" aria-label="消息列表" ref={messageListRef}>
+              {messages.length === 0 && (
+                <div className="empty-chat">
+                  <CustomerServiceOutlined />
+                  <Typography.Title level={4}>今天需要维修什么？</Typography.Title>
+                  <Typography.Paragraph>
+                    目前可处理漏水、用电和门锁问题。请说清问题位置和方便上门的时间。
+                  </Typography.Paragraph>
+                  <div className="quick-prompts">
+                    {['厨房水管漏水，明天下午在家', '客厅插座没电了', '入户门锁打不开'].map(
+                      (example) => (
+                        <Button key={example} onClick={() => void send(example)}>
+                          {example}
+                        </Button>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
+              {messages.map((item, index) => (
+                <div key={`${item.role}-${index}`} className={`message ${item.role}`}>
+                  {item.text}
+                </div>
+              ))}
+              {progress && (
+                <div className={`run-progress ${thread?.run_status === 'FAILED_SAFE' ? 'failed' : ''}`}>
+                  {busy && <Spin size="small" />}
+                  <span>{progress}</span>
+                </div>
+              )}
+              {failedAction && (
+                <Alert
+                  showIcon
+                  type="error"
+                  message="这次没有处理完成"
+                  description="您可以重试，或直接请物业工作人员接手。"
+                  action={
+                    <Space direction="vertical">
+                      <Button
+                        size="small"
+                        icon={<ReloadOutlined />}
+                        onClick={() => void failedAction.retry()}
+                      >
+                        {failedAction.label}
+                      </Button>
+                      <Button size="small" onClick={() => void send('请转人工处理')}>
+                        转人工
+                      </Button>
+                    </Space>
+                  }
+                />
+              )}
+              {thread?.interrupt && !reconciliationBlocked && (
+                <InterruptPanel interrupt={thread.interrupt} onResume={resume} />
+              )}
+            </div>
           </div>
-          {thread?.interrupt && !reconciliationBlocked && (
-            <InterruptPanel interrupt={thread.interrupt} onResume={resume} />
-          )}
-          <Space.Compact className="composer">
-            <Input
-              disabled={reconciliationBlocked || awaitingSelection}
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onPressEnter={() => void send(input)}
-              placeholder={
-                awaitingInformation
-                  ? '直接补充，例如：故障位置在厨房水槽下方'
-                  : '例如：厨房水龙头漏水，明天下午有空'
-              }
-            />
-            <Button
-              disabled={reconciliationBlocked || awaitingSelection}
-              type="primary"
-              icon={<SendOutlined />}
-              onClick={() => void send(input)}
-            >
-              {awaitingInformation ? '提交补充' : '发送'}
-            </Button>
-          </Space.Compact>
-          <Space wrap>
-            <Button
-              disabled={reconciliationBlocked || Boolean(thread?.interrupt)}
-              onClick={() => void send('我要改期，明天下午有空')}
-            >
-              提交改期请求
-            </Button>
-            <Button
-              disabled={reconciliationBlocked || Boolean(thread?.interrupt)}
-              danger
-              onClick={() => void send('请转人工处理')}
-            >
-              请求人工处理
-            </Button>
-          </Space>
-          <Alert
-            type="info"
-            message="取消工单、取消预约和维修验收首版需物业人工处理。"
-          />
+          <div className="composer-area">
+            {awaitingSelection && (
+              <Alert
+                showIcon
+                type="info"
+                message="请先完成上方的选择，再继续发送新消息。"
+              />
+            )}
+            <Space.Compact className="composer">
+              <Input
+                disabled={reconciliationBlocked || awaitingSelection || busy}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onPressEnter={() => void send(input)}
+                placeholder={
+                  awaitingInformation
+                    ? '直接补充，例如：漏水位置在厨房水槽下方'
+                    : '请描述问题，例如：厨房水龙头漏水，明天下午有空'
+                }
+                aria-label="输入消息"
+              />
+              <Button
+                disabled={reconciliationBlocked || awaitingSelection || busy}
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={() => void send(input)}
+              >
+                {awaitingInformation ? '补充信息' : '发送'}
+              </Button>
+            </Space.Compact>
+            <div className="secondary-actions">
+              <Button
+                disabled={reconciliationBlocked || Boolean(thread?.interrupt) || busy}
+                onClick={() => void send('我要改期，明天下午有空')}
+              >
+                申请改期
+              </Button>
+              <Button
+                disabled={reconciliationBlocked || Boolean(thread?.interrupt) || busy}
+                danger
+                onClick={() => void send('请转人工处理')}
+              >
+                请物业协助
+              </Button>
+              <Typography.Text type="secondary">
+                取消工单、取消预约和确认维修结果目前由物业工作人员处理。
+              </Typography.Text>
+            </div>
+          </div>
         </section>
       </Layout.Content>
     </Layout>

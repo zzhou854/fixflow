@@ -17,8 +17,9 @@ test('offers selection of an existing duplicate without force-create', () => {
   expect(screen.queryByText('强制新建')).not.toBeInTheDocument()
 })
 
-test('shows slot rank and non-guarantee warning', () => {
+test('shows a resident-friendly slot rank and non-guarantee warning', () => {
   render(<InterruptPanel interrupt={{ kind: 'APPOINTMENT_SLOT_SELECTION', intent_version: 1, candidates_fingerprint: 'b'.repeat(64), slots: [{ rank: 1, worker_id: '22222222-2222-2222-2222-222222222222', scheduled_start: '2026-07-22T14:00:00+08:00', scheduled_end: '2026-07-22T15:00:00+08:00', booking_guaranteed: false }] }} onResume={vi.fn()} />)
-  expect(screen.getByText('排名 1')).toBeInTheDocument()
-  expect(screen.getByText('booking_guaranteed=false')).toBeInTheDocument()
+  expect(screen.getByText('推荐顺序 1')).toBeInTheDocument()
+  expect(screen.getByText('选择后系统会再次确认，成功后才算预约完成')).toBeInTheDocument()
+  expect(screen.queryByText('booking_guaranteed=false')).not.toBeInTheDocument()
 })
