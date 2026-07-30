@@ -97,7 +97,7 @@ _TEMPLATES: Mapping[str, str] = {
     "APPOINTMENT_BOOKED": "上门时间已经预约成功。",
     "APPOINTMENT_RESCHEDULED": "新的上门时间已经确认。",
     "UNKNOWN_COMMIT": "提交结果暂时无法确认，系统正在核对，请不要重复操作。",
-    "TICKET_CANCELLED": "本次报修已取消，但这不表示维修已经完成。",
+    "TICKET_CANCELLED": "本次报修已取消，后续不会再自动安排。",
     "TICKET_CLOSED": "本次报修已结束。",
     "APPOINTMENT_CANCELLED": "本次上门预约已取消，报修本身没有因此自动取消。",
     "TICKET_CREATION_FAILED": "报修工单暂时未能创建。",
