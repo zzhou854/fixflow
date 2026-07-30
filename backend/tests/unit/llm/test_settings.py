@@ -17,25 +17,39 @@ def test_scripted_provider_does_not_require_key() -> None:
     assert settings.llm_experimental_enabled is False
     assert settings.glm_api_key is None
     assert settings.deepseek_api_key is None
+    assert settings.llm_online_enabled is False
+    assert settings.llm_online_qualification_status == "NOT_ACTIVATED"
+    assert settings.llm_model_budget_seconds == 25
 
 
-def test_experimental_shadow_requires_key_and_keeps_primary_scripted() -> None:
-    with pytest.raises(ValidationError, match="DEEPSEEK_API_KEY"):
-        Settings.model_validate({**BASE, "llm_experimental_enabled": True})
+def test_controlled_shadow_requires_switch_key_and_explicit_qualification() -> None:
+    with pytest.raises(ValidationError, match="LLM_ONLINE_ENABLED"):
+        Settings.model_validate({**BASE, "llm_shadow_enabled": True})
     settings = Settings.model_validate(
         {
             **BASE,
-            "llm_provider": "scripted",
-            "llm_experimental_enabled": True,
+            "llm_online_enabled": True,
+            "llm_shadow_enabled": True,
+            "llm_online_qualification_status": "CONTRACT_PASSED",
             "deepseek_api_key": "synthetic-shadow-secret",
         }
     )
     assert settings.llm_provider == "scripted"
-    assert settings.llm_experimental_provider == "deepseek"
+    assert settings.llm_online_runtime_mode == "demo_safe"
 
 
-def test_experimental_shadow_rejects_online_primary() -> None:
-    with pytest.raises(ValidationError, match="must remain scripted"):
+def test_model_budget_cannot_exceed_product_deadline() -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({**BASE, "llm_model_budget_seconds": 25.01})
+
+
+def test_legacy_experimental_shadow_is_disabled() -> None:
+    with pytest.raises(ValidationError, match="legacy"):
+        Settings.model_validate({**BASE, "llm_experimental_enabled": True})
+
+
+def test_legacy_shadow_cannot_bypass_controlled_gate() -> None:
+    with pytest.raises(ValidationError, match="legacy"):
         Settings.model_validate(
             {
                 **BASE,

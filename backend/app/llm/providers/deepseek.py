@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.agent.models import LLMMessage, LLMRequestConfig, StructuredLLMResult, TextLLMResult
 from app.agent_runtime.execution_context import current_execution_context
@@ -274,9 +274,14 @@ class DeepSeekStructuredInterpretationProvider:
             )
         try:
             structured = response_model.model_validate_json(content)
-        except Exception as exc:
+        except ValidationError as exc:
+            code = (
+                LLMProviderErrorCode.MALFORMED_RESPONSE
+                if any(item["type"] == "json_invalid" for item in exc.errors())
+                else LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED
+            )
             raise self._error(
-                LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED,
+                code,
                 retryable=False,
                 attempt_count=attempt,
                 cause=exc,
@@ -336,7 +341,7 @@ class DeepSeekStructuredInterpretationProvider:
         elif status == 408:
             code, retryable = LLMProviderErrorCode.TIMEOUT, True
         elif status in {500, 502, 503, 504}:
-            code, retryable = LLMProviderErrorCode.UPSTREAM_SERVER_ERROR, True
+            code, retryable = LLMProviderErrorCode.UPSTREAM_5XX, True
         elif status == 400:
             upstream_code = self._upstream_error_code(response)
             if "context" in upstream_code and "length" in upstream_code:
@@ -378,6 +383,11 @@ class DeepSeekStructuredInterpretationProvider:
             attempt_count=attempt_count,
             safe_detail="structured interpretation provider failed",
             cause_type=type(cause).__name__ if cause is not None else None,
+            schema_error_summary=(
+                "response failed strict schema validation"
+                if code is LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED
+                else None
+            ),
         )
 
     def _retry_delay(self, attempt: int, retry_after: float | None) -> float:

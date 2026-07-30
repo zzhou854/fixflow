@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     llm_provider: str = "scripted"
     llm_experimental_enabled: bool = False
     llm_experimental_provider: str = "deepseek"
+    llm_online_enabled: bool = False
+    llm_shadow_enabled: bool = False
+    llm_grounded_response_enabled: bool = False
+    llm_online_runtime_mode: str = "demo_safe"
+    llm_online_qualification_status: str = "NOT_ACTIVATED"
+    llm_model_budget_seconds: float = Field(default=25.0, gt=0, le=25)
+    llm_circuit_failure_threshold: int = Field(default=2, ge=1, le=20)
+    llm_circuit_recovery_seconds: float = Field(default=30.0, gt=0, le=3600)
     glm_model: str = "glm-5.1"
     glm_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
     glm_api_key: SecretStr | None = None
@@ -90,6 +98,35 @@ class Settings(BaseSettings):
             raise ValueError("LLM_PROVIDER must be one of: scripted, glm, deepseek")
         if self.llm_experimental_provider not in {"glm", "deepseek"}:
             raise ValueError("LLM_EXPERIMENTAL_PROVIDER must be glm or deepseek")
+        if self.llm_experimental_enabled:
+            raise ValueError(
+                "legacy LLM_EXPERIMENTAL_ENABLED shadow is disabled; "
+                "use the controlled online shadow gate"
+            )
+        if self.llm_online_runtime_mode not in {
+            "development",
+            "demo_safe",
+            "production_candidate",
+        }:
+            raise ValueError(
+                "LLM_ONLINE_RUNTIME_MODE must be development, demo_safe, or production_candidate"
+            )
+        if self.llm_online_qualification_status not in {
+            "NOT_ACTIVATED",
+            "CONTRACT_PASSED",
+            "DEV_REGRESSION_PASSED",
+            "HOLDOUT_PASSED",
+            "SHADOW_PASSED",
+            "CANARY_PASSED",
+            "APPROVED",
+        }:
+            raise ValueError("invalid LLM_ONLINE_QUALIFICATION_STATUS")
+        if self.llm_shadow_enabled and not self.llm_online_enabled:
+            raise ValueError("LLM_SHADOW_ENABLED requires LLM_ONLINE_ENABLED=true")
+        if self.llm_shadow_enabled and self.llm_experimental_enabled:
+            raise ValueError("legacy and controlled shadow modes cannot both be enabled")
+        if self.llm_grounded_response_enabled and not self.llm_online_enabled:
+            raise ValueError("LLM_GROUNDED_RESPONSE_ENABLED requires LLM_ONLINE_ENABLED=true")
         if self.glm_thinking_mode not in {"disabled", "enabled"}:
             raise ValueError("GLM_THINKING_MODE must be disabled or enabled")
         if self.glm_total_timeout_seconds < self.glm_request_timeout_seconds:
@@ -110,7 +147,9 @@ class Settings(BaseSettings):
             self.glm_api_key is None or not self.glm_api_key.get_secret_value().strip()
         ):
             raise ValueError("GLM_API_KEY is required when LLM_PROVIDER=glm")
-        if self.llm_provider == "deepseek":
+        if self.llm_provider == "deepseek" or (
+            self.llm_online_enabled and self.llm_experimental_provider == "deepseek"
+        ):
             key = (
                 self.deepseek_api_key.get_secret_value().strip()
                 if self.deepseek_api_key is not None
@@ -118,25 +157,6 @@ class Settings(BaseSettings):
             )
             if not key or key == "replace-with-your-deepseek-api-key":
                 raise ValueError("DEEPSEEK_API_KEY is required when LLM_PROVIDER=deepseek")
-        if self.llm_experimental_enabled:
-            if self.llm_provider != "scripted":
-                raise ValueError(
-                    "LLM_PROVIDER must remain scripted when experimental shadow mode is enabled"
-                )
-            if self.llm_experimental_provider == "glm" and (
-                self.glm_api_key is None or not self.glm_api_key.get_secret_value().strip()
-            ):
-                raise ValueError("GLM_API_KEY is required when LLM_EXPERIMENTAL_PROVIDER=glm")
-            if self.llm_experimental_provider == "deepseek":
-                shadow_key = (
-                    self.deepseek_api_key.get_secret_value().strip()
-                    if self.deepseek_api_key is not None
-                    else ""
-                )
-                if not shadow_key or shadow_key == "replace-with-your-deepseek-api-key":
-                    raise ValueError(
-                        "DEEPSEEK_API_KEY is required when LLM_EXPERIMENTAL_PROVIDER=deepseek"
-                    )
         if self.environment == "production":
             if self.runtime_mode != "production":
                 raise ValueError("production ENVIRONMENT requires RUNTIME_MODE=production")
@@ -146,6 +166,8 @@ class Settings(BaseSettings):
                 raise ValueError("production LLM_PROVIDER must remain scripted")
             if self.llm_experimental_enabled:
                 raise ValueError("LLM_EXPERIMENTAL_ENABLED must be false in production")
+            if self.llm_online_enabled or self.llm_shadow_enabled:
+                raise ValueError("online provider remains disabled in production")
             database_url = self.database_url.get_secret_value()
             if "change-me" in database_url.casefold():
                 raise ValueError("production DATABASE_URL cannot contain a placeholder")

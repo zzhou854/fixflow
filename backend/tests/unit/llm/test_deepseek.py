@@ -125,6 +125,39 @@ async def test_empty_json_mode_response_fails_closed_without_retry() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        ("not-json", LLMProviderErrorCode.MALFORMED_RESPONSE),
+        (
+            '{"utterance_intent":"NOT_AN_INTENT"}',
+            LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED,
+        ),
+        (
+            '{"utterance_intent":"NEW_REPAIR","unknown_field":"forbidden"}',
+            LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED,
+        ),
+    ],
+)
+async def test_invalid_json_unknown_fields_and_wrong_enums_are_classified(
+    content: str,
+    expected: LLMProviderErrorCode,
+) -> None:
+    provider = _provider(
+        httpx.MockTransport(lambda _: httpx.Response(200, json=_success(content))),
+        max_attempts=1,
+    )
+    with pytest.raises(LLMProviderError) as caught:
+        await provider.generate_structured(
+            messages=(LLMMessage(role=LLMRole.USER, content="input"),),
+            response_model=InterpretMessageOutput,
+            model_config=_request_config(),
+        )
+    assert caught.value.code is expected
+    await provider.close()
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_retry_respects_retry_after_and_is_bounded() -> None:
     attempts = 0
     delays: list[float] = []
