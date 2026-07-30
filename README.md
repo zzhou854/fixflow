@@ -61,6 +61,8 @@ research track:
 - an isolated official PostgreSQL checkpointer and fresh-snapshot recovery;
 - the natural-language create-ticket and book-appointment main flow;
 - authenticated Agent thread and strict Resume APIs with bounded SSE delivery;
+- durable public message outcomes, recoverable thread archiving, and a
+  pre-ticket human-review queue;
 - an idempotent Argon2-backed development seed;
 - a React/TypeScript/Ant Design resident chat and operator workbench;
 - real API-to-Agent-to-MCP-to-PostgreSQL vertical and cross-resident tests;
@@ -169,6 +171,11 @@ Operator-only escalation mutation, fenced workers, safe resident and
 operator projections, and a test-only fault harness. Task 12 adds isolated
 deterministic Replay and the read-only Recovery Console; it never reissues
 business mutations or writes the formal Checkpoint.
+Revision `20260730_0007` makes durable conversation messages and Agent Run
+outcomes the formal resident result, adds recoverable thread archiving and the
+Operator human-review queue, and reconciles stale `RUNNING` executions without
+replaying mutations. The online providers remain non-activated; the product
+default is still `scripted`.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
@@ -189,6 +196,7 @@ and never maintained manually.
 - [FastAPI and JWT contracts](docs/API.md)
 - [Transactional Outbox](docs/OUTBOX.md)
 - [Persistent Trace Runtime](docs/TRACE_RUNTIME.md)
+- [Agent message reliability and human review](docs/AGENT_RELIABILITY.md)
 - [Resident and operator frontend](docs/FRONTEND.md)
 - [Deterministic Replay](docs/REPLAY.md)
 - [Recovery Console](docs/RECOVERY_CONSOLE.md)

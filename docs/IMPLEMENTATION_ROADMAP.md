@@ -146,6 +146,19 @@ Implemented for Task 9 review:
   read-only Operator thread review
 - React/TypeScript resident chat and operator workbench
 - real API -> Agent -> MCP -> Application -> PostgreSQL vertical evidence
+
+Implemented for commercial-hardening phase 1A:
+
+- durable user/assistant message facts and public `COMPLETED`/`FAILED`/`ESCALATED`
+  outcomes with typed required actions
+- pre-ticket human-review cases, optimistic transitions, immutable history, and
+  same-transaction Outbox evidence
+- resident-owned thread registry with recent-five ordering and recoverable
+  archive/restore
+- one public `message.*` terminal per Run and idempotent stalled-run
+  reconciliation without mutation replay
+- Scripted-provider coverage for all three frozen repair categories; no online
+  provider activation
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,

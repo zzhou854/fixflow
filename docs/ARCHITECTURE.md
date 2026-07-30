@@ -294,3 +294,11 @@ Task 13 adds a lifecycle-owned official Z.AI SDK adapter only at the structured
 interpretation port. The synchronous SDK call runs behind a bounded worker-thread
 boundary. Compose remains scripted; Graph routing, authorization, policy,
 mutation, recovery, and Replay remain deterministic.
+
+Commercial-hardening phase 1A adds a focused Agent reliability UoW. The API
+finalizes durable user/assistant messages, the Agent Run public outcome, an
+optional pre-ticket human-review case and its Outbox evidence in one
+PostgreSQL transaction before responding or publishing SSE. A separate thread
+registry owns listing and recoverable archive state; it never stores or deletes
+LangGraph Checkpoint data. A lifespan-owned monitor reconciles stale RUNNING
+runs from persisted facts without replaying MCP or Application mutations.
