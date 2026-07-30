@@ -12,6 +12,19 @@ from app.agent.models import LLMMessage, LLMRequestConfig
 from app.agent.ports import LLMProvider
 from app.llm.errors import LLMProviderError
 
+GROUNDED_PROMPT_VERSION = "1.0.0"
+GROUNDED_SCHEMA_VERSION = "grounded-response-draft-v1"
+GROUNDED_PROMPT_TEMPLATE = (
+    "Return one JSON object with exactly these keys: "
+    '"template_id", "tone", "included_fact_ids". '
+    'template_id must equal "{template_id}". '
+    'tone must be one of "WARM", "CONCISE", or "REASSURING". '
+    "included_fact_ids must be an array containing only identifiers from "
+    "{allowed_fact_ids}. "
+    "Choose presentation only. Do not write prose, add keys, change the outcome, "
+    "or change the required action. The fixed outcome is {message_outcome}."
+)
+
 
 class ResponseTone(StrEnum):
     WARM = "WARM"
@@ -95,16 +108,7 @@ class GroundedResponseProvider:
     async def compose(self, request: GroundedResponseRequest) -> GroundedResponseResult:
         if request.template_id in CRITICAL_TEMPLATE_IDS:
             return self._render(request, ResponseTone.CONCISE, (), used_model=False)
-        prompt = (
-            "Return one JSON object with exactly these keys: "
-            '"template_id", "tone", "included_fact_ids". '
-            f'template_id must equal "{request.template_id}". '
-            'tone must be one of "WARM", "CONCISE", or "REASSURING". '
-            "included_fact_ids must be an array containing only identifiers from "
-            f"{[fact.fact_id for fact in request.facts]}. "
-            "Choose presentation only. Do not write prose, add keys, change the outcome, "
-            f"or change the required action. The fixed outcome is {request.message_outcome}."
-        )
+        prompt = grounded_prompt(request)
         try:
             raw = await self._provider.generate_structured(
                 messages=(LLMMessage(role=LLMRole.SYSTEM, content=prompt),),
@@ -112,7 +116,7 @@ class GroundedResponseProvider:
                 model_config=LLMRequestConfig(
                     model=self._model,
                     prompt_name="grounded_response",
-                    prompt_version="1.0.0",
+                    prompt_version=GROUNDED_PROMPT_VERSION,
                     temperature=0,
                     max_output_tokens=200,
                 ),
@@ -160,3 +164,13 @@ class GroundedResponseProvider:
             required_user_action=request.required_user_action,
             used_model=used_model,
         )
+
+
+def grounded_prompt(request: GroundedResponseRequest) -> str:
+    """Build the versioned presentation-only instruction frozen for qualification."""
+
+    return GROUNDED_PROMPT_TEMPLATE.format(
+        template_id=request.template_id,
+        allowed_fact_ids=[fact.fact_id for fact in request.facts],
+        message_outcome=request.message_outcome,
+    )

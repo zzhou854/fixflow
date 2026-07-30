@@ -27,6 +27,7 @@ from app.llm.online.budget import ModelCallBudget, current_model_call_budget
 from app.llm.online.circuit import CircuitBreaker, CircuitBreakerRegistry
 
 Sleeper = Callable[[float], Awaitable[None]]
+PROVIDER_ROUTER_VERSION = "deepseek-flash-pro-router-v1"
 
 
 @dataclass(frozen=True, slots=True)
