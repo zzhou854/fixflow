@@ -189,6 +189,11 @@ button, input, textarea { font: inherit; }
 .summary-card .ant-descriptions-item-content { word-break: break-word; }
 .drawer-stack { width: 100%; }
 .operator-content { min-height: 0; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.review-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.review-toolbar .ant-input-search { width: min(360px, 100%); }
+.review-case-list .ant-list-item { padding: 14px 4px; }
+.technical-audit-card summary { cursor: pointer; color: var(--brand-700); font-weight: 600; padding: 4px 0 12px; }
+.technical-audit-card details[open] summary { margin-bottom: 8px; border-bottom: 1px solid var(--line); }
 
 @media (max-width: 900px) {
   .resident-grid { grid-template-columns: 250px minmax(0, 1fr); padding: 10px; gap: 10px; }
@@ -212,4 +217,7 @@ button, input, textarea { font: inherit; }
   .secondary-actions .ant-typography { display: none; }
   .quick-prompts { flex-direction: column; }
   .quick-prompts .ant-btn { width: 100%; }
+  .operator-content { padding: 10px; }
+  .review-toolbar { align-items: stretch; flex-direction: column; }
+  .review-toolbar .ant-segmented { overflow-x: auto; }
 }

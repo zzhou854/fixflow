@@ -10,6 +10,12 @@ import { DemoBanner } from '../components/DemoBanner'
 import { TraceTimeline } from '../components/TraceTimeline'
 import { ReconciliationCases } from '../components/ReconciliationCases'
 import { RecoveryConsole } from '../components/RecoveryConsole'
+import { HumanReviewQueue } from '../components/HumanReviewQueue'
+import {
+  CATEGORY_LABELS,
+  SEVERITY_LABELS,
+  TICKET_STATUS_LABELS,
+} from '../residentDisplay'
 import type { OperatorThread, Ticket, TicketDetail } from '../types'
 
 interface EscalationAttempt {
@@ -104,11 +110,12 @@ export function OperatorPage() {
       <Space><span>{user?.username}</span><Button icon={<LogoutOutlined />} onClick={logout}>退出</Button></Space>
     </Layout.Header>
     <Layout.Content className="operator-content">
+      {token && <HumanReviewQueue token={token} />}
       {token && <ReconciliationCases token={token} />}
-      <Card><Space wrap>
-        <Select aria-label="工单状态" allowClear placeholder="工单状态" onChange={setStatus} options={['OPEN','SCHEDULED','IN_PROGRESS','PENDING_ACCEPTANCE','REWORK_REQUIRED','ESCALATED','CANCELLED','CLOSED'].map((value) => ({ value }))} />
-        <Select aria-label="故障类别" allowClear placeholder="故障类别" onChange={setCategory} options={['WATER_LEAK','ELECTRICAL','DOOR_LOCK'].map((value) => ({ value }))} />
-        <Select aria-label="严重程度" allowClear placeholder="Severity" onChange={setSeverity} options={['LOW','MEDIUM','HIGH','EMERGENCY'].map((value) => ({ value }))} />
+      <Card title="工单工作区"><Space wrap>
+        <Select aria-label="工单状态" allowClear placeholder="工单状态" onChange={setStatus} options={['OPEN','SCHEDULED','IN_PROGRESS','PENDING_ACCEPTANCE','REWORK_REQUIRED','ESCALATED','CANCELLED','CLOSED'].map((value) => ({ value, label: TICKET_STATUS_LABELS[value] ?? value }))} />
+        <Select aria-label="故障类别" allowClear placeholder="故障类别" onChange={setCategory} options={['WATER_LEAK','ELECTRICAL','DOOR_LOCK'].map((value) => ({ value, label: CATEGORY_LABELS[value] ?? value }))} />
+        <Select aria-label="严重程度" allowClear placeholder="处理优先级" onChange={setSeverity} options={['LOW','MEDIUM','HIGH','EMERGENCY'].map((value) => ({ value, label: SEVERITY_LABELS[value] ?? value }))} />
         <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
       </Space></Card>
       <Card title="已知 Agent Thread 审查" size="small">
@@ -133,10 +140,10 @@ export function OperatorPage() {
         { title: '工单', dataIndex: 'ticket_id', ellipsis: true },
         { title: '住户', dataIndex: 'resident_username' },
         { title: '房屋', dataIndex: 'property_label' },
-        { title: '类别', dataIndex: 'issue_category' },
+        { title: '类别', dataIndex: 'issue_category', render: (value: string) => CATEGORY_LABELS[value] ?? value },
         { title: '位置', dataIndex: 'issue_location' },
-        { title: 'Severity', dataIndex: 'severity' },
-        { title: '状态', dataIndex: 'ticket_status', render: (value: string) => <Tag color="cyan">{value}</Tag> },
+        { title: '优先级', dataIndex: 'severity', render: (value: string) => SEVERITY_LABELS[value] ?? value },
+        { title: '状态', dataIndex: 'ticket_status', render: (value: string) => <Tag color="cyan">{TICKET_STATUS_LABELS[value] ?? value}</Tag> },
         { title: '预约', render: (_, row: Ticket) => row.appointment ? new Date(row.appointment.scheduled_start).toLocaleString() : '暂无' },
       ]} />
       <Drawer width={640} title="工单详情" open={Boolean(detail)} onClose={() => setDetail(null)}>
