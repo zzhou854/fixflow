@@ -3,18 +3,21 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import pytest
+from app.agent.errors import ProviderExhausted
 from app.agent.models import (
     LLMMessage,
     LLMRequestConfig,
     StructuredLLMResult,
     TextLLMResult,
 )
+from app.llm.errors import LLMProviderErrorCode
 from app.llm.hybrid.models import (
     ControlledVerificationResult,
     ExtractedResidentFactsV2,
     VerificationVerdict,
 )
 from app.llm.hybrid.pipeline import HybridInterpretationNode
+from app.llm.online.routing import ProviderExhaustedError
 from pydantic import BaseModel
 
 from tests.unit.llm.hybrid.conftest import empty_facts
@@ -55,6 +58,23 @@ class FactProvider:
 
     async def health_check(self) -> bool:
         return True
+
+
+class ExhaustedProvider(FactProvider):
+    async def generate_structured(
+        self,
+        *,
+        messages: Sequence[LLMMessage],
+        response_model: type[BaseModel],
+        model_config: LLMRequestConfig,
+    ) -> StructuredLLMResult:
+        del messages, response_model, model_config
+        raise ProviderExhaustedError(
+            LLMProviderErrorCode.TIMEOUT,
+            provider="deepseek",
+            model="deepseek-v4-pro",
+            retryable=False,
+        )
 
 
 @pytest.mark.asyncio
@@ -98,3 +118,10 @@ async def test_controlled_verification_is_bounded_and_cannot_replace_result() ->
     assert result.interpretation.utterance_intent.value == "RESCHEDULE_APPOINTMENT"
     assert diagnostics.metadata.verification_call_count == 1
     assert diagnostics.metadata.verification_result is VerificationVerdict.INSUFFICIENT_EVIDENCE
+
+
+@pytest.mark.asyncio
+async def test_provider_exhaustion_crosses_agent_boundary_as_typed_failure() -> None:
+    node = HybridInterpretationNode(ExhaustedProvider(empty_facts()), model="fact-model")
+    with pytest.raises(ProviderExhausted):
+        await node(node_input("厨房漏水"))

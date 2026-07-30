@@ -103,6 +103,11 @@ class ReviewPersistenceFailure:
         del kwargs
 
 
+class RecordingReliability(ReviewPersistenceFailure):
+    async def finalize_run(self, command: FinalizeAgentRun) -> None:
+        self.commands.append(command)
+
+
 def _service(result: AgentRunResult, events: SSEEventBus) -> AgentApiService:
     return AgentApiService(
         cast(AgentOrchestrator, FakeOrchestrator(result)),
@@ -249,6 +254,36 @@ async def test_escalation_is_changed_to_failed_when_review_case_cannot_persist()
         "ESCALATED",
         "FAILED",
     ]
+
+
+@pytest.mark.asyncio
+async def test_provider_exhaustion_creates_escalated_reliability_result() -> None:
+    thread_id, trace_id = uuid4(), uuid4()
+    reliability = RecordingReliability()
+    result = AgentRunResult(
+        thread_id=thread_id,
+        trace_id=trace_id,
+        run_status=RunStatus.FAILED_SAFE,
+        workflow_stage=WorkflowStage.INTAKE,
+        error_code="PROVIDER_EXHAUSTED",
+    )
+    service = AgentApiService(
+        cast(AgentOrchestrator, FakeOrchestrator(result)),
+        cast(FixFlowApplicationService, object()),
+        SSEEventBus(),
+        reliability=cast(AgentReliabilityService, reliability),
+    )
+    response = await service.send_message(
+        _identity(),
+        thread_id=thread_id,
+        message="厨房漏水",
+        message_id=uuid4(),
+        reference_time=datetime.now(UTC),
+        timezone_name="UTC",
+    )
+    assert response.message_outcome.value == "ESCALATED"
+    assert response.required_user_action.value == "CONTACT_OPERATOR"
+    assert reliability.commands[-1].error_code == "PROVIDER_EXHAUSTED"
 
 
 @pytest.mark.asyncio

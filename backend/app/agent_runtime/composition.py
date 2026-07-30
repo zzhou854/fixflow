@@ -1,11 +1,12 @@
 """Explicit lifecycle composition for the Task 8 runtime."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Protocol, runtime_checkable
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.agent.models import InterpretationNodeResult, InterpretMessageInput
 from app.agent.nodes.compose_response import ComposeResponseNode
 from app.agent.nodes.interpret_message import InterpretMessageNode
 from app.agent.ports import LLMProvider
@@ -41,6 +42,8 @@ async def open_agent_orchestrator(
     response_provider: LLMProvider,
     embedding_provider: EmbeddingProvider,
     language_model_name: str,
+    interpretation_node: Callable[[InterpretMessageInput], Awaitable[InterpretationNodeResult]]
+    | None = None,
 ) -> AsyncIterator[AgentOrchestrator]:
     """Build one runtime without import-time connections or business-session leakage."""
 
@@ -64,7 +67,8 @@ async def open_agent_orchestrator(
             dependencies = RuntimeDependencies(
                 mcp=recording_mcp,
                 interpret=RecordingInterpretationNode(
-                    InterpretMessageNode(
+                    interpretation_node
+                    or InterpretMessageNode(
                         interpretation_provider,
                         model=language_model_name,
                         input_limits=InterpretationInputLimits(
@@ -85,6 +89,10 @@ async def open_agent_orchestrator(
                     UnknownCommitCoordinator(SqlAlchemyReconciliationRepository(sessions)),
                 )
             finally:
+                if interpretation_node is not None and isinstance(
+                    interpretation_node, AsyncClosableProvider
+                ):
+                    await interpretation_node.close()
                 await engine.dispose()
                 if isinstance(interpretation_provider, AsyncClosableProvider):
                     await interpretation_provider.close()

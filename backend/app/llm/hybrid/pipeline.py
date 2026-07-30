@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from app.agent.enums import LLMRole
-from app.agent.errors import StructuredOutputInvalid
+from app.agent.errors import ProviderExhausted, StructuredOutputInvalid
 from app.agent.models import (
     InterpretationNodeResult,
     InterpretMessageInput,
@@ -22,6 +22,7 @@ from app.agent.models import (
     TimeWindow,
 )
 from app.agent.ports import LLMProvider
+from app.llm.errors import LLMProviderError
 from app.llm.hybrid.decision import (
     InterpretationConflictDetector,
     ResidentIntentDecisionEngine,
@@ -42,6 +43,7 @@ from app.llm.hybrid.models import (
 from app.llm.hybrid.normalizer import ResidentFactNormalizer
 from app.llm.hybrid.prompts import FactPromptRegistry
 from app.llm.hybrid.semantic import ResidentSemanticActsV1, derive_semantic_acts
+from app.llm.online.routing import ProviderExhaustedError
 from app.llm.sanitizer import InterpretationInputLimits, build_sanitized_interpretation_input
 
 Verifier = Callable[
@@ -104,17 +106,22 @@ class HybridInterpretationNode:
                 content=f"Extract facts from this bounded JSON context:\n{sanitized.payload_json}",
             ),
         )
-        raw = await self._provider.generate_structured(
-            messages=messages,
-            response_model=ExtractedResidentFactsV2,
-            model_config=LLMRequestConfig(
-                model=self._model,
-                prompt_name=prompt.prompt_id,
-                prompt_version=prompt.prompt_version,
-                temperature=0,
-                max_output_tokens=1600,
-            ),
-        )
+        try:
+            raw = await self._provider.generate_structured(
+                messages=messages,
+                response_model=ExtractedResidentFactsV2,
+                model_config=LLMRequestConfig(
+                    model=self._model,
+                    prompt_name=prompt.prompt_id,
+                    prompt_version=prompt.prompt_version,
+                    temperature=0,
+                    max_output_tokens=1600,
+                ),
+            )
+        except ProviderExhaustedError as exc:
+            raise ProviderExhausted("online structured providers exhausted") from exc
+        except LLMProviderError as exc:
+            raise ProviderExhausted("online structured provider unavailable") from exc
         try:
             extracted = ExtractedResidentFactsV2.model_validate(raw.payload)
         except ValidationError as exc:

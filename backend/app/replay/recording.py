@@ -7,7 +7,6 @@ from collections.abc import Awaitable, Callable
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from app.agent.models import InterpretationNodeResult, InterpretMessageInput
-from app.agent.nodes.interpret_message import InterpretMessageNode
 from app.agent_runtime.errors import UnknownCommit
 from app.agent_runtime.execution_context import current_execution_context
 from app.agent_runtime.mcp.client import PropertyOperationsClient
@@ -60,7 +59,10 @@ async def _capture(
 
 
 class RecordingInterpretationNode:
-    def __init__(self, inner: InterpretMessageNode) -> None:
+    def __init__(
+        self,
+        inner: Callable[[InterpretMessageInput], Awaitable[InterpretationNodeResult]],
+    ) -> None:
         self._inner = inner
 
     async def __call__(self, request: InterpretMessageInput) -> InterpretationNodeResult:

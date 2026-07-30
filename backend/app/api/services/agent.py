@@ -54,6 +54,7 @@ from app.infrastructure.database.models.observability import (
     AgentRunTrigger,
     TraceSource,
 )
+from app.llm.online.budget import ModelCallBudget, bind_model_call_budget
 from app.replay.capture import (
     NoOpReplayCapture,
     ReplayCapturePort,
@@ -81,6 +82,7 @@ class AgentApiService:
         trace: TraceRuntime | None = None,
         replay: ReplayCaptureService | None = None,
         reliability: AgentReliabilityService | None = None,
+        model_budget_seconds: float = 25.0,
     ) -> None:
         self._orchestrator = orchestrator
         self._application = application
@@ -88,6 +90,7 @@ class AgentApiService:
         self._reliability = reliability
         self._trace = trace
         self._replay = replay
+        self._model_budget_seconds = model_budget_seconds
 
     async def create_thread(
         self,
@@ -194,7 +197,10 @@ class AgentApiService:
             run_id=run_id,
         )
         try:
-            with bind_execution_context(run_id, thread_id, trace_id, self._trace, capture):
+            with (
+                bind_execution_context(run_id, thread_id, trace_id, self._trace, capture),
+                bind_model_call_budget(ModelCallBudget(self._model_budget_seconds)),
+            ):
                 result = await self._orchestrator.resume(thread_id, self._caller(identity), resume)
         except Exception:
             result = self._safe_failure_result(thread_id, trace_id)
@@ -435,7 +441,10 @@ class AgentApiService:
             input_envelope=input_envelope,
         )
         try:
-            with bind_execution_context(run_id, thread_id, trace_id, self._trace, capture):
+            with (
+                bind_execution_context(run_id, thread_id, trace_id, self._trace, capture),
+                bind_model_call_budget(ModelCallBudget(self._model_budget_seconds)),
+            ):
                 result = await self._orchestrator.start_turn(
                     AgentTurnInput(
                         thread_id=thread_id,
@@ -602,6 +611,7 @@ class AgentApiService:
         if result.run_status is RunStatus.FAILED_SAFE:
             if result.error_code in {
                 "LANGUAGE_INTERPRETATION_FAILED",
+                "PROVIDER_EXHAUSTED",
                 "POLICY_RESULT_STALE",
                 "RECONCILIATION_PENDING",
                 "MANUAL_REVIEW",

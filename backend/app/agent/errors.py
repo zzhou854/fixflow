@@ -19,6 +19,10 @@ class StructuredOutputInvalid(AgentError):
     code = "structured_output_invalid"
 
 
+class ProviderExhausted(AgentError):
+    code = "provider_exhausted"
+
+
 class PromptInputInvalid(AgentError):
     code = "prompt_input_invalid"
 
