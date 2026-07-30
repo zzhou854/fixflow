@@ -99,6 +99,48 @@ export interface OperatorThread {
   missing_fields: string[]; active_ticket_id: string | null; active_appointment_id: string | null
   human_review_required: boolean; updated_at: string | null
 }
+export type HumanReviewStatus = 'OPEN' | 'CLAIMED' | 'RESOLVED' | 'DISMISSED'
+export type HumanReviewSafetyLevel = 'STANDARD' | 'ELEVATED' | 'EMERGENCY'
+export interface HumanReviewCase {
+  case_id: string
+  thread_id: string
+  resident_id: string
+  property_id: string | null
+  ticket_id: string | null
+  source_run_id: string | null
+  intent_version: number
+  failure_stage: string
+  reason_code: string
+  last_error_code: string | null
+  safety_level: HumanReviewSafetyLevel
+  priority: number
+  summary: string
+  status: HumanReviewStatus
+  assigned_operator_id: string | null
+  version: number
+  created_at: string
+  updated_at: string
+  claimed_at: string | null
+  resolved_at: string | null
+  resolution_code: string | null
+  resolution_note: string | null
+}
+export interface HumanReviewEvent {
+  event_id: string
+  case_id: string
+  sequence_no: number
+  from_status: HumanReviewStatus | null
+  to_status: HumanReviewStatus
+  action: string
+  actor_type: string
+  actor_id: string
+  trace_id: string
+  version_before: number
+  version_after: number
+  reason_code: string | null
+  note: string | null
+  occurred_at: string
+}
 export interface AgentRun {
   run_id: string; thread_id: string | null; trace_id: string
   trigger: 'THREAD_CREATED' | 'MESSAGE' | 'RESUME' | 'OPERATOR_ACTION'

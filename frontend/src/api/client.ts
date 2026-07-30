@@ -1,4 +1,4 @@
-import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, ReplayExecution, ReplayRun, ReplayRunDetail, ResidentThreadSummary, Ticket, TicketDetail, TraceEvent } from '../types'
+import type { AgentRun, AgentThread, ApiErrorBody, HumanReviewCase, HumanReviewEvent, HumanReviewStatus, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, ReplayExecution, ReplayRun, ReplayRunDetail, ResidentThreadSummary, Ticket, TicketDetail, TraceEvent } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const SHANGHAI_OFFSET_MILLISECONDS = 8 * 60 * 60 * 1000
@@ -44,6 +44,39 @@ export const api = {
   reconciliationCases: (token: string, query = '') => apiRequest<{items: ReconciliationCase[]}>(`/api/v1/operator/reconciliation/cases${query}`,token),
   recheckReconciliation: (token: string, caseId: string) => apiRequest<ReconciliationCase>(`/api/v1/operator/reconciliation/cases/${caseId}/recheck`,token,{method:'POST'}),
   reconciliationCase: (token: string, caseId: string) => apiRequest<ReconciliationCase>(`/api/v1/operator/reconciliation/cases/${caseId}`, token),
+  humanReviewCases: (token: string, status?: HumanReviewStatus, limit = 100, offset = 0) => {
+    const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    if (status) query.set('status', status)
+    return apiRequest<{ items: HumanReviewCase[]; limit: number; offset: number }>(
+      `/api/v1/operator/human-review-cases?${query}`,
+      token,
+    )
+  },
+  transitionHumanReview: (
+    token: string,
+    caseId: string,
+    expectedVersion: number,
+    targetStatus: HumanReviewStatus,
+    resolutionCode?: string,
+    resolutionNote?: string,
+  ) => apiRequest<HumanReviewCase>(
+    `/api/v1/operator/human-review-cases/${caseId}/transition`,
+    token,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        target_status: targetStatus,
+        expected_version: expectedVersion,
+        resolution_code: resolutionCode ?? null,
+        resolution_note: resolutionNote ?? null,
+      }),
+    },
+  ),
+  humanReviewEvents: (token: string, caseId: string) =>
+    apiRequest<{ items: HumanReviewEvent[] }>(
+      `/api/v1/operator/human-review-cases/${caseId}/events`,
+      token,
+    ),
   operatorEscalate: (token: string, ticketId: string, expectedVersion: number, idempotencyKey: string) => apiRequest<OperationResponse>(`/api/v1/operator/tickets/${ticketId}/escalate`, token, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
