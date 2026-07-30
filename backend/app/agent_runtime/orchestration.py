@@ -16,6 +16,7 @@ from app.agent_runtime.models import (
     AGENT_RESUME_ADAPTER,
     INTERRUPT_ADAPTER,
     AgentCallerContext,
+    AgentConversationView,
     AgentResume,
     AgentRunResult,
     AgentStateView,
@@ -274,11 +275,13 @@ class AgentOrchestrator:
             if error:
                 invalidated = await self._invalidate_authorization(existing)
                 return self._failure(turn, invalidated, error)
-            existing = await self._refresh_reconciliation(existing)
-            await self._graph.aupdate_state(
-                self._config(existing.thread_id),
-                RuntimeGraphState(state_json=existing.model_dump_json()),
-            )
+            refreshed = await self._refresh_reconciliation(existing)
+            if refreshed != existing:
+                await self._graph.aupdate_state(
+                    self._config(existing.thread_id),
+                    RuntimeGraphState(state_json=refreshed.model_dump_json()),
+                )
+            existing = refreshed
             if (
                 existing.workflow_stage
                 in {WorkflowStage.RECONCILIATION_PENDING, WorkflowStage.HUMAN_REVIEW}
@@ -396,10 +399,13 @@ class AgentOrchestrator:
         if error:
             invalidated = await self._invalidate_authorization(state)
             return self._failure_from_ids(thread_id, validated.trace_id, invalidated, error)
-        state = await self._refresh_reconciliation(state)
-        await self._graph.aupdate_state(
-            self._config(thread_id), RuntimeGraphState(state_json=state.model_dump_json())
-        )
+        refreshed = await self._refresh_reconciliation(state)
+        if refreshed != state:
+            await self._graph.aupdate_state(
+                self._config(thread_id),
+                RuntimeGraphState(state_json=refreshed.model_dump_json()),
+            )
+        state = refreshed
         if state.pending_reconciliation_case_id is not None:
             code = (
                 "RECONCILIATION_PENDING"
@@ -448,10 +454,13 @@ class AgentOrchestrator:
         if error:
             await self._invalidate_authorization(state)
             raise ThreadIdentityConflict("caller no longer has property access")
-        state = await self._refresh_reconciliation(state)
-        await self._graph.aupdate_state(
-            self._config(thread_id), RuntimeGraphState(state_json=state.model_dump_json())
-        )
+        refreshed = await self._refresh_reconciliation(state)
+        if refreshed != state:
+            await self._graph.aupdate_state(
+                self._config(thread_id),
+                RuntimeGraphState(state_json=refreshed.model_dump_json()),
+            )
+        state = refreshed
         snapshot = await self._graph.aget_state(self._config(thread_id))
         return self._state_view(state, snapshot)
 
@@ -536,6 +545,14 @@ class AgentOrchestrator:
             pending_reconciliation_case_id=state.pending_reconciliation_case_id,
             pending_reconciliation_status=state.pending_reconciliation_status,
             pending_reconciliation_action=state.pending_reconciliation_action,
+            conversation_messages=tuple(
+                AgentConversationView(
+                    role=item.role,
+                    content=item.content,
+                    created_at=item.created_at,
+                )
+                for item in state.conversation_messages
+            ),
         )
 
     async def _result(

@@ -376,6 +376,10 @@ async def test_new_repair_interrupt_resume_books_once_with_system_duration() -> 
     interrupted = await orchestrator.start_turn(turn)
     assert interrupted.run_status is RunStatus.INTERRUPTED
     assert isinstance(interrupted.interrupt, AppointmentSlotSelectionInterrupt)
+    inspected = await orchestrator.get_state(turn.thread_id, _caller(resident_id), uuid4())
+    assert inspected is not None
+    assert inspected.run_status is RunStatus.INTERRUPTED
+    assert isinstance(inspected.interrupt, AppointmentSlotSelectionInterrupt)
     fingerprint = interrupted.interrupt.candidates_fingerprint
     resumed = await orchestrator.resume(
         turn.thread_id,
@@ -393,11 +397,47 @@ async def test_new_repair_interrupt_resume_books_once_with_system_duration() -> 
     assert resumed.active_appointment_id == mcp.appointment_id
     assert [name for name, _ in mcp.calls].count("create_repair_ticket") == 1
     assert [name for name, _ in mcp.calls].count("book_appointment") == 1
-    assert [name for name, _ in mcp.calls].count("get_resident_property") == 2
+    assert [name for name, _ in mcp.calls].count("get_resident_property") == 3
     state = await orchestrator._stored_state(turn.thread_id)
     assert state is not None
     # Selecting rank=1 is structured control input, not a synthetic "1" chat message.
     assert len([item for item in state.conversation_messages if item.role is LLMRole.USER]) == 1
+
+
+@pytest.mark.asyncio
+async def test_door_lock_policy_requires_identity_and_appointment_topics() -> None:
+    resident_id, property_id = uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    requests: list[PolicyRetrievalRequest] = []
+
+    async def capture(request: PolicyRetrievalRequest) -> PolicyRetrievalResult:
+        requests.append(request)
+        return await _policy_result(request)
+
+    orchestrator = _orchestrator(
+        mcp,
+        {
+            "utterance_intent": "NEW_REPAIR",
+            "issue_category": "DOOR_LOCK",
+            "issue_location": "入户门",
+            "issue_description_update": "入户门门锁损坏",
+            "user_availability_windows": [
+                {
+                    "starts_at": "2026-07-21T12:00:00Z",
+                    "ends_at": "2026-07-21T18:00:00Z",
+                }
+            ],
+        },
+        retrieve_policy=capture,
+    )
+
+    result = await orchestrator.start_turn(_turn(resident_id, property_id))
+
+    assert result.run_status is RunStatus.INTERRUPTED
+    assert requests[0].policy_topics == (
+        PolicyTopic.IDENTITY_REQUIREMENT,
+        PolicyTopic.APPOINTMENT,
+    )
 
 
 @pytest.mark.asyncio

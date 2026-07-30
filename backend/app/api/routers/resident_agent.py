@@ -13,6 +13,7 @@ from app.api.errors import ApiError
 from app.api.schemas.agent import (
     AgentThreadResponse,
     CreateThreadRequest,
+    ResidentThreadListResponse,
     ResumeRequest,
     SendMessageRequest,
     SSEEvent,
@@ -20,6 +21,18 @@ from app.api.schemas.agent import (
 from app.application.auth import AuthenticatedIdentity
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
+
+
+@router.get("/threads", response_model=ResidentThreadListResponse)
+async def list_threads(
+    limit: int = 20,
+    offset: int = 0,
+    identity: AuthenticatedIdentity = Depends(require_resident),
+    services: ApiServices = Depends(get_services),
+) -> ResidentThreadListResponse:
+    if not 1 <= limit <= 50 or offset < 0:
+        raise ApiError(422, "VALIDATION_ERROR", "分页参数无效。")
+    return await services.agent.list_threads(identity, limit=limit, offset=offset)
 
 
 @router.post("/threads", response_model=AgentThreadResponse)

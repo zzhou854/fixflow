@@ -50,6 +50,15 @@ export interface SlotInterrupt {
   slots: Array<{ rank: number; worker_id: string; scheduled_start: string; scheduled_end: string; booking_guaranteed: false }>
 }
 export type Interrupt = NeedInformationInterrupt | DuplicateInterrupt | SlotInterrupt
+export interface ConversationMessage {
+  role: 'USER' | 'ASSISTANT'; content: string; created_at: string
+}
+export interface ResidentThreadSummary {
+  thread_id: string; property_id: string; workflow_stage: WorkflowStage
+  run_status: 'COMPLETED' | 'INTERRUPTED' | 'NEEDS_HUMAN_REVIEW' | 'FAILED_SAFE'
+  issue_category: string | null; issue_location: string | null
+  active_ticket_id: string | null; updated_at: string
+}
 export interface AgentThread {
   thread_id: string; trace_id: string; run_id?: string | null; message_id: string | null; workflow_stage: WorkflowStage
   run_status: 'COMPLETED' | 'INTERRUPTED' | 'NEEDS_HUMAN_REVIEW' | 'FAILED_SAFE'
@@ -59,6 +68,7 @@ export interface AgentThread {
   structured_issue: { issue_category: string | null; issue_location: string | null; issue_description: string | null; severity: string | null }
   safety_review_required: boolean; error_code: string | null; development_mode: true
   reconciliation?: ResidentReconciliation | null
+  conversation_messages?: ConversationMessage[]
 }
 export type ReconciliationStatus = 'PENDING'|'PROCESSING'|'RESOLVED_COMMITTED'|'RESOLVED_NOT_COMMITTED'|'MANUAL_REVIEW'
 export interface ResidentReconciliation { case_id: string; status: ReconciliationStatus; action: string; retry_allowed: boolean }

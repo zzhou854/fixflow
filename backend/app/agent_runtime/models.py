@@ -7,7 +7,13 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
-from app.agent.enums import AgentIntent, AgentReconciliationStatus, IssueField, PendingAction
+from app.agent.enums import (
+    AgentIntent,
+    AgentReconciliationStatus,
+    IssueField,
+    LLMRole,
+    PendingAction,
+)
 from app.agent.models import AgentModel
 from app.domain.enums import ActorType, IssueCategory, Severity, WorkflowStage
 from app.policy.enums import EvidenceSufficiency
@@ -193,6 +199,15 @@ class AgentStateView(AgentModel):
     pending_reconciliation_case_id: UUID | None = None
     pending_reconciliation_status: AgentReconciliationStatus | None = None
     pending_reconciliation_action: PendingAction | None = None
+    conversation_messages: tuple["AgentConversationView", ...] = ()
+
+
+class AgentConversationView(AgentModel):
+    """Sanitized conversation item for the resident-facing API."""
+
+    role: LLMRole
+    content: str
+    created_at: datetime
 
 
 class AgentRunResult(AgentModel):

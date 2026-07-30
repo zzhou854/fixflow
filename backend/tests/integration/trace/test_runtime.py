@@ -1,6 +1,6 @@
 import asyncio
-from datetime import UTC, datetime
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 import pytest
 from app.infrastructure.database.models.observability import (
@@ -14,6 +14,78 @@ from app.trace.runtime import TraceConflict, TraceRuntime
 from app.trace.sanitizer import TraceSanitizer
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+
+@pytest.mark.asyncio
+async def test_resident_thread_index_is_owner_scoped_and_orders_latest_activity(
+    migrated_database_url: str,
+) -> None:
+    engine = create_async_engine(migrated_database_url)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    runtime = TraceRuntime(sessions, TraceSanitizer(max_payload_bytes=2048, max_string_length=128))
+    resident_id, other_resident_id = uuid4(), uuid4()
+    older_thread, newer_thread, foreign_thread = uuid4(), uuid4(), uuid4()
+    older_property, newer_property = uuid4(), uuid4()
+    now = datetime.now(UTC)
+
+    async def start(
+        *,
+        thread_id: UUID,
+        user_id: UUID,
+        property_id: UUID | None,
+        trigger: AgentRunTrigger,
+        started_at: datetime,
+    ) -> None:
+        await runtime.start_run(
+            StartRun(
+                run_id=uuid4(),
+                thread_id=thread_id,
+                trace_id=uuid4(),
+                trigger=trigger,
+                actor_type="RESIDENT",
+                actor_id=user_id,
+                user_id=user_id,
+                property_id=property_id,
+                started_at=started_at,
+            )
+        )
+
+    await start(
+        thread_id=older_thread,
+        user_id=resident_id,
+        property_id=older_property,
+        trigger=AgentRunTrigger.THREAD_CREATED,
+        started_at=now,
+    )
+    await start(
+        thread_id=newer_thread,
+        user_id=resident_id,
+        property_id=newer_property,
+        trigger=AgentRunTrigger.THREAD_CREATED,
+        started_at=now + timedelta(minutes=1),
+    )
+    await start(
+        thread_id=older_thread,
+        user_id=resident_id,
+        property_id=None,
+        trigger=AgentRunTrigger.MESSAGE,
+        started_at=now + timedelta(minutes=2),
+    )
+    await start(
+        thread_id=foreign_thread,
+        user_id=other_resident_id,
+        property_id=uuid4(),
+        trigger=AgentRunTrigger.THREAD_CREATED,
+        started_at=now + timedelta(minutes=3),
+    )
+
+    records = await runtime.list_resident_threads(resident_id)
+
+    assert [record.thread_id for record in records] == [older_thread, newer_thread]
+    assert records[0].property_id == older_property
+    assert records[0].updated_at == now + timedelta(minutes=2)
+    assert foreign_thread not in {record.thread_id for record in records}
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

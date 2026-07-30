@@ -1,4 +1,4 @@
-import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, ReplayExecution, ReplayRun, ReplayRunDetail, Ticket, TicketDetail, TraceEvent } from '../types'
+import type { AgentRun, AgentThread, ApiErrorBody, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, ReplayExecution, ReplayRun, ReplayRunDetail, ResidentThreadSummary, Ticket, TicketDetail, TraceEvent } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const SHANGHAI_OFFSET_MILLISECONDS = 8 * 60 * 60 * 1000
@@ -55,6 +55,7 @@ export const api = {
     }),
   }),
   getThread: (token: string, threadId: string) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}`, token),
+  residentThreads: (token: string) => apiRequest<{ items: ResidentThreadSummary[]; limit: number; offset: number }>('/api/v1/agent/threads?limit=20&offset=0', token),
   createThread: (token: string, property_id: string, initial_message: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>('/api/v1/agent/threads', token, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },

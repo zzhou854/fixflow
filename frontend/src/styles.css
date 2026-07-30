@@ -17,6 +17,16 @@ body { margin: 0; min-width: 320px; min-height: 100vh; }
 .message.assistant { align-self: flex-start; background: #edf7f5; border-bottom-left-radius: 4px; }
 .empty-chat { margin: auto; color: #6b807c; text-align: center; }
 .composer { width: 100%; }
+.interrupt-card { border: 2px solid #faad14; box-shadow: 0 8px 24px rgba(250, 173, 20, .12); }
+.interrupt-card .ant-alert { margin-bottom: 14px; }
+.interrupt-explanation { margin-top: 12px; }
+.thread-history-card .ant-card-body { padding: 8px 12px; }
+.thread-history-card .ant-list-item { padding: 4px 0; border: 0; }
+.thread-history-item { width: 100%; border: 1px solid transparent; border-radius: 8px; background: transparent; padding: 9px 10px; text-align: left; color: inherit; cursor: pointer; }
+.thread-history-item:hover { background: #f0fdfa; }
+.thread-history-item.active { border-color: #0f766e; background: #ecfdf5; }
+.thread-history-item strong, .thread-history-item span { display: block; }
+.thread-history-item span { margin-top: 4px; color: #6b807c; font-size: 12px; }
 .summary-card .ant-descriptions-item-content { word-break: break-all; }
 .operator-content { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .drawer-stack { width: 100%; }

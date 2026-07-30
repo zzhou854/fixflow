@@ -111,6 +111,29 @@ class StructuredIssueResponse(ApiModel):
     severity: Severity | None
 
 
+class ResidentConversationMessageResponse(ApiModel):
+    role: Literal["USER", "ASSISTANT"]
+    content: str
+    created_at: datetime
+
+
+class ResidentThreadSummaryResponse(ApiModel):
+    thread_id: UUID
+    property_id: UUID
+    workflow_stage: WorkflowStage
+    run_status: RunStatus
+    issue_category: IssueCategory | None
+    issue_location: str | None
+    active_ticket_id: UUID | None
+    updated_at: datetime
+
+
+class ResidentThreadListResponse(ApiModel):
+    items: tuple[ResidentThreadSummaryResponse, ...]
+    limit: int
+    offset: int
+
+
 class AgentThreadResponse(ApiModel):
     thread_id: UUID
     trace_id: UUID
@@ -128,6 +151,7 @@ class AgentThreadResponse(ApiModel):
     error_code: str | None = None
     development_mode: Literal[True] = True
     reconciliation: "ResidentReconciliationResponse | None" = None
+    conversation_messages: tuple[ResidentConversationMessageResponse, ...] = ()
 
 
 class ResidentReconciliationResponse(ApiModel):

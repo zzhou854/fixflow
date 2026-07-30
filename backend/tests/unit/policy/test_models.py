@@ -98,3 +98,20 @@ def test_synthetic_corpus_is_strict_and_has_expected_coverage() -> None:
         IssueCategory.ELECTRICAL,
         IssueCategory.DOOR_LOCK,
     }
+    demo_as_of = datetime(2026, 7, 1, tzinfo=UTC)
+    effective_codes = {
+        document.policy_code
+        for document in corpus.documents
+        if document.is_enabled and is_policy_effective(document, demo_as_of)
+    }
+    assert {
+        "WATER_NORMAL",
+        "ELECTRICAL_OUTAGE",
+        "LOCK_REPLACEMENT",
+        "GENERAL_APPOINTMENT",
+    } <= effective_codes
+    assert {
+        "EXPIRED_WATER_OLD",
+        "FUTURE_LOCK_RULE",
+        "DISABLED_ELECTRICAL",
+    }.isdisjoint(effective_codes)

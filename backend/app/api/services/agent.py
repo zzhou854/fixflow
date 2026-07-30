@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from app.agent.enums import LLMRole
+from app.agent_runtime.errors import ThreadIdentityConflict
 from app.agent_runtime.execution_context import bind_execution_context
 from app.agent_runtime.models import (
     AgentCallerContext,
@@ -23,6 +24,9 @@ from app.api.errors import ApiError
 from app.api.schemas.agent import (
     AgentThreadResponse,
     PolicyStatusResponse,
+    ResidentConversationMessageResponse,
+    ResidentThreadListResponse,
+    ResidentThreadSummaryResponse,
     ResumeRequest,
     StructuredIssueResponse,
 )
@@ -166,6 +170,42 @@ class AgentApiService:
             active_appointment_id=state.active_appointment_id,
         )
         return await self._response(identity, result, state=state, publish=False)
+
+    async def list_threads(
+        self,
+        identity: AuthenticatedIdentity,
+        *,
+        limit: int,
+        offset: int,
+    ) -> ResidentThreadListResponse:
+        if self._trace is None:
+            return ResidentThreadListResponse(items=(), limit=limit, offset=offset)
+        records = await self._trace.list_resident_threads(
+            identity.user_id, limit=limit, offset=offset
+        )
+        items: list[ResidentThreadSummaryResponse] = []
+        for record in records:
+            try:
+                state = await self._orchestrator.get_state(
+                    record.thread_id, self._caller(identity), uuid4()
+                )
+            except ThreadIdentityConflict:
+                continue
+            if state is None or state.property_id != record.property_id:
+                continue
+            items.append(
+                ResidentThreadSummaryResponse(
+                    thread_id=record.thread_id,
+                    property_id=record.property_id,
+                    workflow_stage=state.workflow_stage,
+                    run_status=state.run_status,
+                    issue_category=state.issue_category,
+                    issue_location=state.issue_location,
+                    active_ticket_id=state.active_ticket_id,
+                    updated_at=state.updated_at or record.updated_at,
+                )
+            )
+        return ResidentThreadListResponse(items=tuple(items), limit=limit, offset=offset)
 
     async def record_api_replay(
         self,
@@ -399,6 +439,14 @@ class AgentApiService:
             safety_review_required=state.safety_review_required if state else False,
             error_code=result.error_code,
             reconciliation=reconciliation,
+            conversation_messages=tuple(
+                ResidentConversationMessageResponse(
+                    role=item.role.value,
+                    content=item.content,
+                    created_at=item.created_at,
+                )
+                for item in (state.conversation_messages if state else ())
+            ),
         )
         if publish:
             await self._publish_result(response)

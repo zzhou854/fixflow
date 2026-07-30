@@ -13,11 +13,12 @@ from app.policy.state_merge import merge_policy_result
 
 _POLICY_QUERY_CONTEXT = {
     PolicyTopic.RESPONSIBILITY_SCOPE: "故障维修 责任范围",
+    PolicyTopic.IDENTITY_REQUIREMENT: "住户身份 房屋关系 身份核验",
     PolicyTopic.APPOINTMENT: "候选时间 正式预约 预约确认",
 }
 _CATEGORY_QUERY_CONTEXT = {
     IssueCategory.WATER_LEAK: "普通漏水 滴漏 管道维修",
-    IssueCategory.ELECTRICAL: "电气维修 插座 跳闸",
+    IssueCategory.ELECTRICAL: "电气维修 插座 跳闸 普通断电 局部断电 电工预约",
     IssueCategory.DOOR_LOCK: "非紧急换锁 预约锁匠",
 }
 
@@ -27,7 +28,11 @@ async def retrieve_policy(
 ) -> RuntimeGraphState:
     state = load_state(graph_state)
     assert state.issue_category is not None
-    topics = (PolicyTopic.RESPONSIBILITY_SCOPE, PolicyTopic.APPOINTMENT)
+    topics = (
+        (PolicyTopic.IDENTITY_REQUIREMENT, PolicyTopic.APPOINTMENT)
+        if state.issue_category is IssueCategory.DOOR_LOCK
+        else (PolicyTopic.RESPONSIBILITY_SCOPE, PolicyTopic.APPOINTMENT)
+    )
     query_context = " ".join(
         (
             *(_POLICY_QUERY_CONTEXT[topic] for topic in topics),

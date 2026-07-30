@@ -7,16 +7,23 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.infrastructure.database.models.observability import (
     AgentRun,
     AgentRunStatus,
+    AgentRunTrigger,
     AgentTraceEvent,
     TraceSource,
 )
-from app.trace.models import AgentRunRecord, StartRun, TraceEventRecord, TracePayload
+from app.trace.models import (
+    AgentRunRecord,
+    ResidentThreadRecord,
+    StartRun,
+    TraceEventRecord,
+    TracePayload,
+)
 from app.trace.sanitizer import TraceSanitizer
 
 
@@ -208,6 +215,47 @@ class TraceRuntime:
                 .offset(offset)
             )
             return tuple(AgentRunRecord.model_validate(row) for row in rows)
+
+    async def list_resident_threads(
+        self, user_id: UUID, *, limit: int = 20, offset: int = 0
+    ) -> tuple[ResidentThreadRecord, ...]:
+        """List only threads formally created by this resident, newest activity first."""
+
+        latest = (
+            select(
+                AgentRun.thread_id.label("thread_id"),
+                func.max(AgentRun.started_at).label("updated_at"),
+            )
+            .where(
+                AgentRun.user_id == user_id,
+                AgentRun.actor_type == "RESIDENT",
+                AgentRun.thread_id.is_not(None),
+            )
+            .group_by(AgentRun.thread_id)
+            .subquery()
+        )
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(
+                        AgentRun.thread_id,
+                        AgentRun.property_id,
+                        AgentRun.started_at.label("created_at"),
+                        latest.c.updated_at,
+                    )
+                    .join(latest, latest.c.thread_id == AgentRun.thread_id)
+                    .where(
+                        AgentRun.user_id == user_id,
+                        AgentRun.actor_type == "RESIDENT",
+                        AgentRun.trigger == AgentRunTrigger.THREAD_CREATED,
+                        AgentRun.property_id.is_not(None),
+                    )
+                    .order_by(latest.c.updated_at.desc(), AgentRun.thread_id.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).mappings()
+            return tuple(ResidentThreadRecord.model_validate(dict(row)) for row in rows)
 
     async def list_events(
         self,

@@ -104,6 +104,17 @@ class AgentRunRecord(BaseModel):
     error_code: str | None
 
 
+class ResidentThreadRecord(BaseModel):
+    """Persistent resident-owned thread index derived from immutable run starts."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    thread_id: UUID
+    property_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
 class TraceEventRecord(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
 
