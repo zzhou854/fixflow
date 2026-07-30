@@ -68,6 +68,8 @@ research track:
 - a fixed-height, responsive resident workspace with recent-five conversation
   navigation, recoverable archive/restore, Chinese business-language statuses,
   and explicit progress/retry/handoff feedback;
+- a dedicated property-staff human-review queue with optimistic claim,
+  release, resolution and dismissal controls plus layered audit details;
 - real API-to-Agent-to-MCP-to-PostgreSQL vertical and cross-resident tests;
 - a same-transaction domain Outbox with stable event identities;
 - a leased at-least-once Dispatcher, retry/backoff, and dead-letter state;

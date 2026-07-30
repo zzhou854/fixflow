@@ -13,14 +13,18 @@ forms, and refreshed ticket/appointment summaries. Rescheduling and requests
 for human handling use the Agent path. Cancellation and acceptance/rejection
 remain property-staff operations in this first product slice.
 
-The operator page provides ticket status/category/severity filters, business
-details, ticket and appointment histories, and the latest Worker Event. A known
+The operator page provides a dedicated pre-ticket “待人工处理” queue, ticket
+status/category/severity filters, business details, ticket and appointment
+histories, and the latest Worker Event. Queue items are ordered by priority,
+filterable by lifecycle status, searchable, and use the existing optimistic
+`OPEN`/`CLAIMED`/`RESOLVED`/`DISMISSED` transitions. Version conflicts refresh
+the authoritative queue instead of overwriting another operator. Details are
+presented as business summary, handling basis, and a collapsed technical-audit
+layer. A known
 Agent thread can be inspected by the Operator Thread API only when its Agent
 State ticket link is revalidated against the database resident/property ticket
-snapshot. The UI never guesses a relation or fabricates policy or workflow
-data. The pre-ticket human-review queue is now available through the Operator
-API; its commercial workbench presentation remains part of the later Operator
-UI phase. For an authorized, ticket-linked thread the workbench shows a paged,
+snapshot. The UI never guesses a relation or fabricates policy, workflow, or
+ticket data. For an authorized, ticket-linked thread the workbench shows a paged,
 source-filterable persistent
 execution timeline. It labels business histories and Agent Trace as separate
 views and renders a safe summary rather than raw JSON.

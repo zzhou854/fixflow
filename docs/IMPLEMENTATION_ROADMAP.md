@@ -169,6 +169,14 @@ Implemented for commercial-hardening phase 2:
 - Chinese resident-facing business labels, deterministic progress feedback,
   visible failed-request retry/handoff, and mobile drawer navigation
 - route-level lazy loading without a second UI framework or new dependency
+
+Implemented for commercial-hardening phase 3:
+
+- dedicated Operator human-review queue for pre-ticket and ticket-linked work
+- priority/safety presentation, lifecycle filtering, search, claim/release,
+  resolve/dismiss controls, and optimistic-conflict refresh
+- business summary, handling basis, and collapsed technical-audit layers
+- localized ticket category, status, and severity labels in the workbench
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,
