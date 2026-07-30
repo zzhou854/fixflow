@@ -146,6 +146,26 @@ Codex has not supplied an approver identity or decision. Until a separate review
 changes the lifecycle through the validated protocol, online execution is
 forbidden.
 
+## Internal adversarial assistance
+
+An internal offline review inspected all 180 Structured and 60 Grounded cases
+after phase 1D-B was sealed. The successful second pass recorded 240
+`ASSISTED_ACCEPT`, zero `ASSISTED_ISSUE`, zero `ASSISTED_UNCERTAIN`, and no
+unresolved BLOCKER, MAJOR, or MINOR issue. It exercised field-level evidence,
+negation/correction, typed known context, safety and authorization boundaries,
+outcome/action preservation, identifier and schedule permissions, cross-entity
+cancellation semantics, and technical-leakage controls.
+
+The first internal pass is also retained: it rejected every case because the
+review tool incorrectly treated the string `PASSED` as a failed Boolean check
+and used stale enum assumptions. That evidence was not overwritten. The
+reviewer was corrected and rerun under a new review ID.
+
+This assistance is not independent review. The human-signature request remains
+`PENDING_HUMAN_SIGNATURE`, its signature and approver are null, and all 240
+cases still require a fresh independent human decision. No Provider or
+qualification call was made.
+
 ## Explicit non-claims
 
 This packet does not mean:

@@ -168,3 +168,16 @@ both revised suites.
 Automated checks cover all 240 revised cases, but the status remains
 `AUTOMATED_CHECKED_REVIEW_PENDING`. A fresh review packet initializes all 240
 cases as `UNREVIEWED`; none of the previous 159 assisted accepts is inherited.
+
+## Post-seal internal adversarial review
+
+The repository-safe report
+`backend/evals/holdout/reports/internal_assisted_review.revised.json` binds the
+second offline internal review without exposing case or Golden text. It records
+240 assisted accepts and zero unresolved issues or uncertain decisions. The
+private evidence includes one preserved failed reviewer run and the corrected
+run; neither is an independent human review or approval.
+
+The next lifecycle state is an unsigned private request with
+`decision=PENDING_HUMAN_SIGNATURE` and `signature=null`. Formal inference,
+Shadow, Canary, and online activation remain forbidden.

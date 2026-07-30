@@ -1,0 +1,27 @@
+{
+  "approval_decision": null,
+  "grounded_case_count": 60,
+  "independent_human_review_completed": false,
+  "online_provider_calls": 0,
+  "review_artifacts": {
+    "artifact_integrity_sha256": "1d6f4ae6d2531f8066e6b78f2ec8c630c2c6fb1ef6755e37cdf54abeb721a96c",
+    "case_reviews_sha256": "e954baedd48064dbb7ba8c8aa125e35147e3f68d4e1db4e1404f3a3bd49b204f",
+    "review_issues_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "review_summary_sha256": "5d84d98de3a3a241e2b98bdabb75154f3c475050c97494d7b78215a5f2b846f6",
+    "review_tool_sha256": "81936708660760256872d1b3990e0ba10e7534c5e43510407f7c171b1afde8a1"
+  },
+  "review_id": "internal-adversarial-assisted-20260731-02",
+  "review_kind": "INTERNAL_ADVERSARIAL_ASSISTED_NOT_INDEPENDENT",
+  "status": "ASSISTED_COMPLETE_AWAITING_INDEPENDENT_HUMAN_REVIEW",
+  "status_counts": {
+    "ASSISTED_ACCEPT": 240,
+    "ASSISTED_ISSUE": 0,
+    "ASSISTED_UNCERTAIN": 0
+  },
+  "structured_case_count": 180,
+  "unresolved_severity_counts": {
+    "BLOCKER": 0,
+    "MAJOR": 0,
+    "MINOR": 0
+  }
+}

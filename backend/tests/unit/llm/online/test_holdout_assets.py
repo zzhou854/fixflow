@@ -189,6 +189,28 @@ def test_revised_preparation_report_records_no_live_or_online_calls() -> None:
         assert not duplicate_report[suite]["near_duplicates"]
 
 
+def test_internal_assisted_review_is_advisory_and_call_free() -> None:
+    report = json.loads(
+        (ASSETS / "reports" / "internal_assisted_review.revised.json").read_text(encoding="utf-8")
+    )
+
+    assert report["status"] == "ASSISTED_COMPLETE_AWAITING_INDEPENDENT_HUMAN_REVIEW"
+    assert report["review_kind"] == "INTERNAL_ADVERSARIAL_ASSISTED_NOT_INDEPENDENT"
+    assert report["status_counts"] == {
+        "ASSISTED_ACCEPT": 240,
+        "ASSISTED_ISSUE": 0,
+        "ASSISTED_UNCERTAIN": 0,
+    }
+    assert report["unresolved_severity_counts"] == {
+        "BLOCKER": 0,
+        "MAJOR": 0,
+        "MINOR": 0,
+    }
+    assert report["independent_human_review_completed"] is False
+    assert report["approval_decision"] is None
+    assert report["online_provider_calls"] == 0
+
+
 def test_original_manifest_content_identities_remain_frozen() -> None:
     structured = HoldoutManifest.model_validate_json(
         (MANIFESTS / "resident_interpretation_holdout_v2.manifest.json").read_text(encoding="utf-8")
