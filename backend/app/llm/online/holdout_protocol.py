@@ -42,6 +42,12 @@ class ApprovalDecision(StrEnum):
     REJECTED = "REJECTED"
 
 
+class DispositionDecision(StrEnum):
+    CHANGES_REQUIRED = "CHANGES_REQUIRED"
+    SUPERSEDED = "SUPERSEDED"
+    REJECTED = "REJECTED"
+
+
 class GoldenReviewStatus(StrEnum):
     AUTOMATED_CHECKED_REVIEW_PENDING = "AUTOMATED_CHECKED_REVIEW_PENDING"
     INDEPENDENT_REVIEWED = "INDEPENDENT_REVIEWED"
@@ -252,6 +258,31 @@ class HoldoutApprovalRecord(BaseModel):
     def validate_timestamp(self) -> HoldoutApprovalRecord:
         if self.approval_timestamp.tzinfo is None:
             raise ValueError("approval_timestamp must be timezone-aware")
+        return self
+
+
+class HoldoutDispositionRecord(BaseModel):
+    """Append-only external decision; it never mutates a sealed manifest."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    disposition_schema_version: Literal["holdout-disposition-v1"] = "holdout-disposition-v1"
+    disposition_id: str = Field(min_length=1, max_length=200)
+    dataset_id: str = Field(pattern=r"^[a-z][a-z0-9_.-]{2,99}$")
+    dataset_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    sealed_manifest_sha256: str = Field(pattern=SHA256_PATTERN)
+    decision: DispositionDecision
+    qualification_executed: Literal[False] = False
+    live_call_count: Literal[0] = 0
+    superseded_by: str = Field(min_length=1, max_length=200)
+    review_id: str = Field(min_length=1, max_length=200)
+    recorded_at: datetime
+    notes: str = Field(default="", max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_recorded_at(self) -> HoldoutDispositionRecord:
+        if self.recorded_at.tzinfo is None:
+            raise ValueError("recorded_at must be timezone-aware")
         return self
 
 
@@ -627,6 +658,10 @@ def begin_first_live_call_atomically(
         target = _read_manifest(target_manifest_path)
         structured = _read_manifest(structured_manifest_path)
         grounded = _read_manifest(grounded_manifest_path)
+        _reject_non_executable_disposition(
+            target,
+            manifest_path=target_manifest_path,
+        )
         approval = HoldoutApprovalRecord.model_validate_json(
             approval_path.read_text(encoding="utf-8")
         )
@@ -644,6 +679,33 @@ def begin_first_live_call_atomically(
         )
         _atomic_write_model(target_manifest_path, consumed)
         return consumed
+
+
+def _reject_non_executable_disposition(
+    manifest: HoldoutManifest,
+    *,
+    manifest_path: Path,
+) -> None:
+    """Reject any sealed package with an append-only adverse disposition."""
+
+    registries = (
+        manifest_path.parent / "disposition.jsonl",
+        manifest_path.parent.parent / "dispositions" / "holdout_dispositions.jsonl",
+    )
+    expected_hash = _sealed_manifest_sha256(manifest)
+    for registry in registries:
+        if not registry.exists():
+            continue
+        for raw in registry.read_text(encoding="utf-8-sig").splitlines():
+            if not raw.strip():
+                continue
+            disposition = HoldoutDispositionRecord.model_validate_json(raw)
+            if (
+                disposition.dataset_id == manifest.dataset_id
+                and disposition.dataset_version == manifest.dataset_version
+                and disposition.sealed_manifest_sha256 == expected_hash
+            ):
+                raise ValueError(f"Holdout version is not executable: {disposition.decision.value}")
 
 
 def write_qualification_result_once(
@@ -894,11 +956,13 @@ __all__ = [
     "ApprovalDecision",
     "ApprovalIdentityBundle",
     "DEFAULT_NEAR_DUPLICATE_THRESHOLD",
+    "DispositionDecision",
     "DistributionCount",
     "DuplicateScanResult",
     "FrozenQualificationIdentity",
     "GoldenReviewStatus",
     "HoldoutApprovalRecord",
+    "HoldoutDispositionRecord",
     "HoldoutManifest",
     "HoldoutStatus",
     "NearDuplicateMatch",

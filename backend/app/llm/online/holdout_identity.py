@@ -70,6 +70,34 @@ def grounded_identity(*, code_commit: str) -> FrozenQualificationIdentity:
     )
 
 
+def revised_structured_identity(*, code_commit: str) -> FrozenQualificationIdentity:
+    """Identity for the independently reviewed 2.1.0 structured package."""
+
+    original = structured_identity(code_commit=code_commit)
+    return original.model_copy(
+        update={
+            "scorer_version": "resident_interpretation_holdout_scorer@1.1.0",
+            "scorer_sha256": sha256_file(_HOLDOUT_SPECS / "structured_scorer_v1_1.json"),
+            "gate_version": "resident_interpretation_holdout_gate@1.1.0",
+            "gate_sha256": sha256_file(_HOLDOUT_SPECS / "structured_gate_v1_1.json"),
+        }
+    )
+
+
+def revised_grounded_identity(*, code_commit: str) -> FrozenQualificationIdentity:
+    """Identity for the independently reviewed 1.1.0 grounded package."""
+
+    original = grounded_identity(code_commit=code_commit)
+    return original.model_copy(
+        update={
+            "scorer_version": "grounded_response_holdout_scorer@1.1.0",
+            "scorer_sha256": sha256_file(_HOLDOUT_SPECS / "grounded_scorer_v1_1.json"),
+            "gate_version": "grounded_response_holdout_gate@1.1.0",
+            "gate_sha256": sha256_file(_HOLDOUT_SPECS / "grounded_gate_v1_1.json"),
+        }
+    )
+
+
 def _canonical_hash(value: object) -> str:
     canonical = json.dumps(
         value,
@@ -95,5 +123,7 @@ __all__ = [
     "GROUNDED_NORMALIZATION_VERSION",
     "STRUCTURED_NORMALIZATION_VERSION",
     "grounded_identity",
+    "revised_grounded_identity",
+    "revised_structured_identity",
     "structured_identity",
 ]

@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 from app.llm.online.holdout_protocol import (
     ApprovalDecision,
+    DispositionDecision,
     FrozenQualificationIdentity,
     GoldenReviewStatus,
     HoldoutApprovalRecord,
+    HoldoutDispositionRecord,
     HoldoutManifest,
     HoldoutStatus,
     PendingApprovalPacket,
@@ -402,6 +404,75 @@ def test_execution_lock_rejects_non_scripted_default_or_business_routing(
                 business_traffic_routed_to_online_provider=False,
             ),
         )
+
+
+def test_executor_rejects_append_only_changes_required_disposition(
+    tmp_path: Path,
+) -> None:
+    structured, dataset, golden = _sealed(tmp_path, "structured", ("厨房洗菜盆下面持续滴水",))
+    grounded, _, _ = _sealed(tmp_path, "grounded", ("展示预约待确认结果",))
+    approval = _approval(structured, grounded)
+    pending = create_pending_approval_packet(structured, grounded, generated_at=NOW)
+    approved_structured = apply_independent_approval(
+        structured,
+        structured_manifest=structured,
+        grounded_manifest=grounded,
+        approval=approval,
+    )
+    approved_grounded = apply_independent_approval(
+        grounded,
+        structured_manifest=structured,
+        grounded_manifest=grounded,
+        approval=approval,
+    )
+    suite_dir = tmp_path / "structured"
+    suite_dir.mkdir()
+    disposition_dir = tmp_path / "dispositions"
+    disposition_dir.mkdir()
+    structured_path = suite_dir / "manifest.json"
+    grounded_path = tmp_path / "grounded.json"
+    approval_path = tmp_path / "approval.json"
+    structured_path.write_text(
+        approved_structured.model_dump_json(),
+        encoding="utf-8",
+    )
+    grounded_path.write_text(approved_grounded.model_dump_json(), encoding="utf-8")
+    approval_path.write_text(approval.model_dump_json(), encoding="utf-8")
+    disposition = HoldoutDispositionRecord(
+        disposition_id="review-failed-structured-v1",
+        dataset_id=structured.dataset_id,
+        dataset_version=structured.dataset_version,
+        sealed_manifest_sha256=pending.structured_manifest_sha256,
+        decision=DispositionDecision.CHANGES_REQUIRED,
+        superseded_by="structured@1.1.0",
+        review_id="independent-review-1",
+        recorded_at=NOW,
+        notes="Independent review requires revision.",
+    )
+    (disposition_dir / "holdout_dispositions.jsonl").write_text(
+        disposition.model_dump_json() + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="CHANGES_REQUIRED"):
+        begin_first_live_call_atomically(
+            target_manifest_path=structured_path,
+            structured_manifest_path=structured_path,
+            grounded_manifest_path=grounded_path,
+            approval_path=approval_path,
+            dataset_path=dataset,
+            golden_path=golden,
+            expected_identity=approved_structured.identity,
+            environment=QualificationExecutionEnvironment(
+                online_credentials_present=True,
+                default_provider="scripted",
+                business_traffic_routed_to_online_provider=False,
+            ),
+        )
+
+    persisted = HoldoutManifest.model_validate_json(structured_path.read_text(encoding="utf-8"))
+    assert persisted.status is HoldoutStatus.APPROVED
+    assert persisted.live_call_count == 0
 
 
 def test_results_are_aggregate_only_and_cannot_be_overwritten(tmp_path: Path) -> None:
