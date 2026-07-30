@@ -7,6 +7,7 @@ from app.llm.online.holdout_protocol import (
     HoldoutManifest,
     HoldoutStatus,
     PendingApprovalPacket,
+    create_pending_approval_packet,
     sha256_file,
 )
 
@@ -95,3 +96,116 @@ def test_holdout_directory_is_outside_git_and_docker_build_context() -> None:
 
     assert repository not in external.parents
     assert external not in repository.parents
+
+
+def test_revised_holdout_suites_are_sealed_and_require_fresh_review() -> None:
+    structured = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "resident_interpretation_holdout_v2_1.manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    grounded = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "grounded_response_holdout_v1_1.manifest.json").read_text(encoding="utf-8")
+    )
+    packet = PendingApprovalPacket.model_validate_json(
+        (ASSETS / "approval" / "holdout_approval.revised.pending.json").read_text(encoding="utf-8")
+    )
+
+    assert structured.dataset_version == "2.1.0"
+    assert structured.case_count == 180
+    assert structured.single_turn_count == 120
+    assert structured.multi_turn_count == 60
+    assert grounded.dataset_version == "1.1.0"
+    assert grounded.case_count == 60
+    assert grounded.single_turn_count == 60
+    assert grounded.multi_turn_count == 0
+    assert {item.label for item in grounded.category_distribution} >= {
+        "TICKET_CANCELLED",
+        "TICKET_CLOSED",
+        "APPOINTMENT_CANCELLED",
+        "TICKET_CREATION_FAILED",
+        "APPOINTMENT_PENDING",
+        "HUMAN_REVIEW_CREATED",
+        "POLICY_REVIEW_REQUIRED",
+    }
+    for manifest in (structured, grounded):
+        assert manifest.status is HoldoutStatus.SEALED
+        assert manifest.live_call_count == 0
+        assert manifest.first_live_call_at is None
+        assert manifest.approved_at is None
+        assert manifest.approved_by is None
+        assert manifest.identity.code_commit == ("990bbfcbf0c03e40c4b339be71b959a0065a30ba")
+    assert packet == create_pending_approval_packet(
+        structured,
+        grounded,
+        generated_at=packet.generated_at,
+    )
+    assert packet.status == "PENDING_APPROVAL"
+    assert packet.decision is None
+    assert packet.approver is None
+
+
+def test_revised_manifest_hashes_bind_new_scorers_and_gates() -> None:
+    structured = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "resident_interpretation_holdout_v2_1.manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    grounded = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "grounded_response_holdout_v1_1.manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert structured.identity.scorer_version.endswith("@1.1.0")
+    assert structured.identity.scorer_sha256 == sha256_file(ASSETS / "structured_scorer_v1_1.json")
+    assert structured.identity.gate_version.endswith("@1.1.0")
+    assert structured.identity.gate_sha256 == sha256_file(ASSETS / "structured_gate_v1_1.json")
+    assert grounded.identity.scorer_version.endswith("@1.1.0")
+    assert grounded.identity.scorer_sha256 == sha256_file(ASSETS / "grounded_scorer_v1_1.json")
+    assert grounded.identity.gate_version.endswith("@1.1.0")
+    assert grounded.identity.gate_sha256 == sha256_file(ASSETS / "grounded_gate_v1_1.json")
+
+
+def test_revised_preparation_report_records_no_live_or_online_calls() -> None:
+    summary = json.loads(
+        (ASSETS / "reports" / "preparation_summary.revised.json").read_text(encoding="utf-8")
+    )
+    duplicate_report = json.loads(
+        (ASSETS / "reports" / "duplicate_scan.revised.json").read_text(encoding="utf-8")
+    )
+
+    assert summary["status"] == ("REVISED_PACKAGES_PREPARED_PENDING_INDEPENDENT_REVIEW")
+    assert summary["review_issue_count"] == 85
+    assert summary["resolved_issue_count"] == 85
+    assert summary["structured_automated_check_count"] == 180
+    assert summary["grounded_automated_check_count"] == 60
+    assert summary["manifest_status"] == "SEALED"
+    assert summary["approval_status"] == "PENDING_APPROVAL"
+    assert summary["live_call_count"] == 0
+    assert summary["online_call_count"] == 0
+    assert summary["independent_review_status"] == "NOT_STARTED"
+    for suite in ("structured", "grounded"):
+        assert not duplicate_report[suite]["duplicate_case_ids"]
+        assert not duplicate_report[suite]["internal_duplicate_case_ids"]
+        assert not duplicate_report[suite]["near_duplicates"]
+
+
+def test_original_manifest_content_identities_remain_frozen() -> None:
+    structured = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "resident_interpretation_holdout_v2.manifest.json").read_text(encoding="utf-8")
+    )
+    grounded = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "grounded_response_holdout_v1.manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert structured.dataset_sha256 == (
+        "ea7f4efdc5994e1c11444999c4171306caea98c431b41df08991acbc592a8c07"
+    )
+    assert structured.golden_sha256 == (
+        "cf93a02c8013ab66d061ff56de5003a5bba8d0f93c69b244284f5a822b789822"
+    )
+    assert grounded.dataset_sha256 == (
+        "a11949a6db8168398d6c7eb06882eed59da32b3e09a9b4d5ec8121527008c146"
+    )
+    assert grounded.golden_sha256 == (
+        "9fb6104833c473ef727a866ddbaf6cee3a75e9b2dfcd2cb58eda8a86c9037a83"
+    )

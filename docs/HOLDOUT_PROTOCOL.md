@@ -2,12 +2,14 @@
 
 ## Current state
 
-Commercial-hardening phase 1D-A prepares two previously unseen synthetic
-qualification suites. It performs no Provider call and grants no approval:
+Commercial-hardening phase 1D-B prepares revised synthetic qualification
+suites after phase 1D-A independent-assisted review returned
+`REVIEW_FAILED_CHANGES_REQUIRED`. It performs no Provider call and grants no
+approval:
 
 ```text
-Structured manifest: SEALED
-Grounded manifest: SEALED
+Structured 2.1.0 manifest: SEALED
+Grounded 1.1.0 manifest: SEALED
 Golden review: REVIEW_PENDING
 Approval: PENDING_APPROVAL
 live_call_count: 0
@@ -15,7 +17,12 @@ Default Provider: scripted
 Online Provider: NOT_ACTIVATED
 ```
 
-`SEALED` means that data, Golden, scorer, gate, Prompt, schema,
+The original 2.0.0/1.0.0 manifests remain immutable `SEALED` evidence with an
+append-only `CHANGES_REQUIRED` disposition, zero live calls and no qualification
+execution. The executor rejects `CHANGES_REQUIRED`, `SUPERSEDED` and `REJECTED`
+versions before network dispatch.
+
+`SEALED` means that revised data, Golden, scorer, gate, Prompt, schema,
 normalization, router and runtime code identities are immutable. It does not
 mean that the candidate passed the Holdout.
 
@@ -33,8 +40,21 @@ F:\agent\fixflow-holdouts\
     dataset.jsonl
     golden.jsonl
     manifest.json
+  resident_interpretation_holdout_2.1.0\
+    dataset.jsonl
+    golden.jsonl
+    automated_checks.jsonl
+    manifest.json
+  grounded_response_holdout_1.1.0\
+    dataset.jsonl
+    golden.jsonl
+    automated_checks.jsonl
+    manifest.json
+  dispositions\
+    holdout_dispositions.jsonl
   approval\
     holdout_approval.pending.json
+    holdout_approval.revised.pending.json
 ```
 
 The root has protected Windows ACL inheritance. The observed allowed
@@ -52,7 +72,7 @@ Provider output or model-targeting detail.
 ### Structured Understanding
 
 ```text
-dataset: resident_interpretation_holdout@2.0.0
+dataset: resident_interpretation_holdout@2.1.0
 cases: 180
 single-turn: 120
 multi-turn: 60
@@ -67,17 +87,18 @@ recovery.
 ### Grounded Response
 
 ```text
-dataset: grounded_response_holdout@1.0.0
+dataset: grounded_response_holdout@1.1.0
 cases: 60
 categories: 15
 cases per category: 4
 ```
 
 The categories include ticket and appointment success/failure, information and
-slot interrupts, authorization denial, Policy insufficiency/conflict, Safety
-escalation, human-task success/failure, `UNKNOWN_COMMIT`, terminal outcomes and
-unsupported requests. The model may select presentation only. Server-owned
-outcome, required action and facts remain authoritative.
+slot interrupts, authorization denial, Policy review, Safety escalation,
+human-task success/failure, mutation reconciliation, unsupported requests, and
+separate ticket cancellation, ticket closure and appointment cancellation. The
+model may select presentation only. Server-owned outcome, required action and
+facts remain authoritative.
 
 ## Isolation scan
 
@@ -105,18 +126,22 @@ no private text.
 
 ## Golden review
 
-Automated round one validates:
+Automated revised-package checks validate:
 
 - Pydantic schema;
 - Dataset/Golden Case-ID equality and uniqueness;
 - conversation equality across the two private files;
-- evidence spans against the source conversation;
+- exact field/value/source/Turn/span/offset evidence bindings;
+- negated and stale evidence invalidation;
+- explicit `known_issue_fields` retention and correction;
 - category and single/multi-turn totals;
 - Missing Fields uniqueness;
 - fact/null exclusivity;
 - critical Safety consistency;
 - `REQUEST_HUMAN` priority;
-- Grounded outcome, action, allowlist and deterministic Safety-template rules.
+- Grounded outcome, action, required/forbidden information, allowlist,
+  identifier/schedule permissions, technical leakage, cross-entity status and
+  deterministic Safety-template rules.
 
 This is not an independent human review. A second reviewer has not signed the
 Golden, so both manifests retain
@@ -140,8 +165,8 @@ Golden SHA-256
 ```
 
 Any mismatch changes the manifest to `INVALIDATED`; an approval cannot be
-carried forward. The runtime identity is the committed qualification
-implementation `63b78e08ad97cab40314e1f3b34e1f6b8671e5ba`. Later
+carried forward. The runtime identity is the committed revised qualification
+implementation `990bbfcbf0c03e40c4b339be71b959a0065a30ba`. Later
 documentation-only commits do not alter that frozen runtime; the executor must
 run the frozen commit in a clean worktree.
 
@@ -197,12 +222,14 @@ and leave the Holdout consumed.
 
 ## Frozen scorer and gates
 
-Structured scoring adds evidence precision, unsupported-fact rate, correct
-abstention and authorization accuracy to the historical release measures.
-Grounded scoring deterministically checks outcome/action preservation,
-allowlisted facts, unsupported claims, fabricated identifiers/schedules,
-unauthorized promises, deterministic templates, technical leakage and Safety
-templates.
+Structured scorer `1.1.0` adds field-level evidence precision/recall,
+unsupported-field, mismatched-evidence, stale-evidence and negation-error
+metrics while retaining correct abstention and authorization accuracy.
+Grounded scorer `1.1.0` promotes required-information coverage and
+forbidden-information violations into aggregate metrics, then checks
+outcome/action preservation, allowlisted facts, unsupported claims, fabricated
+identifiers/schedules, unauthorized promises, template mapping, entity/status
+semantics, technical leakage and Safety templates.
 
 The historical `resident_interpretation_gate@1.0.0` and hash
 `7391042124ab2aec9eccd796b4493a4184e0722748f55528c5cb22e7aa1b134e`
@@ -210,14 +237,17 @@ remain unchanged. The structured gate inherits those thresholds and adds:
 
 ```text
 Authorization Boundary Accuracy = 100%
-Evidence Precision >= 99%
-Unsupported Fact Rate = 0%
+Field-level Evidence Precision >= 99%
+Field-level Evidence Recall >= 99%
+Unsupported Field Rate = 0%
+Mismatched / Stale / Negation Evidence Rate = 0%
 Correct Abstention Rate >= 99%
 Provider Exhausted Rate = 0%
 ```
 
-The Grounded gate requires 100% outcome/action/allowlist/template/Safety
-compliance and zero unsupported claims, fabricated IDs, fabricated schedules,
+The Grounded gate requires 100% required-information coverage,
+outcome/action/allowlist/template/status/Safety compliance and zero forbidden
+information, unsupported claims, fabricated IDs, fabricated schedules,
 unauthorized promises and technical leakage. These additions were fixed before
 any live call. They are pending independent approval and cannot be changed
 based on future Holdout results.

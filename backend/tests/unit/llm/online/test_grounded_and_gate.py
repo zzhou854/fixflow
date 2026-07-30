@@ -75,6 +75,37 @@ async def test_critical_business_result_bypasses_model_and_preserves_outcome() -
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("template_id", "expected_text", "forbidden_text"),
+    (
+        ("TICKET_CANCELLED", "本次报修已取消", "维修已经完成"),
+        ("TICKET_CLOSED", "本次报修已结束", "本次报修已取消"),
+        ("APPOINTMENT_CANCELLED", "本次上门预约已取消", "本次报修已取消"),
+    ),
+)
+async def test_cancellation_and_closure_templates_preserve_entity_semantics(
+    template_id: str,
+    expected_text: str,
+    forbidden_text: str,
+) -> None:
+    model = DraftProvider({})
+    result = await GroundedResponseProvider(
+        model,
+        model="deepseek-v4-flash",
+    ).compose(
+        GroundedResponseRequest(
+            template_id=template_id,
+            message_outcome="TERMINAL",
+        )
+    )
+
+    assert model.calls == 0
+    assert expected_text in result.text
+    assert forbidden_text not in result.text
+    assert result.used_model is False
+
+
+@pytest.mark.asyncio
 async def test_draft_can_only_select_server_owned_facts_and_tone() -> None:
     model = DraftProvider(
         {

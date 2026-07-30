@@ -192,13 +192,16 @@ development gates passed, but qualification remains `NOT_ACTIVATED`; no new
 Holdout, formal Shadow campaign, Canary, activation, or DeepSeek business
 traffic was performed.
 
-Commercial-hardening phase 1D-A prepares two new independent qualification
-Suites outside the Git worktree: 180 Structured Understanding cases and 60
-Grounded Response cases. Their data, Golden, scorer, gate, Prompt, Schema,
-normalization, router and runtime identities are sealed; duplicate and privacy
-checks pass. The Golden still requires independent human review and the
-approval packet is `PENDING_APPROVAL`. No Holdout call has occurred, so this is
-preparation evidence, not a passing qualification.
+Commercial-hardening phase 1D-A prepared two external qualification Suites,
+but independent assisted Golden review returned
+`REVIEW_FAILED_CHANGES_REQUIRED`. The original sealed assets, 85 review issues,
+and adverse disposition remain immutable evidence and were never used for an
+online call. Phase 1D-B fixes the scorer/gate defects and prepares revised
+`resident_interpretation_holdout@2.1.0` (180 cases) and
+`grounded_response_holdout@1.1.0` (60 cases). The revised packages are
+`SEALED`, their fresh approval is `PENDING_APPROVAL`, all live-call counters
+remain zero, and all 240 cases must be reviewed independently again. This is
+revision/preparation evidence—not a Holdout pass or model qualification.
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.
@@ -233,6 +236,7 @@ and never maintained manually.
 - [DeepSeek development regression evidence](docs/DEVELOPMENT_REGRESSION.md)
 - [Independent Holdout protocol](docs/HOLDOUT_PROTOCOL.md)
 - [Holdout approval packet](docs/HOLDOUT_APPROVAL_PACKET.md)
+- [Phase 1D-B Holdout revision report](docs/HOLDOUT_REVISION_1D_B.md)
 
 ## Week-1 delivery order
 

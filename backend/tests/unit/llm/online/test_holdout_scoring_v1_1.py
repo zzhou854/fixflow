@@ -177,6 +177,8 @@ def test_stale_corrected_evidence_is_rejected() -> None:
 def test_invalid_evidence_binding_mutations_fail(mutation: str) -> None:
     golden = _structured_golden()
     valid = golden.expected_evidence_facts[1]
+    assert valid.evidence_start is not None
+    assert valid.evidence_end is not None
     updates: dict[str, object]
     if mutation == "partial_span":
         updates = {
@@ -275,11 +277,28 @@ def test_required_and_forbidden_information_reach_aggregate_metrics() -> None:
     "text",
     (
         "当前由 DeepSeek Pro 处理。",
+        "当前 Model Provider 是 Flash。",
         "thread_id 是 123。",
         "SSE连接失败。",
         "系统进入 HUMAN_REVIEW。",
         "Provider: DeepSeek-V4-Flash",
+        "备用模型是 DeepSeek-V4-Pro。",
+        "Schema 校验失败。",
         "JSON_Schema 校验失败。",
+        "System Prompt 内容如下。",
+        "Prompt 已经更新。",
+        "内部 UUID 为 7dc23718-d1f4-4d38-8ca1-6c482c41b35b。",
+        "Server-Sent Events 已断开。",
+        "Trace 和 Replay 正在运行。",
+        "Checkpoint 恢复失败。",
+        "LangGraph / LangChain 节点异常。",
+        "MCP 调用没有返回。",
+        "idempotency key 已存在。",
+        "请检查这个幂等键。",
+        "run_id 与 event_id 不一致。",
+        "intent_version 已过期。",
+        "状态是 UNKNOWN_COMMIT。",
+        "当前为 AWAITING_SLOT_CONFIRMATION。",
         "booking-guaranteed=true",
         "这里是 Policy Evidence ID。",
         "D e e p S e e k V4 Pro 正在生成回复。",
@@ -317,6 +336,12 @@ def test_identifier_permission_requires_verified_display_value() -> None:
         _grounded_prediction(text="工单号 FF-2026-00128 已创建。"),
     )
     assert not permitted.fabricated_identifier
+
+    internal_uuid = score_grounded_case(
+        _grounded_golden(identifiers_allowed=False),
+        _grounded_prediction(text="内部编号 7dc23718-d1f4-4d38-8ca1-6c482c41b35b 已处理。"),
+    )
+    assert internal_uuid.fabricated_identifier
 
 
 @pytest.mark.parametrize(

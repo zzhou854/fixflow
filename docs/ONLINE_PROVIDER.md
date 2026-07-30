@@ -2,7 +2,7 @@
 
 ## Status
 
-Commercial-hardening phases 1B through 1D-A supply a candidate integration,
+Commercial-hardening phases 1B through 1D-B supply a candidate integration,
 development evidence and sealed qualification materials, not an activation:
 
 ```text
@@ -12,10 +12,11 @@ DeepSeek production traffic: false
 ```
 
 Historical qualification corpora are not reusable as new Holdouts. Phase 1D-A
-adds two newly authored, externally stored Suites whose manifests are
-`SEALED`, whose approval is `PENDING_APPROVAL`, and whose live-call count is
-zero. It runs no Holdout inference, formal Shadow campaign, Canary, or
-production activation.
+assets received a `CHANGES_REQUIRED` review disposition without any live call.
+Phase 1D-B adds revised, externally stored 2.1.0/1.1.0 Suites whose manifests
+are `SEALED`, whose fresh approval is `PENDING_APPROVAL`, and whose live-call
+count is zero. It runs no Holdout inference, formal Shadow campaign, Canary,
+or production activation.
 
 ## Capability split
 
@@ -111,7 +112,9 @@ not set that status automatically and does not establish Holdout, Shadow,
 Canary, or production qualification. New Holdout sealing tools and the
 no-reuse protocol are documented in `docs/HOLDOUT_PROTOCOL.md`.
 
-Phase 1D-A extends that protocol with independent approval, Golden review,
+Phase 1D-A introduced independent approval, Golden review,
 Prompt/Schema/scorer/gate/code binding, one-time concurrent execution locking,
-append-only aggregate results, and separate Structured/Grounded scorers. It
-prepares but does not execute or pass the Holdout.
+append-only aggregate results, and separate Structured/Grounded scorers.
+Phase 1D-B preserves its failed review evidence, adds adverse-disposition
+enforcement, revises field-level evidence and Grounded hard gates, and prepares
+a fresh all-240-case review packet. It does not execute or pass the Holdout.

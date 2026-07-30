@@ -22,8 +22,16 @@ def _structured_golden() -> StructuredGolden:
         case_id="structured-1",
         conversation_turns=(ConversationTurn(role="USER", content="厨房水管正在漏水。"),),
         expected_evidence_facts=(
-            EvidenceFact(field="issue_category", value="WATER_LEAK", evidence="漏水"),
-            EvidenceFact(field="issue_location", value="厨房", evidence="厨房"),
+            EvidenceFact(
+                field_name="issue_category",
+                normalized_value="WATER_LEAK",
+                evidence_span="漏水",
+            ),
+            EvidenceFact(
+                field_name="issue_location",
+                normalized_value="厨房",
+                evidence_span="厨房",
+            ),
         ),
         expected_null_fields=("explicit_property_reference",),
         expected_intent="NEW_REPAIR",
@@ -44,11 +52,15 @@ def test_structured_scorer_requires_evidence_and_correct_abstention() -> None:
         prediction=StructuredPrediction(
             evidence_facts=(
                 EvidenceFact(
-                    field="issue_category",
-                    value="WATER_LEAK",
-                    evidence="漏水",
+                    field_name="issue_category",
+                    normalized_value="WATER_LEAK",
+                    evidence_span="漏水",
                 ),
-                EvidenceFact(field="issue_location", value="厨房", evidence="厨房"),
+                EvidenceFact(
+                    field_name="issue_location",
+                    normalized_value="厨房",
+                    evidence_span="厨房",
+                ),
             ),
             null_fields=("explicit_property_reference",),
             intent="NEW_REPAIR",
@@ -74,9 +86,9 @@ def test_structured_scorer_exposes_unsupported_facts_and_missing_field_errors() 
         prediction=StructuredPrediction(
             evidence_facts=(
                 EvidenceFact(
-                    field="issue_category",
-                    value="ELECTRICAL",
-                    evidence="电火花",
+                    field_name="issue_category",
+                    normalized_value="ELECTRICAL",
+                    evidence_span="电火花",
                 ),
             ),
             intent="NEW_REPAIR",
