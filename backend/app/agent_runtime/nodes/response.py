@@ -14,6 +14,7 @@ from app.agent_runtime.runtime_state import (
     RuntimeGraphState,
     append_message,
     dump_state,
+    finish_with_assistant_message,
     load_state,
 )
 from app.domain.enums import WorkflowStage
@@ -92,13 +93,13 @@ async def finish_safety(graph_state: RuntimeGraphState) -> RuntimeGraphState:
     # does not call escalate_to_operator: a trustworthy active ticket may not
     # exist, and Task 8 has no rule that auto-escalates it.
     return dump_state(
-        state.model_copy(
-            update={
+        finish_with_assistant_message(
+            state,
+            message="检测到安全风险，需要紧急人工处理；尚未自动变更工单或预约。",
+            updates={
                 "workflow_stage": WorkflowStage.EMERGENCY_REVIEW,
-                "last_assistant_message": (
-                    "检测到安全风险，需要紧急人工处理；尚未自动变更工单或预约。"
-                ),
-            }
+                "escalation_reason": "SAFETY_REVIEW_REQUIRED",
+            },
         )
     )
 
@@ -106,12 +107,13 @@ async def finish_safety(graph_state: RuntimeGraphState) -> RuntimeGraphState:
 async def finish_policy_review(graph_state: RuntimeGraphState) -> RuntimeGraphState:
     state = load_state(graph_state)
     return dump_state(
-        state.model_copy(
-            update={
+        finish_with_assistant_message(
+            state,
+            message="政策证据不足或存在冲突，需要人工复核；尚未创建工单。",
+            updates={
                 "workflow_stage": WorkflowStage.HUMAN_REVIEW,
-                "last_assistant_message": "政策证据不足或存在冲突，需要人工复核；尚未创建工单。",
                 "escalation_reason": "POLICY_REVIEW_REQUIRED",
-            }
+            },
         )
     )
 
@@ -122,20 +124,15 @@ async def finish_manual_request(graph_state: RuntimeGraphState) -> RuntimeGraphS
     state = load_state(graph_state)
     message = "该请求需要物业工作人员人工处理。"
     return dump_state(
-        append_message(
-            state.model_copy(
-                update={
-                    "workflow_stage": WorkflowStage.HUMAN_REVIEW,
-                    "last_assistant_message": message,
-                    "escalation_reason": "RESIDENT_MANUAL_REQUEST",
-                    "pending_action": PendingAction.NONE,
-                    "pending_operation": None,
-                }
-            ),
-            role=LLMRole.ASSISTANT,
-            content=message,
-            turn_id=state.trace_id,
-            created_at=datetime.now(UTC),
+        finish_with_assistant_message(
+            state,
+            message=message,
+            updates={
+                "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                "escalation_reason": "RESIDENT_MANUAL_REQUEST",
+                "pending_action": PendingAction.NONE,
+                "pending_operation": None,
+            },
         )
     )
 
@@ -143,11 +140,12 @@ async def finish_manual_request(graph_state: RuntimeGraphState) -> RuntimeGraphS
 async def finish_unsupported(graph_state: RuntimeGraphState) -> RuntimeGraphState:
     state = load_state(graph_state)
     return dump_state(
-        state.model_copy(
-            update={
+        finish_with_assistant_message(
+            state,
+            message="该操作当前不能自动执行，已转为人工处理。",
+            updates={
                 "workflow_stage": WorkflowStage.HUMAN_REVIEW,
-                "last_assistant_message": "该操作当前不能自动执行，已转为人工处理。",
                 "escalation_reason": "UNSUPPORTED_AUTOMATION",
-            }
+            },
         )
     )

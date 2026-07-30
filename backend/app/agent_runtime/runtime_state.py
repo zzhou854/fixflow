@@ -1,6 +1,6 @@
 """Small JSON-state helpers shared by deterministic LangGraph nodes."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TypedDict
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -59,3 +59,31 @@ def append_message(
         ),
     )[-100:]
     return state.model_copy(update={"conversation_messages": messages})
+
+
+def finish_with_assistant_message(
+    state: AgentState,
+    *,
+    message: str,
+    updates: dict[str, object] | None = None,
+) -> AgentState:
+    """Set and append one terminal assistant result using the same text.
+
+    Every deterministic terminal path goes through this helper so the public
+    result and the checkpointed conversation cannot drift apart.  The
+    deterministic message ID keeps graph retries idempotent.
+    """
+
+    next_state = state.model_copy(
+        update={
+            **(updates or {}),
+            "last_assistant_message": message,
+        }
+    )
+    return append_message(
+        next_state,
+        role=LLMRole.ASSISTANT,
+        content=message,
+        turn_id=state.trace_id,
+        created_at=datetime.now(UTC),
+    )
