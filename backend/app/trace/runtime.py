@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.application.agent_reliability_models import MessageOutcome, RequiredUserAction
 from app.infrastructure.database.models.observability import (
     AgentRun,
     AgentRunStatus,
@@ -195,6 +196,16 @@ class TraceRuntime:
             run.terminal_event_type = event_type
             run.final_intent_version = final_intent_version
             run.error_code = error_code
+            run.message_outcome = (
+                MessageOutcome.FAILED
+                if status in {AgentRunStatus.FAILED, AgentRunStatus.FAILED_SAFE}
+                else MessageOutcome.COMPLETED
+            )
+            run.required_user_action = (
+                RequiredUserAction.RETRY
+                if status in {AgentRunStatus.FAILED, AgentRunStatus.FAILED_SAFE}
+                else RequiredUserAction.NONE
+            )
             await session.flush()
             return AgentRunRecord.model_validate(run)
 

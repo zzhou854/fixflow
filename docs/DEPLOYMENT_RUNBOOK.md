@@ -51,7 +51,7 @@ docker compose run --rm migrate alembic current
 docker compose run --rm migrate alembic check
 ```
 
-Expected business head: `20260723_0006`. Do not start the API against an older
+Expected business head: `20260730_0007`. Do not start the API against an older
 or newer unreviewed Schema.
 
 For the local demonstration only:

@@ -1,5 +1,11 @@
 """Import all SQLAlchemy mappings so Base.metadata is complete."""
 
+from app.infrastructure.database.models.agent_control import (
+    AgentMessageRow,
+    AgentThreadRecordRow,
+    HumanReviewCaseEventRow,
+    HumanReviewCaseRow,
+)
 from app.infrastructure.database.models.appointment import (
     Appointment,
     AppointmentStatusHistory,
@@ -37,6 +43,7 @@ from app.infrastructure.database.models.worker import Worker, WorkerAvailability
 __all__ = [
     "Appointment",
     "AppointmentStatusHistory",
+    "AgentMessageRow",
     "AgentRun",
     "AgentRunStatus",
     "AgentRunTrigger",
@@ -44,8 +51,11 @@ __all__ = [
     "AgentReplayExecution",
     "AgentReplayStep",
     "AgentTraceEvent",
+    "AgentThreadRecordRow",
     "IdempotencyExecutionStatus",
     "IdempotencyRecord",
+    "HumanReviewCaseEventRow",
+    "HumanReviewCaseRow",
     "OutboxEvent",
     "OutboxStatus",
     "OperationReconciliationCase",

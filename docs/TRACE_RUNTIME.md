@@ -41,6 +41,13 @@ same-key/different-payload rejection may similarly write runless
 Failure to atomically start the initial Run/event removes the transient API
 reservation, so the same key can safely retry.
 
+Revision 0007 keeps the technical lifecycle terminal and adds a distinct public
+message terminal: exactly one of `message.completed`, `message.failed`, or
+`message.escalated`. Both terminal families are unique per Run. The public
+terminal is written with durable messages, the run outcome, and any
+human-review case before HTTP/SSE delivery; it is not invented later by the
+browser.
+
 ## Sanitization
 
 Persistence accepts a closed Pydantic `TracePayload`, not an arbitrary

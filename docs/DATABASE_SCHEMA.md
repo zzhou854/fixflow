@@ -175,3 +175,21 @@ Task 13 adds no business table and no migration. Prompt assets remain
 Git-managed files; provider metadata uses the existing closed Trace and Replay
 projections rather than a prompt or LLM-response table.
 tables.
+
+Revision `20260730_0007` adds the commercial-hardening control records without
+modifying revisions 0001-0006:
+
+- `agent_thread_records`: resident ownership, optional verified property,
+  activity ordering, optimistic version, and recoverable archive state;
+- `agent_messages`: immutable per-thread user/assistant messages linked to one
+  Agent Run with unique message and sequence identities;
+- `human_review_cases`: typed pre-ticket/operator work items with active-case
+  deduplication;
+- `human_review_case_events`: immutable optimistic transition history.
+
+It also adds nullable `message_outcome` and non-null
+`required_user_action` to `agent_runs`, backfills old terminal runs, and adds a
+partial unique public-terminal Trace index. All new enums remain
+`VARCHAR + named CHECK`; timestamps are timezone-aware and foreign keys use
+`ON DELETE RESTRICT`. Historical thread backfill accepts only one unambiguous
+resident and at most one non-null property per thread.

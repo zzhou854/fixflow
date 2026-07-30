@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.application.agent_reliability_models import MessageOutcome, RequiredUserAction
 from app.infrastructure.database.models.observability import (
     AgentRunStatus,
     AgentRunTrigger,
@@ -102,6 +103,8 @@ class AgentRunRecord(BaseModel):
     finished_at: datetime | None
     terminal_event_type: str | None
     error_code: str | None
+    message_outcome: MessageOutcome | None = None
+    required_user_action: RequiredUserAction = RequiredUserAction.NONE
 
 
 class ResidentThreadRecord(BaseModel):

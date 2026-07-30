@@ -10,7 +10,7 @@ async def test_migration_readiness_accepts_current_and_rejects_stale_database(
 ) -> None:
     engine = create_async_engine(migrated_database_url)
     expected = expected_migration_head()
-    assert expected == "20260723_0006"
+    assert expected == "20260730_0007"
     try:
         await verify_database_migration_head(engine)
         async with engine.begin() as connection:

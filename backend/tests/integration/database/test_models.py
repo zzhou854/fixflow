@@ -37,6 +37,10 @@ def test_metadata_contains_exact_core_tables() -> None:
         "agent_replay_bundles",
         "agent_replay_steps",
         "agent_replay_executions",
+        "agent_thread_records",
+        "agent_messages",
+        "human_review_cases",
+        "human_review_case_events",
     }
 
 

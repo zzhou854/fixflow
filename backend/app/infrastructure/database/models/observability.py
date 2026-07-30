@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.application.agent_reliability_models import MessageOutcome, RequiredUserAction
 from app.infrastructure.database.base import Base
 from app.infrastructure.database.models.common import string_enum
 
@@ -76,6 +77,11 @@ class AgentRun(Base):
             "(status = 'FAILED' AND terminal_event_type = 'run_failed')",
             name="terminal_event_matches_status",
         ),
+        CheckConstraint(
+            "(status = 'RUNNING' AND message_outcome IS NULL) OR "
+            "(status <> 'RUNNING' AND message_outcome IS NOT NULL)",
+            name="message_outcome_matches_status",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -98,6 +104,15 @@ class AgentRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     terminal_event_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    message_outcome: Mapped[MessageOutcome | None] = mapped_column(
+        string_enum(MessageOutcome, name="agent_run_message_outcome_values"),
+        nullable=True,
+    )
+    required_user_action: Mapped[RequiredUserAction] = mapped_column(
+        string_enum(RequiredUserAction, name="agent_run_required_user_action_values"),
+        nullable=False,
+        default=RequiredUserAction.NONE,
+    )
 
 
 class AgentTraceEvent(Base):
@@ -111,6 +126,14 @@ class AgentTraceEvent(Base):
             unique=True,
             postgresql_where=text(
                 "event_type IN ('run_interrupted','run_completed','run_failed_safe','run_failed')"
+            ),
+        ),
+        Index(
+            "uq_agent_trace_events_message_terminal_per_run",
+            "run_id",
+            unique=True,
+            postgresql_where=text(
+                "event_type IN ('message.completed','message.failed','message.escalated')"
             ),
         ),
         CheckConstraint(
