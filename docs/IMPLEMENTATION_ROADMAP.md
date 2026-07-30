@@ -159,6 +159,16 @@ Implemented for commercial-hardening phase 1A:
   reconciliation without mutation replay
 - Scripted-provider coverage for all three frozen repair categories; no online
   provider activation
+
+Implemented for commercial-hardening phase 2:
+
+- fixed-height resident shell with independently scrolling recent sessions and
+  chat history plus a bottom-anchored composer
+- recent-five conversation rail and searchable all-conversation drawer
+- recoverable archive/restore controls with explicit non-deletion semantics
+- Chinese resident-facing business labels, deterministic progress feedback,
+  visible failed-request retry/handoff, and mobile drawer navigation
+- route-level lazy loading without a second UI framework or new dependency
 ```
 
 Acceptance requires a complete ticket and appointment path without an LLM,

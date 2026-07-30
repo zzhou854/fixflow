@@ -39,11 +39,23 @@ used; no `dangerouslySetInnerHTML` rendering exists.
 
 ## Conversation delivery
 
-The resident API returns the five most recently active conversations by
-default. Archive and restore are recoverable operations: they never delete
-Checkpoint, Trace, Replay, ticket, appointment, or audit facts. The current UI
-client and types understand these contracts; the recent-five drawer and
-commercial archive controls remain part of the resident UI phase.
+The resident page is a fixed-height application shell. Its recent-conversation
+rail and message region scroll independently, while the composer remains
+anchored at the bottom of the chat region. The rail shows at most the five most
+recently active conversations. “全部会话” opens a searchable drawer with
+active/archived filters and recoverable archive/restore controls. Archive never
+deletes Checkpoint, Trace, Replay, ticket, appointment, or audit facts. When a
+thread is linked to a ticket the action is explicitly labelled “归档会话”; for
+an unlinked thread “移除会话” still opens a confirmation explaining that the
+operation is recoverable archive rather than permanent deletion.
+
+Resident-visible workflow, ticket, severity, and missing-field labels are
+Chinese business language. Internal enum names, worker UUIDs, SSE terminology,
+and booking implementation flags are not rendered. In-progress calls show the
+current authoritative stage (understanding, policy check, ticket creation,
+slot lookup, result reconciliation, or human handoff). A failed request keeps
+its HTTP result boundary visible and offers retry or property-staff assistance;
+SSE remains a notification channel rather than the source of truth.
 
 The public SSE terminal events are `message.completed`, `message.failed`, and
 `message.escalated`. HTTP and the refreshed Thread State remain authoritative;
@@ -71,10 +83,11 @@ Vitest and React Testing Library cover login, safe errors, resident messages,
 every interrupt control, ticket summary, role routing, and operator listing. A
 heavy browser E2E framework is intentionally not introduced in Task 9.
 
-The current Ant Design production chunk is about 1.06 MB before gzip. It is a
-non-blocking first-release optimisation item; no second UI framework or complex
-bundler plugin is introduced. API, MCP, and frontend still start as documented
-separate processes, so one-command Compose delivery remains partial.
+Resident, operator, and login routes are loaded independently with
+`React.lazy`, avoiding one synchronous page entry. Ant Design remains the only
+UI framework; no complex bundler plugin is introduced. API, MCP, and frontend
+still start as documented separate processes, so one-command Compose delivery
+remains partial.
 
 Task 11 adds resident reconciliation states and the operator “失败对账” panel.
 Pending/processing disables mutation-producing controls and asks the resident not

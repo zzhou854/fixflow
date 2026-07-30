@@ -65,6 +65,9 @@ research track:
   pre-ticket human-review queue;
 - an idempotent Argon2-backed development seed;
 - a React/TypeScript/Ant Design resident chat and operator workbench;
+- a fixed-height, responsive resident workspace with recent-five conversation
+  navigation, recoverable archive/restore, Chinese business-language statuses,
+  and explicit progress/retry/handoff feedback;
 - real API-to-Agent-to-MCP-to-PostgreSQL vertical and cross-resident tests;
 - a same-transaction domain Outbox with stable event identities;
 - a leased at-least-once Dispatcher, retry/backoff, and dead-letter state;
