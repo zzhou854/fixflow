@@ -1,0 +1,32 @@
+{
+  "grounded": {
+    "candidate_case_count": 60,
+    "duplicate_case_ids": [],
+    "exact_text_duplicate_case_ids": [],
+    "internal_duplicate_case_ids": [],
+    "joined_turn_duplicate_case_ids": [],
+    "known_fingerprint_duplicate_case_ids": [],
+    "near_duplicate_algorithm": "unicode-nfkc-punctuationless-sequence-matcher",
+    "near_duplicate_algorithm_version": "1.0.0",
+    "near_duplicate_threshold": 0.88,
+    "near_duplicates": [],
+    "normalized_text_duplicate_case_ids": [],
+    "punctuationless_duplicate_case_ids": [],
+    "reference_unit_count": 24203
+  },
+  "structured": {
+    "candidate_case_count": 180,
+    "duplicate_case_ids": [],
+    "exact_text_duplicate_case_ids": [],
+    "internal_duplicate_case_ids": [],
+    "joined_turn_duplicate_case_ids": [],
+    "known_fingerprint_duplicate_case_ids": [],
+    "near_duplicate_algorithm": "unicode-nfkc-punctuationless-sequence-matcher",
+    "near_duplicate_algorithm_version": "1.0.0",
+    "near_duplicate_threshold": 0.88,
+    "near_duplicates": [],
+    "normalized_text_duplicate_case_ids": [],
+    "punctuationless_duplicate_case_ids": [],
+    "reference_unit_count": 24083
+  }
+}
