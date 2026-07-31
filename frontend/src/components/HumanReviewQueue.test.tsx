@@ -62,6 +62,7 @@ test('renders a prioritized pre-ticket review without fabricating a ticket', asy
   expect(screen.getByText('紧急')).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: /查看/ }))
   expect(await screen.findByText('尚未创建工单')).toBeInTheDocument()
+  expect(screen.getByText('存在需要物业核实的安全风险')).toBeInTheDocument()
   expect(screen.getByText(/系统不会为可见性伪造工单/)).toBeInTheDocument()
   expect(screen.getByText('技术审计')).toBeInTheDocument()
 })

@@ -54,6 +54,19 @@ const STAGE_LABELS: Record<string, string> = {
   UNSUPPORTED_REQUEST: '当前请求暂不支持自动处理',
 }
 
+const REASON_LABELS: Record<string, string> = {
+  RESIDENT_MANUAL_REQUEST: '住户主动申请物业协助',
+  SAFETY_REVIEW_REQUIRED: '存在需要物业核实的安全风险',
+  UNSUPPORTED_AUTOMATION: '当前事项暂不支持自动办理',
+  PROPERTY_CONTEXT_REQUIRED: '需要核实住户与房屋关系',
+  POLICY_EVIDENCE_INSUFFICIENT: '现有服务依据不足，需要人工判断',
+  POLICY_CONFLICT: '服务依据存在冲突，需要人工判断',
+}
+
+function reasonLabel(code: string): string {
+  return REASON_LABELS[code] ?? '需要物业工作人员进一步核实'
+}
+
 function safeError(reason: unknown): string {
   return reason instanceof ApiError ? reason.body.message : '人工处理队列暂时不可用。'
 }
@@ -280,7 +293,9 @@ export function HumanReviewQueue({ token }: { token: string }) {
                 <Descriptions.Item label="需要人工的环节">
                   {STAGE_LABELS[selected.failure_stage] ?? '需要人工核实'}
                 </Descriptions.Item>
-                <Descriptions.Item label="业务原因">{selected.reason_code}</Descriptions.Item>
+                <Descriptions.Item label="业务原因">
+                  {reasonLabel(selected.reason_code)}
+                </Descriptions.Item>
                 <Descriptions.Item label="关联工单">
                   {selected.ticket_id ?? '尚未创建工单'}
                 </Descriptions.Item>
@@ -340,6 +355,7 @@ export function HumanReviewQueue({ token }: { token: string }) {
                   <Descriptions.Item label="任务 ID">{selected.case_id}</Descriptions.Item>
                   <Descriptions.Item label="会话 ID">{selected.thread_id}</Descriptions.Item>
                   <Descriptions.Item label="失败阶段">{selected.failure_stage}</Descriptions.Item>
+                  <Descriptions.Item label="原因代码">{selected.reason_code}</Descriptions.Item>
                   <Descriptions.Item label="最近错误">{selected.last_error_code ?? '无'}</Descriptions.Item>
                   <Descriptions.Item label="版本">{selected.version}</Descriptions.Item>
                 </Descriptions>
