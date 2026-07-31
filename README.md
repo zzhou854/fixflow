@@ -242,6 +242,7 @@ and never maintained manually.
 - [Independent Holdout protocol](docs/HOLDOUT_PROTOCOL.md)
 - [Holdout approval packet](docs/HOLDOUT_APPROVAL_PACKET.md)
 - [Phase 1D-B Holdout revision report](docs/HOLDOUT_REVISION_1D_B.md)
+- [Commercial hardening acceptance](docs/COMMERCIAL_HARDENING_ACCEPTANCE.md)
 
 ## Week-1 delivery order
 
