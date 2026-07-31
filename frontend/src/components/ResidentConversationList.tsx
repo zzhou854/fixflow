@@ -17,6 +17,7 @@ interface Props {
   recentThreads: ResidentThreadSummary[]
   allThreads: ResidentThreadSummary[]
   allThreadsLoading: boolean
+  archiveFilter: ArchiveFilter
   drawerOpen: boolean
   renderDrawer?: boolean
   onDrawerOpen: () => void
@@ -53,6 +54,8 @@ function ThreadButton({
 
 export function ResidentConversationList(props: Props) {
   const [query, setQuery] = useState('')
+  const [archiveCandidate, setArchiveCandidate] = useState<ResidentThreadSummary | null>(null)
+  const [archiveBusy, setArchiveBusy] = useState(false)
   const visible = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase()
     if (!keyword) return props.allThreads
@@ -62,16 +65,18 @@ export function ResidentConversationList(props: Props) {
   }, [props.allThreads, query])
 
   function confirmArchive(item: ResidentThreadSummary) {
-    const hasTicket = Boolean(item.active_ticket_id)
-    Modal.confirm({
-      title: hasTicket ? '归档这段会话？' : '移除这段会话？',
-      content: hasTicket
-        ? '会话将从最近列表隐藏，但不会取消已有工单、预约或删除审计记录，之后仍可恢复。'
-        : '这不是永久删除。会话会被安全归档，之后可在“全部会话”中恢复。',
-      okText: hasTicket ? '归档会话' : '确认移除',
-      cancelText: '暂不处理',
-      onOk: () => props.onArchive(item),
-    })
+    setArchiveCandidate(item)
+  }
+
+  async function archiveSelected() {
+    if (!archiveCandidate) return
+    setArchiveBusy(true)
+    try {
+      await props.onArchive(archiveCandidate)
+      setArchiveCandidate(null)
+    } finally {
+      setArchiveBusy(false)
+    }
   }
 
   return (
@@ -111,6 +116,7 @@ export function ResidentConversationList(props: Props) {
           </Typography.Text>
           <Segmented
             block
+            value={props.archiveFilter}
             options={[
               { label: '进行中', value: 'active' },
               { label: '已归档', value: 'archived' },
@@ -166,6 +172,21 @@ export function ResidentConversationList(props: Props) {
           />
         </Space>
       </Drawer>}
+      <Modal
+        title={archiveCandidate?.active_ticket_id ? '归档这段会话？' : '移除这段会话？'}
+        open={archiveCandidate !== null}
+        okText={archiveCandidate?.active_ticket_id ? '归档会话' : '确认移除'}
+        cancelText="暂不处理"
+        confirmLoading={archiveBusy}
+        onOk={() => void archiveSelected()}
+        onCancel={() => setArchiveCandidate(null)}
+      >
+        <Typography.Paragraph>
+          {archiveCandidate?.active_ticket_id
+            ? '会话将从最近列表隐藏，但不会取消已有工单、预约或删除审计记录，之后仍可恢复。'
+            : '这不是永久删除。会话会被安全归档，之后可在“全部会话”中恢复。'}
+        </Typography.Paragraph>
+      </Modal>
     </>
   )
 }

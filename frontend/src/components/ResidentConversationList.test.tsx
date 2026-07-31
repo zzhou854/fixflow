@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Modal } from 'antd'
 import { vi } from 'vitest'
 import type { ResidentThreadSummary } from '../types'
 import { ResidentConversationList } from './ResidentConversationList'
@@ -24,6 +23,7 @@ function thread(index: number, archived = false): ResidentThreadSummary {
 const baseProps = {
   currentThreadId: undefined,
   allThreadsLoading: false,
+  archiveFilter: 'active' as const,
   drawerOpen: false,
   onDrawerOpen: vi.fn(),
   onDrawerClose: vi.fn(),
@@ -72,15 +72,9 @@ test('explains archive semantics and restores an archived session', async () => 
       drawerOpen={true}
     />,
   )
-  const confirm = vi.spyOn(Modal, 'confirm').mockReturnValue({
-    destroy: vi.fn(),
-    update: vi.fn(),
-  })
   await userEvent.click(screen.getByRole('button', { name: /归档会话/ }))
-  expect(confirm).toHaveBeenCalledWith(
-    expect.objectContaining({
-      title: '归档这段会话？',
-      content: expect.stringMatching(/不会取消已有工单、预约或删除审计记录/),
-    }),
-  )
+  expect(screen.getByText('归档这段会话？')).toBeInTheDocument()
+  expect(screen.getByText(/不会取消已有工单、预约或删除审计记录/)).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /^归档会话$/ }))
+  expect(baseProps.onArchive).toHaveBeenCalledWith(activeWithTicket)
 })

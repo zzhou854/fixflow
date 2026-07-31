@@ -61,6 +61,7 @@ export function ResidentPage() {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [allLoading, setAllLoading] = useState(false)
+  const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived' | 'all'>('active')
   const [conversationDrawerOpen, setConversationDrawerOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [failedAction, setFailedAction] = useState<FailedAction | null>(null)
@@ -80,7 +81,7 @@ export function ResidentPage() {
   }, [token])
 
   const loadAllThreads = useCallback(
-    async (archiveStatus: 'active' | 'archived' | 'all' = 'all') => {
+    async (archiveStatus: 'active' | 'archived' | 'all' = archiveFilter) => {
       if (!token) return
       setAllLoading(true)
       try {
@@ -92,7 +93,7 @@ export function ResidentPage() {
         setAllLoading(false)
       }
     },
-    [token],
+    [archiveFilter, token],
   )
 
   const reconcile = useCallback(
@@ -216,7 +217,7 @@ export function ResidentPage() {
         setThread(null)
         setMessages([])
       }
-      await Promise.all([refreshThreads(), loadAllThreads('all')])
+      await Promise.all([refreshThreads(), loadAllThreads(archiveFilter)])
       toast.success('会话已归档，之后可以随时恢复。')
     } catch (reason) {
       toast.error(friendlyError(reason))
@@ -227,7 +228,7 @@ export function ResidentPage() {
     if (!token) return
     try {
       await api.restoreThread(token, item.thread_id, item.version)
-      await Promise.all([refreshThreads(), loadAllThreads('all')])
+      await Promise.all([refreshThreads(), loadAllThreads(archiveFilter)])
       toast.success('会话已恢复到最近列表。')
     } catch (reason) {
       toast.error(friendlyError(reason))
@@ -269,14 +270,18 @@ export function ResidentPage() {
           recentThreads={threads}
           allThreads={allThreads}
           allThreadsLoading={allLoading}
+          archiveFilter={archiveFilter}
           drawerOpen={conversationDrawerOpen}
           renderDrawer={renderConversationDrawer}
           onDrawerOpen={() => {
             setConversationDrawerOpen(true)
-            void loadAllThreads('all')
+            void loadAllThreads(archiveFilter)
           }}
           onDrawerClose={() => setConversationDrawerOpen(false)}
-          onFilterChange={(filter) => void loadAllThreads(filter)}
+          onFilterChange={(filter) => {
+            setArchiveFilter(filter)
+            void loadAllThreads(filter)
+          }}
           onSelect={selectThread}
           onArchive={archiveThread}
           onRestore={restoreThread}

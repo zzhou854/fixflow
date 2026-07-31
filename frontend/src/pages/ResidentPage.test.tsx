@@ -56,10 +56,10 @@ test('keeps previous sessions visible after starting a new session', async () =>
   expect(screen.getByText('漏水报修 · 厨房')).toBeInTheDocument()
 })
 
-test('keeps the all-conversation request within the API page limit', async () => {
+test('opens the conversation drawer with the active filter and API page limit', async () => {
   render(<ResidentPage />)
   await userEvent.click(await screen.findByRole('button', { name: /查看全部会话/ }))
-  expect(api.residentThreads).toHaveBeenCalledWith('token', 'all', 50, 0)
+  expect(api.residentThreads).toHaveBeenCalledWith('token', 'active', 50, 0)
 })
 
 test('uses the resume endpoint when chatting during a need-information interrupt', async () => {
