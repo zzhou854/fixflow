@@ -56,6 +56,12 @@ test('keeps previous sessions visible after starting a new session', async () =>
   expect(screen.getByText('漏水报修 · 厨房')).toBeInTheDocument()
 })
 
+test('keeps the all-conversation request within the API page limit', async () => {
+  render(<ResidentPage />)
+  await userEvent.click(await screen.findByRole('button', { name: /查看全部会话/ }))
+  expect(api.residentThreads).toHaveBeenCalledWith('token', 'all', 50, 0)
+})
+
 test('uses the resume endpoint when chatting during a need-information interrupt', async () => {
   sessionStorage.setItem('fixflow.demo.thread_id', 'needs-info')
   vi.mocked(api.properties).mockResolvedValue([{ property_id: 'p', community_name: '星河花园', building_no: '3', unit_no: '2', room_no: '1201', address_text: '星河花园 1201' }])

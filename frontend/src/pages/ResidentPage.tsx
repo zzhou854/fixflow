@@ -84,7 +84,7 @@ export function ResidentPage() {
       if (!token) return
       setAllLoading(true)
       try {
-        const result = await api.residentThreads(token, archiveStatus, 100, 0)
+        const result = await api.residentThreads(token, archiveStatus, 50, 0)
         setAllThreads(result.items)
       } catch (reason) {
         toast.error(friendlyError(reason))
