@@ -228,7 +228,10 @@ class GroundedGolden(BaseModel):
     expected_required_user_action: str | None
     expected_template_id: str
     deterministic_template_required: bool
+    grounded_generation_allowed: bool = False
     safety_template_required: bool
+    expected_business_status: str | None = None
+    expected_display_action_text: str | None = None
     identifiers_allowed: bool = False
     schedules_allowed: bool = False
     promises_allowed: bool = False
@@ -272,6 +275,10 @@ class GroundedCaseScore(BaseModel):
     forbidden_information_total: int = Field(default=0, ge=0)
     template_mapping_correct: bool = True
     status_semantics_preserved: bool = True
+    allowed_fact_supported: int = Field(default=0, ge=0)
+    allowed_fact_total: int = Field(default=0, ge=0)
+    natural_response_completed: bool = True
+    semantic_template_compliant: bool = True
 
 
 class GroundedMetrics(BaseModel):
@@ -292,6 +299,9 @@ class GroundedMetrics(BaseModel):
     forbidden_information_violation_rate: float
     template_mapping_accuracy: float
     status_semantics_preservation_rate: float
+    allowed_fact_precision: float
+    natural_response_completion_rate: float
+    semantic_template_compliance: float
 
 
 _IDENTIFIER = re.compile(
@@ -650,14 +660,25 @@ def score_grounded_case(
     status_semantics_preserved = (
         template_mapping_correct and forbidden_absent and not unsupported_claim
     )
+    allowed_fact_ids = set(golden.allowed_fact_ids)
+    included_fact_ids = tuple(dict.fromkeys(prediction.included_fact_ids))
+    allowed_fact_supported = sum(item in allowed_fact_ids for item in included_fact_ids)
+    outcome_preserved = prediction.message_outcome == golden.expected_message_outcome
+    action_preserved = prediction.required_user_action == golden.expected_required_user_action
+    semantic_template_compliant = (
+        outcome_preserved
+        and action_preserved
+        and template_mapping_correct
+        and required_present
+        and forbidden_absent
+        and not unsupported_claim
+    )
     return GroundedCaseScore(
         case_id=golden.case_id,
         completed=prediction.completed,
-        outcome_preserved=prediction.message_outcome == golden.expected_message_outcome,
-        required_action_preserved=(
-            prediction.required_user_action == golden.expected_required_user_action
-        ),
-        allowed_fact_usage=set(prediction.included_fact_ids).issubset(golden.allowed_fact_ids),
+        outcome_preserved=outcome_preserved,
+        required_action_preserved=action_preserved,
+        allowed_fact_usage=set(included_fact_ids).issubset(allowed_fact_ids),
         unsupported_claim=unsupported_claim,
         fabricated_identifier=fabricated_identifier,
         fabricated_schedule=fabricated_schedule,
@@ -679,6 +700,12 @@ def score_grounded_case(
         forbidden_information_total=len(golden.forbidden_information),
         template_mapping_correct=template_mapping_correct,
         status_semantics_preserved=status_semantics_preserved,
+        allowed_fact_supported=allowed_fact_supported,
+        allowed_fact_total=len(included_fact_ids),
+        natural_response_completed=(
+            prediction.completed if golden.grounded_generation_allowed else True
+        ),
+        semantic_template_compliant=semantic_template_compliant,
     )
 
 
@@ -690,6 +717,8 @@ def aggregate_grounded(scores: Iterable[GroundedCaseScore]) -> GroundedMetrics:
     required_found = sum(item.required_information_found for item in items)
     forbidden_violations = sum(item.forbidden_information_violations for item in items)
     forbidden_total = sum(item.forbidden_information_total for item in items)
+    allowed_fact_supported = sum(item.allowed_fact_supported for item in items)
+    allowed_fact_total = sum(item.allowed_fact_total for item in items)
     return GroundedMetrics(
         completion_rate=_mean(item.completed for item in items),
         outcome_preservation_rate=_mean(item.outcome_preserved for item in items),
@@ -711,6 +740,9 @@ def aggregate_grounded(scores: Iterable[GroundedCaseScore]) -> GroundedMetrics:
         ),
         template_mapping_accuracy=_mean(item.template_mapping_correct for item in items),
         status_semantics_preservation_rate=_mean(item.status_semantics_preserved for item in items),
+        allowed_fact_precision=_ratio(allowed_fact_supported, allowed_fact_total),
+        natural_response_completion_rate=_mean(item.natural_response_completed for item in items),
+        semantic_template_compliance=_mean(item.semantic_template_compliant for item in items),
     )
 
 
