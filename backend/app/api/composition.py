@@ -1,10 +1,17 @@
 """Explicit lifecycle composition for the authenticated product API."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.agent.models import (
+    ComposeResponseInput,
+    ComposeResponseResult,
+    InterpretationNodeResult,
+    InterpretMessageInput,
+)
+from app.agent.nodes.compose_response import ComposeResponseNode
 from app.agent.nodes.interpret_message import InterpretMessageNode
 from app.agent.ports import LLMProvider
 from app.agent_runtime.composition import open_agent_orchestrator
@@ -32,8 +39,17 @@ from app.infrastructure.database.auth_repository import SqlAlchemyAuthUserReposi
 from app.infrastructure.database.uow import SqlAlchemyUnitOfWork
 from app.llm.hybrid.pipeline import HybridInterpretationNode
 from app.llm.hybrid.prompts import FactPromptRegistry
-from app.llm.online.factory import build_deepseek_online_candidate
+from app.llm.online.canary import (
+    AllowlistedComposeNode,
+    AllowlistedInterpretationNode,
+    OnlineGroundedComposeNode,
+)
+from app.llm.online.factory import (
+    build_deepseek_grounded_candidate,
+    build_deepseek_online_candidate,
+)
 from app.llm.online.gate import ProviderPurpose
+from app.llm.online.grounded import GroundedResponseProvider
 from app.llm.online.shadow import (
     ShadowingInterpretationNode,
     SqlAlchemyShadowEvidenceSink,
@@ -94,7 +110,12 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
         await stalled_runs.start()
         scripted_llm = DemoScriptedLLMProvider()
         interpretation_provider: LLMProvider = scripted_llm
-        interpretation_node = None
+        interpretation_node: (
+            Callable[[InterpretMessageInput], Awaitable[InterpretationNodeResult]] | None
+        ) = None
+        compose_node: Callable[[ComposeResponseInput], Awaitable[ComposeResponseResult]] | None = (
+            None
+        )
         if settings.llm_shadow_enabled:
             candidate = build_deepseek_online_candidate(
                 settings,
@@ -123,6 +144,53 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
                 prompt_version=prompt.prompt_version,
                 schema_version=prompt.schema_version,
             )
+        elif settings.online_canary_enabled:
+            limits = InterpretationInputLimits(
+                max_input_characters=settings.llm_max_input_characters,
+                max_context_messages=settings.llm_max_context_messages,
+                max_message_characters=settings.llm_max_message_characters,
+            )
+            allowed = settings.online_canary_user_id_set
+            scripted_interpret = InterpretMessageNode(
+                scripted_llm,
+                model="fixflow-demo-scripted-v1",
+                input_limits=limits,
+            )
+            if settings.online_structured_understanding_enabled:
+                structured_candidate = build_deepseek_online_candidate(
+                    settings,
+                    purpose=ProviderPurpose.DEVELOPMENT_CANARY,
+                )
+                interpretation_node = AllowlistedInterpretationNode(
+                    scripted=scripted_interpret,
+                    online=HybridInterpretationNode(
+                        structured_candidate,
+                        model="deepseek-v4-flash",
+                        input_limits=limits,
+                    ),
+                    allowed_user_ids=allowed,
+                    enabled=True,
+                )
+            if settings.online_grounded_response_enabled:
+                grounded_candidate = build_deepseek_grounded_candidate(
+                    settings,
+                    purpose=ProviderPurpose.DEVELOPMENT_CANARY,
+                )
+                compose_node = AllowlistedComposeNode(
+                    scripted=ComposeResponseNode(
+                        scripted_llm,
+                        model="fixflow-demo-scripted-v1",
+                    ),
+                    online=OnlineGroundedComposeNode(
+                        GroundedResponseProvider(
+                            grounded_candidate,
+                            model="deepseek-v4-flash",
+                        ),
+                        model="deepseek-v4-flash",
+                    ),
+                    allowed_user_ids=allowed,
+                    enabled=True,
+                )
         async with open_agent_orchestrator(
             settings,
             interpretation_provider=interpretation_provider,
@@ -130,6 +198,7 @@ async def open_api_services(settings: Settings) -> AsyncIterator[ApiServices]:
             embedding_provider=DemoDeterministicEmbeddingProvider(),
             language_model_name="fixflow-demo-scripted-v1",
             interpretation_node=interpretation_node,
+            compose_node=compose_node,
         ) as orchestrator:
             operator_review = OperatorThreadReviewService(orchestrator)
             operator_trace = OperatorTraceQueryService(operator_review, trace)

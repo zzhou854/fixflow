@@ -21,6 +21,7 @@ class ExecutionContext:
     trace_id: UUID
     trace: TraceRuntime | None
     replay_capture: ReplayCapturePort | None = None
+    user_id: UUID | None = None
 
 
 _CURRENT: ContextVar[ExecutionContext | None] = ContextVar(
@@ -39,6 +40,7 @@ def bind_execution_context(
     trace_id: UUID,
     trace: TraceRuntime | None,
     replay_capture: ReplayCapturePort | None = None,
+    user_id: UUID | None = None,
 ) -> Iterator[None]:
     token = _CURRENT.set(
         ExecutionContext(
@@ -47,6 +49,7 @@ def bind_execution_context(
             trace_id=trace_id,
             trace=trace,
             replay_capture=replay_capture,
+            user_id=user_id,
         )
     )
     try:

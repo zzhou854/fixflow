@@ -74,6 +74,14 @@ safe workflow/run status, assistant text, typed interrupt, refreshed business
 summaries, structured issue view, and policy status. Checkpoint blobs, raw MCP
 responses, hashes, SQL, and stacks are never returned.
 
+The public terminal message contract is deliberately small. `message_outcome`
+is one of `COMPLETED`, `FAILED`, or `ESCALATED`; `required_user_action` is one
+of `NONE`, `PROVIDE_DETAILS`, `SELECT_SLOT`, `CONFIRM_ACTION`,
+`CONTACT_OPERATOR`, or `RETRY`. `business_status` and `template_id` carry the
+business-specific state, while `display_action_text` contains optional Chinese
+UI copy. An online presentation provider cannot alter any of these
+server-derived values. See `docs/MESSAGE_OUTCOME_CONTRACT.md`.
+
 The four mutation routes (thread creation, message, Resume, and operator
 escalation) require `Idempotency-Key`. The Task 9 API keeps a bounded,
 single-process replay record keyed by caller, route scope, and key. An identical

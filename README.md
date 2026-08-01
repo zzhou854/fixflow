@@ -182,6 +182,13 @@ Operator human-review queue, and reconciles stale `RUNNING` executions without
 replaying mutations. The online providers remain non-activated; the product
 default is still `scripted`.
 
+An optional development-only account allowlist can route Structured
+Understanding and constrained Grounded Response through DeepSeek without
+changing the product default. The allowlist is derived from authenticated
+server-side user identity; non-allowlisted users remain Scripted. All switches
+are disabled in `.env.example` and Docker production configuration. See
+`docs/ONLINE_PROVIDER.md` and `docs/MESSAGE_OUTCOME_CONTRACT.md`.
+
 Commercial-hardening phase 1B adds an inactive controlled DeepSeek candidate:
 Flash-first structured fact extraction, one bounded repair, Pro fallback, a
 single 25-second request budget, independent circuit breakers, deterministic

@@ -21,10 +21,16 @@ async def interpret_message(
     state = load_state(graph_state)
     if not state.property_context_verified or state.current_user_message is None:
         return graph_state
+    # The current turn is already carried by ``current_user_message``.  The
+    # orchestrator durably appends it before graph invocation, so including the
+    # same turn here would make deterministic intent rules misclassify a new
+    # repair as conversational follow-up information.
     recent = tuple(
         ConversationMessage(role=item.role, content=item.content)
-        for item in state.conversation_messages[-12:]
+        for item in state.conversation_messages[-13:]
+        if item.turn_id != state.trace_id
     )
+    recent = recent[-12:]
     result = await context.interpret(
         InterpretMessageInput(
             current_user_message=state.current_user_message,

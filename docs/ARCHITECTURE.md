@@ -311,3 +311,12 @@ deadline, bounded repair/fallback, and independent circuits. Provider exhaustion
 becomes a typed Agent failure; the existing reliability transaction, not the
 provider, creates the human-review case. Optional Shadow execution is
 zero-influence and commits sanitized evidence independently.
+
+The development-account online canary composes those ports behind a trusted
+allowlist. FastAPI binds the authenticated database `user_id` into an
+execution-scoped context; the language-node selector reads only that context.
+Browser fields cannot select a provider. Allowlisted development users may use
+DeepSeek Structured Understanding and constrained Grounded Response, while
+every other user uses the existing Scripted nodes. The online nodes do not
+import MCP, Repository, UoW, or state-machine mutation code. Product and Docker
+defaults remain Scripted and online activation remains prohibited.

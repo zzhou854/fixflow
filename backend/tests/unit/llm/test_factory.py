@@ -41,6 +41,10 @@ def test_evaluation_can_inject_prompt_v2_without_changing_runtime_default(
             "database_url": "postgresql+asyncpg://u:p@localhost/db",
             "llm_provider": "glm",
             "glm_api_key": "synthetic-test-secret-value",
+            "llm_online_enabled": False,
+            "online_canary_enabled": False,
+            "online_structured_understanding_enabled": False,
+            "online_grounded_response_enabled": False,
         }
     )
     factory.build_structured_interpretation_provider(
@@ -70,6 +74,10 @@ def test_factory_constructs_deepseek_without_changing_default(
             "database_url": "postgresql+asyncpg://u:p@localhost/db",
             "llm_provider": "deepseek",
             "deepseek_api_key": "synthetic-test-secret-value",
+            "llm_online_enabled": False,
+            "online_canary_enabled": False,
+            "online_structured_understanding_enabled": False,
+            "online_grounded_response_enabled": False,
         }
     )
     factory.build_structured_interpretation_provider(

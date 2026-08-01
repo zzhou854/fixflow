@@ -62,6 +62,7 @@ async def compose(context: NodeContext, graph_state: RuntimeGraphState) -> Runti
                 for item in state.policy_evidence_ids
             ),
             current_workflow_stage=state.workflow_stage,
+            task_intent=state.task_intent,
             required_user_action=None,
             safe_error_information=safe_error,
         )

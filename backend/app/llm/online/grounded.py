@@ -10,9 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.agent.enums import LLMRole
 from app.agent.models import LLMMessage, LLMRequestConfig
 from app.agent.ports import LLMProvider
+from app.application.agent_reliability_models import RequiredUserAction
 from app.llm.errors import LLMProviderError
 
-GROUNDED_PROMPT_VERSION = "1.0.0"
+GROUNDED_PROMPT_VERSION = "1.1.0"
 GROUNDED_SCHEMA_VERSION = "grounded-response-draft-v1"
 GROUNDED_PROMPT_TEMPLATE = (
     "Return one JSON object with exactly these keys: "
@@ -42,7 +43,8 @@ class GroundedResponseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     template_id: str = Field(pattern=r"^[A-Z][A-Z0-9_]{1,63}$")
     message_outcome: str = Field(min_length=1, max_length=100)
-    required_user_action: str | None = Field(default=None, max_length=500)
+    required_user_action: RequiredUserAction = RequiredUserAction.NONE
+    display_action_text: str | None = Field(default=None, max_length=500)
     facts: tuple[GroundedFact, ...] = Field(default=(), max_length=30)
 
 
@@ -60,7 +62,8 @@ class GroundedResponseResult(BaseModel):
     text: str
     template_id: str
     message_outcome: str
-    required_user_action: str | None
+    required_user_action: RequiredUserAction
+    display_action_text: str | None
     used_model: bool
 
 
@@ -110,6 +113,7 @@ _TEMPLATES: Mapping[str, str] = {
     "UNSUPPORTED_REQUEST": "这项操作目前无法自动完成，需要工作人员协助。",
     "CANCELLED": "本次处理已取消。",
     "CLOSED": "本次报修已经完成并关闭。",
+    "STATUS_UPDATE": "这是目前的处理进展。",
     "GENERIC_UPDATE": "你的请求已经处理。",
 }
 
@@ -154,6 +158,11 @@ class GroundedResponseProvider:
             used_model=True,
         )
 
+    async def close(self) -> None:
+        close = getattr(self._provider, "close", None)
+        if close is not None:
+            await close()
+
     @staticmethod
     def _validate_draft(request: GroundedResponseRequest, draft: GroundedResponseDraft) -> None:
         if draft.template_id != request.template_id:
@@ -174,8 +183,8 @@ class GroundedResponseProvider:
         allowed = {fact.fact_id: fact.safe_text for fact in request.facts}
         facts = " ".join(allowed[fact_id] for fact_id in fact_ids if fact_id in allowed)
         action = (
-            f" 接下来请{request.required_user_action.strip()}。"
-            if request.required_user_action
+            f" 接下来请{request.display_action_text.strip()}。"
+            if request.display_action_text
             else ""
         )
         text = f"{_PREFIXES[tone]}{base}{' ' + facts if facts else ''}{action}".strip()
@@ -184,6 +193,7 @@ class GroundedResponseProvider:
             template_id=request.template_id,
             message_outcome=request.message_outcome,
             required_user_action=request.required_user_action,
+            display_action_text=request.display_action_text,
             used_model=used_model,
         )
 

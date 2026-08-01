@@ -214,6 +214,7 @@ class ComposeResponseInput(AgentModel):
     verified_business_facts: tuple[VerifiedBusinessFact, ...] = Field(max_length=30)
     allowed_policy_evidence: tuple[AllowedPolicyEvidence, ...] = Field(max_length=20)
     current_workflow_stage: WorkflowStage
+    task_intent: AgentIntent = AgentIntent.UNKNOWN
     required_user_action: str | None = Field(default=None, max_length=1000)
     safe_error_information: SafeErrorInformation | None = None
 

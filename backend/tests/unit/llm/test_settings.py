@@ -38,6 +38,44 @@ def test_controlled_shadow_requires_switch_key_and_explicit_qualification() -> N
     assert settings.llm_online_runtime_mode == "demo_safe"
 
 
+def test_development_canary_requires_trusted_uuid_allowlist_and_keeps_default_scripted() -> None:
+    user_id = "233b64aa-0c53-5388-85e5-87b4ede2c8eb"
+    settings = Settings.model_validate(
+        {
+            **BASE,
+            "environment": "development",
+            "llm_online_enabled": True,
+            "llm_online_runtime_mode": "development",
+            "online_canary_enabled": True,
+            "online_canary_user_ids": user_id,
+            "online_structured_understanding_enabled": True,
+            "online_grounded_response_enabled": True,
+            "deepseek_api_key": "synthetic-canary-secret",
+        }
+    )
+    assert settings.llm_provider == "scripted"
+    assert {str(item) for item in settings.online_canary_user_id_set} == {user_id}
+
+
+def test_development_canary_rejects_missing_allowlist_and_non_development() -> None:
+    base = {
+        **BASE,
+        "llm_online_enabled": True,
+        "online_canary_enabled": True,
+        "deepseek_api_key": "synthetic-canary-secret",
+    }
+    with pytest.raises(ValidationError, match="ONLINE_CANARY_USER_IDS"):
+        Settings.model_validate(base)
+    with pytest.raises(ValidationError, match="restricted to development"):
+        Settings.model_validate(
+            {
+                **base,
+                "environment": "test",
+                "online_canary_user_ids": "233b64aa-0c53-5388-85e5-87b4ede2c8eb",
+            }
+        )
+
+
 def test_model_budget_cannot_exceed_product_deadline() -> None:
     with pytest.raises(ValidationError):
         Settings.model_validate({**BASE, "llm_model_budget_seconds": 25.01})

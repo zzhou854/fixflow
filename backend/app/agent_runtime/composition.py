@@ -6,7 +6,12 @@ from typing import Protocol, runtime_checkable
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.agent.models import InterpretationNodeResult, InterpretMessageInput
+from app.agent.models import (
+    ComposeResponseInput,
+    ComposeResponseResult,
+    InterpretationNodeResult,
+    InterpretMessageInput,
+)
 from app.agent.nodes.compose_response import ComposeResponseNode
 from app.agent.nodes.interpret_message import InterpretMessageNode
 from app.agent.ports import LLMProvider
@@ -44,6 +49,7 @@ async def open_agent_orchestrator(
     language_model_name: str,
     interpretation_node: Callable[[InterpretMessageInput], Awaitable[InterpretationNodeResult]]
     | None = None,
+    compose_node: Callable[[ComposeResponseInput], Awaitable[ComposeResponseResult]] | None = None,
 ) -> AsyncIterator[AgentOrchestrator]:
     """Build one runtime without import-time connections or business-session leakage."""
 
@@ -78,7 +84,8 @@ async def open_agent_orchestrator(
                         ),
                     )
                 ),
-                compose=ComposeResponseNode(response_provider, model=language_model_name),
+                compose=compose_node
+                or ComposeResponseNode(response_provider, model=language_model_name),
                 retrieve_policy=RecordingPolicyService(policy.retrieve),
             )
             graph = build_agent_graph(dependencies, checkpointer=checkpointer)
@@ -93,6 +100,8 @@ async def open_agent_orchestrator(
                     interpretation_node, AsyncClosableProvider
                 ):
                     await interpretation_node.close()
+                if compose_node is not None and isinstance(compose_node, AsyncClosableProvider):
+                    await compose_node.close()
                 await engine.dispose()
                 if isinstance(interpretation_provider, AsyncClosableProvider):
                     await interpretation_provider.close()

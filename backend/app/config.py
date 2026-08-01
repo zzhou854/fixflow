@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
+from uuid import UUID
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,6 +53,10 @@ class Settings(BaseSettings):
     llm_online_enabled: bool = False
     llm_shadow_enabled: bool = False
     llm_grounded_response_enabled: bool = False
+    online_canary_enabled: bool = False
+    online_canary_user_ids: str = ""
+    online_structured_understanding_enabled: bool = False
+    online_grounded_response_enabled: bool = False
     enable_live_provider_tests: bool = False
     llm_online_runtime_mode: str = "demo_safe"
     llm_online_qualification_status: str = "NOT_ACTIVATED"
@@ -128,6 +133,21 @@ class Settings(BaseSettings):
             raise ValueError("legacy and controlled shadow modes cannot both be enabled")
         if self.llm_grounded_response_enabled and not self.llm_online_enabled:
             raise ValueError("LLM_GROUNDED_RESPONSE_ENABLED requires LLM_ONLINE_ENABLED=true")
+        if self.online_canary_enabled:
+            if not self.llm_online_enabled:
+                raise ValueError("ONLINE_CANARY_ENABLED requires LLM_ONLINE_ENABLED=true")
+            if self.environment != "development":
+                raise ValueError("ONLINE_CANARY_ENABLED is restricted to development")
+            if self.llm_provider != "scripted":
+                raise ValueError("the default LLM_PROVIDER must remain scripted")
+            if not self.online_canary_user_id_set:
+                raise ValueError("ONLINE_CANARY_USER_IDS must contain at least one UUID")
+            if self.llm_shadow_enabled:
+                raise ValueError("development Canary and Shadow cannot run together")
+        if (
+            self.online_structured_understanding_enabled or self.online_grounded_response_enabled
+        ) and not self.online_canary_enabled:
+            raise ValueError("online language capabilities require ONLINE_CANARY_ENABLED=true")
         if self.glm_thinking_mode not in {"disabled", "enabled"}:
             raise ValueError("GLM_THINKING_MODE must be disabled or enabled")
         if self.glm_total_timeout_seconds < self.glm_request_timeout_seconds:
@@ -179,6 +199,16 @@ class Settings(BaseSettings):
             if not hosts or "*" in hosts:
                 raise ValueError("production ALLOWED_HOSTS must be explicit")
         return self
+
+    @property
+    def online_canary_user_id_set(self) -> frozenset[UUID]:
+        """Parse the trusted development allowlist without exposing it to clients."""
+
+        values = tuple(item.strip() for item in self.online_canary_user_ids.split(","))
+        try:
+            return frozenset(UUID(item) for item in values if item)
+        except ValueError as exc:
+            raise ValueError("ONLINE_CANARY_USER_IDS must contain comma-separated UUIDs") from exc
 
 
 @lru_cache

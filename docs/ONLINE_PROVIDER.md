@@ -2,14 +2,31 @@
 
 ## Status
 
-Commercial-hardening phases 1B through 1D-B supply a candidate integration,
-development evidence and sealed qualification materials, not an activation:
+Commercial-hardening phases 1B through 1D-B supply a candidate integration and
+development evidence. The subsequent development-account canary remains an
+allowlisted development facility, not a product activation:
 
 ```text
 Default provider: scripted
 Online provider: NOT_ACTIVATED
 DeepSeek production traffic: false
 ```
+
+When all four default-off canary switches are enabled, only an authenticated
+`user_id` in `FIXFLOW_ONLINE_CANARY_USER_IDS` may use online Structured
+Understanding and/or Grounded Response. The identifier comes from the verified
+JWT/account context and cannot be supplied by a browser request. All other
+accounts remain on Scripted. Canary configuration is rejected outside the
+`development` runtime, when the product default is not `scripted`, or when
+Shadow is enabled. Docker production configuration keeps all canary switches
+off.
+
+The switches are `FIXFLOW_ONLINE_CANARY_ENABLED`,
+`FIXFLOW_ONLINE_CANARY_USER_IDS`,
+`FIXFLOW_ONLINE_STRUCTURED_UNDERSTANDING_ENABLED`, and
+`FIXFLOW_ONLINE_GROUNDED_RESPONSE_ENABLED`. They authorize language calls only;
+deterministic routing, authorization, policy, workflow, MCP, and persistence
+boundaries are unchanged.
 
 Historical qualification corpora are not reusable as new Holdouts. Phase 1D-A
 assets received a `CHANGES_REQUIRED` review disposition without any live call.
@@ -31,6 +48,13 @@ cannot change `message_outcome`, `required_user_action`, ticket/appointment
 facts, or policy facts. Safety, permission, mutation-result, human-review,
 UNKNOWN_COMMIT, cancellation, and closure messages bypass the model. Optional
 drafting failure falls back to the deterministic template.
+
+Every grounded call receives only allowlisted business facts plus the
+server-owned `message_outcome`, `business_status`, `template_id`, and typed
+`required_user_action`. The provider may choose phrasing and fact references;
+it cannot change those fields. Trace evidence records whether a real model was
+used and whether `deterministic_template_fallback=true`, while resident
+responses never disclose provider or model names.
 
 Neither interface imports MCP, business repositories, Unit of Work, or
 Application mutation services.

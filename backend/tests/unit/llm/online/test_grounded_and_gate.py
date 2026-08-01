@@ -9,6 +9,7 @@ from app.agent.models import (
     StructuredLLMResult,
     TextLLMResult,
 )
+from app.application.agent_reliability_models import RequiredUserAction
 from app.llm.online.gate import (
     OnlineProviderGate,
     OnlineRuntimeMode,
@@ -65,12 +66,14 @@ async def test_critical_business_result_bypasses_model_and_preserves_outcome() -
         GroundedResponseRequest(
             template_id="TICKET_CREATED",
             message_outcome="COMPLETED",
-            required_user_action="选择上门时间",
+            required_user_action=RequiredUserAction.SELECT_SLOT,
+            display_action_text="选择上门时间",
         )
     )
     assert model.calls == 0
     assert result.message_outcome == "COMPLETED"
-    assert result.required_user_action == "选择上门时间"
+    assert result.required_user_action is RequiredUserAction.SELECT_SLOT
+    assert "选择上门时间" in result.text
     assert result.used_model is False
 
 
@@ -127,6 +130,28 @@ async def test_draft_can_only_select_server_owned_facts_and_tone() -> None:
 
 
 @pytest.mark.asyncio
+async def test_status_update_is_noncritical_but_remains_fact_allowlisted() -> None:
+    model = DraftProvider(
+        {
+            "template_id": "STATUS_UPDATE",
+            "tone": "CONCISE",
+            "included_fact_ids": ["ticket.status"],
+        }
+    )
+    result = await GroundedResponseProvider(model, model="deepseek-v4-flash").compose(
+        GroundedResponseRequest(
+            template_id="STATUS_UPDATE",
+            message_outcome="COMPLETED",
+            facts=(GroundedFact(fact_id="ticket.status", safe_text="Ticket is scheduled."),),
+        )
+    )
+
+    assert model.calls == 1
+    assert result.used_model is True
+    assert "Ticket is scheduled." in result.text
+
+
+@pytest.mark.asyncio
 async def test_unverified_fact_or_changed_template_falls_back_deterministically() -> None:
     model = DraftProvider(
         {
@@ -173,9 +198,10 @@ def test_default_gate_keeps_online_provider_inactive() -> None:
     assert not any(gate.allows(purpose) for purpose in ProviderPurpose)
 
 
-def test_development_gate_allows_only_explicit_test_calls() -> None:
+def test_development_gate_allows_test_and_explicit_development_canary_calls() -> None:
     gate = OnlineProviderGate(enabled=True, mode=OnlineRuntimeMode.DEVELOPMENT)
     assert gate.allows(ProviderPurpose.TEST)
+    assert gate.allows(ProviderPurpose.DEVELOPMENT_CANARY)
     assert not gate.allows(ProviderPurpose.BUSINESS)
     assert not gate.allows(ProviderPurpose.SHADOW)
 

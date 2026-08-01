@@ -24,6 +24,7 @@ from app.agent.models import (
     StructuredLLMResult,
     TextLLMResult,
 )
+from app.application.agent_reliability_models import RequiredUserAction
 from app.config import Settings
 from app.domain.enums import WorkflowStage
 from app.llm.errors import LLMProviderError, LLMProviderErrorCode
@@ -251,7 +252,8 @@ async def _grounded_once(
             GroundedResponseRequest(
                 template_id="GENERIC_UPDATE",
                 message_outcome="COMPLETED",
-                required_user_action="确认下一步安排",
+                required_user_action=RequiredUserAction.CONFIRM_ACTION,
+                display_action_text="确认下一步安排",
                 facts=facts,
             )
         )
@@ -261,7 +263,7 @@ async def _grounded_once(
         provider="deepseek",
         model="deepseek-v4-flash",
         capability="GROUNDED_RESPONSE",
-        prompt_version="1.0.0",
+        prompt_version="1.1.0",
         schema_version="grounded-response-draft-v1",
         started_at=started,
         completed_at=completed,
@@ -422,6 +424,9 @@ def main(argv: list[str] | None = None) -> int:
         llm_provider="deepseek",
         llm_online_enabled=True,
         llm_online_runtime_mode="development",
+        online_canary_enabled=False,
+        online_structured_understanding_enabled=False,
+        online_grounded_response_enabled=False,
     )
     report = asyncio.run(run_live_smoke(settings, output_path=args.output))
     print(

@@ -151,6 +151,9 @@ class AgentThreadResponse(ApiModel):
     run_status: RunStatus
     message_outcome: MessageOutcome = MessageOutcome.COMPLETED
     required_user_action: RequiredUserAction = RequiredUserAction.NONE
+    business_status: str = "REQUEST_COMPLETED"
+    template_id: str = "GENERIC_UPDATE"
+    display_action_text: str | None = None
     assistant_message: str | None
     interrupt: InterruptResponse | None
     active_ticket: TicketListItemResponse | None

@@ -23,6 +23,7 @@ class QualificationStatus(StrEnum):
 class ProviderPurpose(StrEnum):
     TEST = "TEST"
     SHADOW = "SHADOW"
+    DEVELOPMENT_CANARY = "DEVELOPMENT_CANARY"
     BUSINESS = "BUSINESS"
 
 
@@ -53,6 +54,8 @@ class OnlineProviderGate:
         if not self.enabled:
             return False
         if purpose is ProviderPurpose.TEST:
+            return self.mode is OnlineRuntimeMode.DEVELOPMENT
+        if purpose is ProviderPurpose.DEVELOPMENT_CANARY:
             return self.mode is OnlineRuntimeMode.DEVELOPMENT
         if purpose is ProviderPurpose.SHADOW:
             return (

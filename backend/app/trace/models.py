@@ -68,6 +68,7 @@ class TracePayload(BaseModel):
     finish_reason: str | None = None
     provider_request_id: str | None = None
     success: bool | None = None
+    deterministic_template_fallback: bool | None = None
 
 
 class StartRun(BaseModel):

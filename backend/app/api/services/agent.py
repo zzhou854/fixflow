@@ -198,7 +198,14 @@ class AgentApiService:
         )
         try:
             with (
-                bind_execution_context(run_id, thread_id, trace_id, self._trace, capture),
+                bind_execution_context(
+                    run_id,
+                    thread_id,
+                    trace_id,
+                    self._trace,
+                    capture,
+                    user_id=identity.user_id,
+                ),
                 bind_model_call_budget(ModelCallBudget(self._model_budget_seconds)),
             ):
                 result = await self._orchestrator.resume(thread_id, self._caller(identity), resume)
@@ -442,7 +449,14 @@ class AgentApiService:
         )
         try:
             with (
-                bind_execution_context(run_id, thread_id, trace_id, self._trace, capture),
+                bind_execution_context(
+                    run_id,
+                    thread_id,
+                    trace_id,
+                    self._trace,
+                    capture,
+                    user_id=identity.user_id,
+                ),
                 bind_model_call_budget(ModelCallBudget(self._model_budget_seconds)),
             ):
                 result = await self._orchestrator.start_turn(
@@ -797,6 +811,13 @@ class AgentApiService:
             )
             for item in (state.conversation_messages if state else ())
         )
+        resolved_outcome = message_outcome or self._message_outcome(result)
+        resolved_action = required_user_action or self._required_user_action(result)
+        business_status, template_id, display_action = self._public_message_contract(
+            result,
+            outcome=resolved_outcome,
+            action=resolved_action,
+        )
         response = AgentThreadResponse(
             thread_id=result.thread_id,
             trace_id=result.trace_id,
@@ -804,8 +825,11 @@ class AgentApiService:
             message_id=message_id,
             workflow_stage=result.workflow_stage,
             run_status=result.run_status,
-            message_outcome=message_outcome or self._message_outcome(result),
-            required_user_action=required_user_action or self._required_user_action(result),
+            message_outcome=resolved_outcome,
+            required_user_action=resolved_action,
+            business_status=business_status,
+            template_id=template_id,
+            display_action_text=display_action,
             assistant_message=result.assistant_message,
             interrupt=result.interrupt.model_dump(mode="json") if result.interrupt else None,
             active_ticket=ticket,
@@ -911,6 +935,9 @@ class AgentApiService:
                 "text": response.assistant_message or "",
                 "message_outcome": response.message_outcome.value,
                 "required_user_action": response.required_user_action.value,
+                "business_status": response.business_status,
+                "template_id": response.template_id,
+                "display_action_text": response.display_action_text,
                 "interrupt_kind": response.interrupt.kind if response.interrupt else None,
                 "error_code": response.error_code,
             },
@@ -924,6 +951,31 @@ class AgentApiService:
             actor_id=identity.actor_id,
             user_id=identity.user_id,
         )
+
+    @staticmethod
+    def _public_message_contract(
+        result: AgentRunResult,
+        *,
+        outcome: MessageOutcome,
+        action: RequiredUserAction,
+    ) -> tuple[str, str, str | None]:
+        if action is RequiredUserAction.PROVIDE_DETAILS:
+            return "NEED_INFORMATION", "NEED_INFORMATION", "请补充缺少的报修信息"
+        if action is RequiredUserAction.SELECT_SLOT:
+            return "APPOINTMENT_PENDING", "APPOINTMENT_PENDING", "请选择可用的上门时间"
+        if action is RequiredUserAction.CONTACT_OPERATOR:
+            return "HUMAN_REVIEW_REQUIRED", "HUMAN_REVIEW_REQUIRED", "请等待工作人员联系"
+        if action is RequiredUserAction.RETRY:
+            return "REQUEST_FAILED", "GENERIC_UPDATE", "请重试或联系工作人员"
+        if outcome is MessageOutcome.ESCALATED:
+            return "HUMAN_REVIEW_REQUIRED", "HUMAN_REVIEW_REQUIRED", None
+        if outcome is MessageOutcome.FAILED:
+            return "REQUEST_FAILED", "GENERIC_UPDATE", None
+        if result.active_appointment_id is not None:
+            return "APPOINTMENT_BOOKED", "APPOINTMENT_BOOKED", None
+        if result.active_ticket_id is not None:
+            return "TICKET_CREATED", "TICKET_CREATED", None
+        return "REQUEST_COMPLETED", "GENERIC_UPDATE", None
 
     @staticmethod
     def _resume(request: ResumeRequest, trace_id: UUID) -> AgentResume:

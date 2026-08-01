@@ -1,3 +1,5 @@
+import type { MessageOutcome, RequiredUserAction } from './messageContract'
+
 export type ActorType = 'RESIDENT' | 'OPERATOR'
 export type WorkflowStage =
   | 'INTAKE' | 'NEED_PROPERTY' | 'NEED_INFO' | 'EMERGENCY_REVIEW'
@@ -63,8 +65,11 @@ export interface ResidentThreadSummary {
 export interface AgentThread {
   thread_id: string; trace_id: string; run_id?: string | null; message_id: string | null; workflow_stage: WorkflowStage
   run_status: 'COMPLETED' | 'INTERRUPTED' | 'NEEDS_HUMAN_REVIEW' | 'FAILED_SAFE'
-  message_outcome: 'COMPLETED' | 'FAILED' | 'ESCALATED'
-  required_user_action: 'NONE' | 'PROVIDE_DETAILS' | 'SELECT_SLOT' | 'CONFIRM_ACTION' | 'CONTACT_OPERATOR' | 'RETRY'
+  message_outcome: MessageOutcome
+  required_user_action: RequiredUserAction
+  business_status: string
+  template_id: string
+  display_action_text: string | null
   assistant_message: string | null; interrupt: Interrupt | null
   active_ticket: Ticket | null; active_appointment: Appointment | null
   policy_status: { sufficiency: string | null; conflict: boolean; evidence_ids: string[] }

@@ -7,6 +7,10 @@ def _settings(**updates: object) -> Settings:
     values: dict[str, object] = {
         "database_url": "postgresql+asyncpg://user:password@localhost/fixflow",
         "jwt_secret": "unit-security-secret-with-more-than-thirty-two-bytes",
+        "llm_online_enabled": False,
+        "online_canary_enabled": False,
+        "online_structured_understanding_enabled": False,
+        "online_grounded_response_enabled": False,
     }
     values.update(updates)
     return Settings.model_validate(values)

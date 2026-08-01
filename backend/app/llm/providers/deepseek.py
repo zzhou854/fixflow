@@ -27,10 +27,17 @@ SUPPORTED_DEEPSEEK_MODELS = frozenset({"deepseek-v4-flash", "deepseek-v4-pro"})
 
 
 class StructuredPromptIdentity(Protocol):
-    prompt_id: str
-    prompt_version: str
-    prompt_hash: str
-    schema_version: str
+    @property
+    def prompt_id(self) -> str: ...
+
+    @property
+    def prompt_version(self) -> str: ...
+
+    @property
+    def prompt_hash(self) -> str: ...
+
+    @property
+    def schema_version(self) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
