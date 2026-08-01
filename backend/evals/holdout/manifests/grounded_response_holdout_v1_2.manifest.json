@@ -1,0 +1,95 @@
+{
+  "approved_at": null,
+  "approved_by": null,
+  "case_count": 90,
+  "category_distribution": [
+    {
+      "count": 6,
+      "label": "APPOINTMENT_BOOKED"
+    },
+    {
+      "count": 6,
+      "label": "APPOINTMENT_PENDING"
+    },
+    {
+      "count": 6,
+      "label": "AUTHORIZATION_DENIED"
+    },
+    {
+      "count": 6,
+      "label": "DETAILS_RECEIVED"
+    },
+    {
+      "count": 6,
+      "label": "HUMAN_REVIEW_CREATED"
+    },
+    {
+      "count": 6,
+      "label": "HUMAN_REVIEW_CREATION_FAILED"
+    },
+    {
+      "count": 6,
+      "label": "MUTATION_RECONCILIATION_PENDING"
+    },
+    {
+      "count": 6,
+      "label": "POLICY_CONFIRMED"
+    },
+    {
+      "count": 6,
+      "label": "REQUEST_ACKNOWLEDGED"
+    },
+    {
+      "count": 6,
+      "label": "SAFETY_REVIEW_REQUIRED"
+    },
+    {
+      "count": 6,
+      "label": "SLOT_OPTIONS_READY"
+    },
+    {
+      "count": 6,
+      "label": "STATUS_UPDATE"
+    },
+    {
+      "count": 6,
+      "label": "TICKET_CANCELLED"
+    },
+    {
+      "count": 6,
+      "label": "TICKET_CREATED"
+    },
+    {
+      "count": 6,
+      "label": "TICKET_CREATION_FAILED"
+    }
+  ],
+  "created_at": "2026-08-01T05:24:13.010211Z",
+  "dataset_id": "grounded_response_holdout",
+  "dataset_sha256": "e3949114ededb238daa831495fa7a865b22984ef25a219004650341bbaa07e7a",
+  "dataset_version": "1.2.0",
+  "first_live_call_at": null,
+  "golden_review_status": "AUTOMATED_CHECKED_REVIEW_PENDING",
+  "golden_sha256": "6487b22200a7c72e7f68a8e92389fa2b3514d3baa25aeb69a03dc977aec630ef",
+  "identity": {
+    "code_commit": "35e58526d5e10c42c080a20090166af2d13861b8",
+    "gate_sha256": "1de4b1bbaba4f6fd9fdf58b16d9220e948ab45692dfa6b9d064500136fb905db",
+    "gate_version": "grounded_response_holdout_gate@1.2.0",
+    "normalization_sha256": "ebf2ecc90e7bff04d674ec080e0aa1d646cdfad65d7dc4e5aadb18c0b4a2b275",
+    "normalization_version": "grounded-template-renderer-v1",
+    "prompt_sha256": "6cb80356371a1e086ec8e355cee72a26de48eb5ffe75a9502e06a7182a87ab1d",
+    "prompt_version": "grounded_response@1.1.0",
+    "provider_router_version": "deepseek-flash-pro-router-v1",
+    "schema_sha256": "6cebaa74f1120b66c4bc41e547aeed27b6b7291e79001e442f9c8bccde2609ff",
+    "schema_version": "grounded-response-draft-v1",
+    "scorer_sha256": "b66c8479d55e0543e6a86535ab236dd8361a0f5750ab6a1f26a67118305d9dbc",
+    "scorer_version": "grounded_response_holdout_scorer@1.2.0"
+  },
+  "live_call_count": 0,
+  "manifest_schema_version": "holdout-manifest-v2",
+  "multi_turn_count": 0,
+  "purpose": "HOLDOUT_QUALIFICATION",
+  "sealed_at": "2026-08-01T05:24:13.010211Z",
+  "single_turn_count": 90,
+  "status": "SEALED"
+}

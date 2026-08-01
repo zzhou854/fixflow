@@ -1,0 +1,17 @@
+{
+  "approval_schema_version": "holdout-approval-v1",
+  "approver": null,
+  "decision": null,
+  "generated_at": "2026-08-01T05:24:13.010211Z",
+  "grounded_manifest_sha256": "33911df65f6c0da6c26f4babe425e419378667a469585d229bb50991075f651d",
+  "identity": {
+    "code_commit": "35e58526d5e10c42c080a20090166af2d13861b8",
+    "gate_sha256": "a3ae6e3efb65098a60cefa8b10c84e9189caad4671fdf3075ded04d03b500aea",
+    "prompt_sha256": "a98ef25a5598c3fb79396133e2ec530b3f9ab86f592e029a03d2bc13d6b1584d",
+    "schema_sha256": "8ce681ce9abf6c1d3732a86a280b92aafdc95a49ebb84bce172d6e5a201b8877",
+    "scorer_sha256": "c42a7ab872401c703666098bf9865bc4d5b4f11d2b36e4f7aef42e317820de5e"
+  },
+  "signature": null,
+  "status": "PENDING_HUMAN_SIGNATURE",
+  "structured_manifest_sha256": "0346f6bf4c5a3a64e9a1639c9061717d63c831f569a8e62f8b6b6f4263180282"
+}

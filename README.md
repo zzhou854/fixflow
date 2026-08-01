@@ -209,11 +209,16 @@ but independent assisted Golden review returned
 `REVIEW_FAILED_CHANGES_REQUIRED`. The original sealed assets, 85 review issues,
 and adverse disposition remain immutable evidence and were never used for an
 online call. Phase 1D-B fixes the scorer/gate defects and prepares revised
-`resident_interpretation_holdout@2.1.0` (180 cases) and
-`grounded_response_holdout@1.1.0` (60 cases). The revised packages are
-`SEALED`, their fresh approval is `PENDING_APPROVAL`, all live-call counters
-remain zero, and all 240 cases must be reviewed independently again. This is
+`resident_interpretation_holdout@2.2.0` (180 cases) and
+`grounded_response_holdout@1.2.0` (90 cases: 60 deterministic templates and 30
+controlled natural responses). The revised packages are
+`SEALED`, their fresh approval is `PENDING_HUMAN_SIGNATURE`, all live-call
+counters remain zero, and all 270 cases must be reviewed independently. This is
 revision/preparation evidence—not a Holdout pass or model qualification.
+
+The v2 external-review package is bound to runtime commit `35e5852`, remains
+`SEALED` with `PENDING_HUMAN_SIGNATURE`, and has zero formal live calls. See
+[Holdout revision v2](docs/HOLDOUT_REVISION_V2.md).
 
 Copy `.env.example` to the ignored `.env` file, set a local PostgreSQL password,
 and place the same password in `FIXFLOW_DATABASE_URL` before starting PostgreSQL.

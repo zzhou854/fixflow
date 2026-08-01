@@ -249,3 +249,69 @@ def test_original_manifest_content_identities_remain_frozen() -> None:
     assert grounded.golden_sha256 == (
         "9fb6104833c473ef727a866ddbaf6cee3a75e9b2dfcd2cb58eda8a86c9037a83"
     )
+
+
+def test_v2_external_review_suites_are_sealed_without_execution() -> None:
+    structured = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "resident_interpretation_holdout_v2_2.manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    grounded = HoldoutManifest.model_validate_json(
+        (MANIFESTS / "grounded_response_holdout_v1_2.manifest.json").read_text(encoding="utf-8")
+    )
+    approval = json.loads(
+        (ASSETS / "approval" / "holdout_approval.v2.pending.json").read_text(encoding="utf-8")
+    )
+
+    assert structured.dataset_version == "2.2.0"
+    assert structured.case_count == 180
+    assert structured.single_turn_count + structured.multi_turn_count == 180
+    assert structured.dataset_sha256 == (
+        "5597454685b72a8518b949c940ada88b212c586314f97dfee23d72e5604a5328"
+    )
+    assert structured.golden_sha256 == (
+        "f7ac762c4bb3e0f5253bc1f4c25f3cffab2a7b637b036710a468dd6fb1da0a3f"
+    )
+    assert grounded.dataset_version == "1.2.0"
+    assert grounded.case_count == 90
+    assert grounded.single_turn_count == 90
+    assert grounded.multi_turn_count == 0
+    assert grounded.dataset_sha256 == (
+        "e3949114ededb238daa831495fa7a865b22984ef25a219004650341bbaa07e7a"
+    )
+    assert grounded.golden_sha256 == (
+        "6487b22200a7c72e7f68a8e92389fa2b3514d3baa25aeb69a03dc977aec630ef"
+    )
+    for manifest in (structured, grounded):
+        assert manifest.status is HoldoutStatus.SEALED
+        assert manifest.live_call_count == 0
+        assert manifest.first_live_call_at is None
+        assert manifest.approved_at is None
+        assert manifest.approved_by is None
+        assert manifest.identity.code_commit == ("35e58526d5e10c42c080a20090166af2d13861b8")
+    assert structured.identity.scorer_version.endswith("@1.1.0")
+    assert structured.identity.gate_version.endswith("@1.1.0")
+    assert grounded.identity.scorer_version.endswith("@1.2.0")
+    assert grounded.identity.gate_version.endswith("@1.2.0")
+    assert approval["status"] == "PENDING_HUMAN_SIGNATURE"
+    assert approval["signature"] is None
+    assert approval["approver"] is None
+    assert approval["decision"] is None
+
+
+def test_v2_preparation_report_is_review_only() -> None:
+    report = json.loads(
+        (ASSETS / "reports" / "preparation_summary.v2.json").read_text(encoding="utf-8")
+    )
+
+    assert report["status"] == "REVISED_HOLDOUT_SEALED_AWAITING_EXTERNAL_REVIEW"
+    assert report["structured_case_count"] == 180
+    assert report["grounded_case_count"] == 90
+    assert report["grounded_deterministic_count"] == 60
+    assert report["grounded_natural_count"] == 30
+    assert report["duplicate_scan"] == "PASS"
+    assert report["approval"] == "PENDING_HUMAN_SIGNATURE"
+    assert report["signature"] is None
+    assert report["live_call_count"] == 0
+    assert report["qualification_execution_count"] == 0
