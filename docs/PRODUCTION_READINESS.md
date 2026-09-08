@@ -16,7 +16,8 @@ Production startup requires:
 - `FIXFLOW_RUNTIME_MODE=production`;
 - `FIXFLOW_DEBUG=false`;
 - explicit CORS origins and Allowed Hosts without wildcards;
-- `FIXFLOW_LLM_PROVIDER=scripted`;
+- `FIXFLOW_LLM_PROVIDER=scripted` by default; an approved future online route is
+  Flash-only and exhausts to a persisted human-review case;
 - `FIXFLOW_LLM_EXPERIMENTAL_ENABLED=false`;
 - a business database whose Alembic revision exactly matches the shipped head.
 
@@ -52,9 +53,10 @@ Repository, Checkpoint, Outbox, or business-mutation facility.
 ## Limitations
 
 - This is not evidence of public-cloud deployment or internet exposure.
-- TLS termination, external secret management, backups, monitoring, capacity
-  planning, and organization-specific incident response remain deployment-site
-  responsibilities.
+- TLS termination, external secret management, monitoring, capacity planning,
+  restore drills, and organization-specific incident response remain
+  deployment-site responsibilities. A local PostgreSQL backup command and
+  checksum are provided, but this is not a managed off-site backup service.
 - The frontend bundle is functional but large; route/chunk optimization is a
   non-blocking follow-up.
 - The online model is not qualified and must remain disabled.

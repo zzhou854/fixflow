@@ -19,8 +19,10 @@ FIXFLOW_DEBUG=false
 Phase 1B does not authorize changing these defaults. A future controlled Shadow
 requires an explicit reviewed configuration and qualification state; a future
 business activation additionally requires a fresh Holdout, Shadow, Canary, and
-approval. Never use Scripted as a production-candidate fallback after online
-activation; the approved future chain is Flash, Pro, then human review.
+approval. Never use Scripted as a product fallback after online activation. The
+current product candidate is Flash-only: one bounded transport retry or one
+schema repair, then a persisted human-review case. DeepSeek Pro is not in the
+product route.
 
 For a non-local host, use `docker-compose.production.yml` and set explicit
 `FIXFLOW_PRODUCTION_CORS_ORIGINS` and `FIXFLOW_PRODUCTION_ALLOWED_HOSTS`.
@@ -61,7 +63,7 @@ docker compose run --rm migrate alembic current
 docker compose run --rm migrate alembic check
 ```
 
-Expected business head: `20260730_0007`. Do not start the API against an older
+Expected business head: `20260730_0008`. Do not start the API against an older
 or newer unreviewed Schema.
 
 For the local demonstration only:
@@ -83,6 +85,30 @@ docker compose down
 
 `docker compose down` keeps the named PostgreSQL volume. Do not add `-v` unless
 destructive data removal is explicitly intended and approved.
+
+For a repeatable local health and Schema check:
+
+```powershell
+.\scripts\operations\verify.ps1
+```
+
+## Backup and restore boundary
+
+Create a timestamped custom-format PostgreSQL backup outside the repository:
+
+```powershell
+.\scripts\operations\backup.ps1
+```
+
+The default destination is `F:\agent\fixflow-backups`; each dump has a SHA-256
+sidecar. The script never prints credentials and removes its temporary file from
+the container. Backups are operational data and must not be committed.
+
+Restore is intentionally not automated as a casual developer command. Restore
+requires a separate target database, verified checksum, compatible Migration
+head, maintenance window and explicit operator approval. First prove a dump can
+be listed with `pg_restore --list`; never restore over the active development or
+production database. Replay artifacts are not database backups.
 
 ## Rollback
 
