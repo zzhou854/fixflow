@@ -82,6 +82,9 @@ export function ResidentPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [failedAction, setFailedAction] = useState<FailedAction | null>(null)
   const [pendingStep, setPendingStep] = useState<string | null>(null)
+  const [bootstrapStatus, setBootstrapStatus] = useState<'loading' | 'ready' | 'error'>(
+    'loading',
+  )
   const messageListRef = useRef<HTMLDivElement>(null)
 
   const apply = useCallback((next: AgentThread) => {
@@ -131,6 +134,15 @@ export function ResidentPage() {
     thread?.interrupt?.kind === 'DUPLICATE_TICKET_SELECTION' ||
     thread?.interrupt?.kind === 'APPOINTMENT_SLOT_SELECTION'
   const progress = pendingStep ?? progressLabel(thread, busy)
+  const serviceStatus = bootstrapStatus === 'error'
+    ? { color: 'error', label: '服务暂时不可用' }
+    : bootstrapStatus === 'loading'
+      ? { color: 'processing', label: '正在准备服务' }
+      : !thread
+        ? { color: 'success', label: '可以开始报修' }
+        : sse === 'connected'
+          ? { color: 'success', label: '服务连接正常' }
+          : { color: 'processing', label: '正在同步消息' }
 
   const beginProgress = () => {
     setPendingStep('正在理解您的需求')
@@ -144,16 +156,27 @@ export function ResidentPage() {
     }
   }
 
-  useEffect(() => {
+  const bootstrap = useCallback(async () => {
     if (!token) return
-    void Promise.all([api.properties(token), api.residentThreads(token, 'active', 5, 0)]).then(
-      ([propertyItems, threadResult]) => {
-        setProperties(propertyItems)
-        setPropertyId(propertyItems[0]?.property_id)
-        setThreads(threadResult.items)
-      },
-    )
+    setBootstrapStatus('loading')
+    try {
+      const [propertyItems, threadResult] = await Promise.all([
+        api.properties(token),
+        api.residentThreads(token, 'active', 5, 0),
+      ])
+      setProperties(propertyItems)
+      setPropertyId((current) => current ?? propertyItems[0]?.property_id)
+      setThreads(threadResult.items)
+      setBootstrapStatus('ready')
+    } catch (reason) {
+      setBootstrapStatus('error')
+      toast.error(friendlyError(reason))
+    }
   }, [token])
+
+  useEffect(() => {
+    void bootstrap()
+  }, [bootstrap])
 
   useEffect(() => {
     const saved = sessionStorage.getItem('fixflow.demo.thread_id')
@@ -357,9 +380,7 @@ export function ResidentPage() {
           </div>
         </Space>
         <Space>
-          <Tag color={sse === 'connected' ? 'success' : 'default'}>
-            {sse === 'connected' ? '服务连接正常' : '正在连接服务'}
-          </Tag>
+          <Tag color={serviceStatus.color}>{serviceStatus.label}</Tag>
           <span className="resident-username">{user?.username}</span>
           <Button icon={<LogoutOutlined />} onClick={logout}>
             退出
@@ -393,6 +414,15 @@ export function ResidentPage() {
             )}
           </div>
           <div className="chat-scroll-region">
+            {bootstrapStatus === 'error' && (
+              <Alert
+                showIcon
+                type="error"
+                message="暂时无法读取您的房屋和报修记录"
+                description="请检查网络后重试；如果仍未恢复，请联系物业工作人员。"
+                action={<Button onClick={() => void bootstrap()}>重新加载</Button>}
+              />
+            )}
             {thread?.reconciliation && (
               <Alert
                 showIcon

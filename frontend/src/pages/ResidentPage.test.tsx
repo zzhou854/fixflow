@@ -30,6 +30,23 @@ test('renders a resident message and the agent reply', async () => {
   expect(await screen.findByText('请补充具体位置')).toBeInTheDocument()
 })
 
+test('shows that a fresh session is ready instead of pretending SSE is connecting', async () => {
+  render(<ResidentPage />)
+
+  expect(await screen.findByText('可以开始报修')).toBeInTheDocument()
+  expect(screen.queryByText('正在连接服务')).not.toBeInTheDocument()
+})
+
+test('shows a recoverable error when resident bootstrap data cannot be loaded', async () => {
+  vi.mocked(api.properties).mockRejectedValueOnce(new Error('network unavailable'))
+  render(<ResidentPage />)
+
+  expect(await screen.findByText('服务暂时不可用')).toBeInTheDocument()
+  expect(screen.getByText('暂时无法读取您的房屋和报修记录')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: '重新加载' }))
+  expect(await screen.findByText('可以开始报修')).toBeInTheDocument()
+})
+
 test('restores only the saved thread id through the state API', async () => {
   sessionStorage.setItem('fixflow.demo.thread_id', 'saved-thread')
   vi.mocked(api.properties).mockResolvedValue([])
