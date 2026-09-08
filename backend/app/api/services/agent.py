@@ -542,7 +542,10 @@ class AgentApiService:
     ) -> tuple[AgentRunResult, MessageOutcome, RequiredUserAction]:
         outcome = self._message_outcome(result)
         required_action = self._required_user_action(result)
-        assistant_message = result.assistant_message or self._default_assistant_message(outcome)
+        assistant_message = result.assistant_message or self._default_assistant_message(
+            outcome,
+            required_action,
+        )
         result = result.model_copy(update={"assistant_message": assistant_message})
         stage = self._failure_stage(result) if outcome is MessageOutcome.ESCALATED else None
         command = FinalizeAgentRun(
@@ -690,11 +693,23 @@ class AgentApiService:
         }[AgentApiService._agent_run_status(result)]
 
     @staticmethod
-    def _default_assistant_message(outcome: MessageOutcome) -> str:
+    def _default_assistant_message(
+        outcome: MessageOutcome,
+        action: RequiredUserAction,
+    ) -> str:
+        action_messages = {
+            RequiredUserAction.PROVIDE_DETAILS: "还需要补充一点报修信息，请直接在下方告诉我。",
+            RequiredUserAction.SELECT_SLOT: "已经找到可选的上门时间，请在下方选择。",
+            RequiredUserAction.CONFIRM_ACTION: "发现一条可能相关的报修，请在下方确认。",
+            RequiredUserAction.CONTACT_OPERATOR: "这次需要物业工作人员继续处理，请等待联系。",
+            RequiredUserAction.RETRY: "这次处理没有完成，请重试或请物业工作人员协助。",
+        }
+        if action in action_messages:
+            return action_messages[action]
         return {
             MessageOutcome.COMPLETED: "本次请求已处理完成。",
-            MessageOutcome.ESCALATED: "本次请求已转交物业人工处理。",
-            MessageOutcome.FAILED: "本次请求暂时未能完成，请稍后重试。",
+            MessageOutcome.ESCALATED: "这次需要物业工作人员继续处理，请等待联系。",
+            MessageOutcome.FAILED: "这次处理没有完成，请重试或请物业工作人员协助。",
         }[outcome]
 
     @staticmethod

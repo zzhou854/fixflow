@@ -20,7 +20,11 @@ from app.application.agent_reliability import (
     AgentReliabilityService,
     HumanReviewPersistenceFailed,
 )
-from app.application.agent_reliability_models import FinalizeAgentRun
+from app.application.agent_reliability_models import (
+    FinalizeAgentRun,
+    MessageOutcome,
+    RequiredUserAction,
+)
 from app.application.auth import AuthenticatedIdentity
 from app.application.services import FixFlowApplicationService
 from app.domain.enums import ActorType, WorkflowStage
@@ -187,6 +191,17 @@ async def test_interrupted_turn_publishes_interrupt_required() -> None:
             "assistant_delta",
             "message.completed",
         ]
+
+
+def test_default_message_tells_the_resident_what_to_do_next() -> None:
+    assert AgentApiService._default_assistant_message(
+        MessageOutcome.COMPLETED,
+        RequiredUserAction.SELECT_SLOT,
+    ) == "已经找到可选的上门时间，请在下方选择。"
+    assert AgentApiService._default_assistant_message(
+        MessageOutcome.ESCALATED,
+        RequiredUserAction.CONTACT_OPERATOR,
+    ) == "这次需要物业工作人员继续处理，请等待联系。"
 
 
 @pytest.mark.asyncio
