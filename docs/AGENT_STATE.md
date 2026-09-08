@@ -90,7 +90,9 @@ never overwrites State. Merge always recomputes `missing_fields` from typed
 state using one deterministic matrix:
 
 - `NEW_REPAIR`: authorized property, issue category, normalized issue location,
-  and issue description are required.
+  and an observable issue description are required. A room-level location and
+  everyday symptom such as “书房的开关坏了” satisfy this contract; equipment
+  model, component subtype, cause, and repair method are not missing fields.
 - `RESCHEDULE_APPOINTMENT`: at least one `user_availability_window` is required.
 - Other current task goals have no Task-6 field requirements.
 

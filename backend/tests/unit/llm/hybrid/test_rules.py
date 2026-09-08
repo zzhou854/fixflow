@@ -185,6 +185,19 @@ def test_missing_fields_and_clarification_are_one_deterministic_decision() -> No
     assert human.clarification_needed is False
 
 
+def test_room_level_problem_description_is_enough_for_a_resident_repair() -> None:
+    """Residents identify observable problems; technicians identify parts and models."""
+
+    facts, decision = decide("书房的开关坏了。")
+    from app.llm.hybrid.decision import resolved_issue_category
+
+    assert decision.utterance_intent is AgentIntent.NEW_REPAIR
+    assert resolved_issue_category(facts) is IssueCategory.ELECTRICAL
+    assert facts.location_text == "书房"
+    assert decision.missing_fields == ()
+    assert decision.clarification_needed is False
+
+
 @pytest.mark.parametrize(
     ("message", "expected"),
     [

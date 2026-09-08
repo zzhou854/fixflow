@@ -45,6 +45,14 @@ The flow must handle user corrections, rescheduling, cancellation, worker
 rejection/cancellation, risk escalation, arrival conflicts, and rejected repair
 acceptance.
 
+Resident input follows a minimum-actionable-information rule. A room-level
+location such as “study” and an observable symptom such as “the switch is
+broken” are sufficient for a repair ticket once the property and supported
+category are known. Brand, model, component subtype, cause, and repair method
+are technician-owned facts and are never resident prerequisites. The system
+asks only for missing facts that a resident can reasonably know; availability
+may be collected after ticket creation before slot search.
+
 ## Architecture commitment
 
 Use one orchestrator, typed workflow state, a small number of LLM nodes, and
