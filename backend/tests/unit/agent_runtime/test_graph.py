@@ -433,6 +433,56 @@ async def test_three_category_repair_interrupt_resume_books_once_with_system_dur
 
 
 @pytest.mark.asyncio
+async def test_missing_availability_resumes_without_duplicate_ticket() -> None:
+    resident_id, property_id = uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    orchestrator = _orchestrator(
+        mcp,
+        (
+            {
+                "utterance_intent": "NEW_REPAIR",
+                "issue_category": "ELECTRICAL",
+                "issue_location": "书房开关",
+                "issue_description_update": "书房开关失灵",
+            },
+            {
+                "utterance_intent": "NEW_REPAIR",
+                "user_availability_windows": [
+                    {
+                        "starts_at": "2026-07-21T12:00:00Z",
+                        "ends_at": "2026-07-21T18:00:00Z",
+                    }
+                ],
+            },
+        ),
+    )
+    turn = _turn(resident_id, property_id)
+
+    awaiting_time = await orchestrator.start_turn(turn)
+
+    assert awaiting_time.run_status is RunStatus.INTERRUPTED
+    assert isinstance(awaiting_time.interrupt, NeedInformationInterrupt)
+    assert awaiting_time.interrupt.missing_fields == ("AVAILABILITY",)
+    assert [name for name, _ in mcp.calls].count("create_repair_ticket") == 1
+    resumed = await orchestrator.resume(
+        turn.thread_id,
+        _caller(resident_id),
+        ProvideInformationResume(
+            kind="PROVIDE_INFORMATION",
+            intent_version=1,
+            user_message="明天下午有空",
+            reference_time=datetime(2026, 7, 20, 10, tzinfo=UTC),
+            timezone_name="UTC",
+            trace_id=uuid4(),
+        ),
+    )
+
+    assert resumed.run_status is RunStatus.INTERRUPTED
+    assert isinstance(resumed.interrupt, AppointmentSlotSelectionInterrupt)
+    assert [name for name, _ in mcp.calls].count("create_repair_ticket") == 1
+
+
+@pytest.mark.asyncio
 async def test_door_lock_policy_requires_identity_and_appointment_topics() -> None:
     resident_id, property_id = uuid4(), uuid4()
     mcp = FakePropertyOperationsClient(resident_id, property_id)

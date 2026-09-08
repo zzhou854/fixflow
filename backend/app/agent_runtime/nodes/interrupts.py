@@ -5,6 +5,7 @@ from typing import cast
 from langgraph.types import interrupt
 
 from app.agent.enums import LLMRole
+from app.agent.state import AgentState
 from app.agent_runtime.models import (
     AGENT_RESUME_ADAPTER,
     AppointmentSlotSelectionInterrupt,
@@ -27,11 +28,35 @@ from app.domain.enums import WorkflowStage
 
 async def need_information(graph_state: RuntimeGraphState) -> RuntimeGraphState:
     state = load_state(graph_state)
+    return _request_information(
+        state,
+        missing_fields=tuple(item.value for item in state.missing_fields),
+        message="请补充缺失的报修信息。",
+    )
+
+
+async def need_availability_information(graph_state: RuntimeGraphState) -> RuntimeGraphState:
+    """Ask for a resident availability window after the ticket exists."""
+
+    state = load_state(graph_state)
+    return _request_information(
+        state,
+        missing_fields=("AVAILABILITY",),
+        message="请告诉我您方便维修人员上门的日期和时间段。",
+    )
+
+
+def _request_information(
+    state: AgentState,
+    *,
+    missing_fields: tuple[str, ...],
+    message: str,
+) -> RuntimeGraphState:
     value = interrupt(
         NeedInformationInterrupt(
             intent_version=state.intent_version,
-            missing_fields=tuple(item.value for item in state.missing_fields),
-            message="请补充缺失的报修信息。",
+            missing_fields=missing_fields,
+            message=message,
         ).model_dump(mode="json")
     )
     resume = AGENT_RESUME_ADAPTER.validate_python(value)

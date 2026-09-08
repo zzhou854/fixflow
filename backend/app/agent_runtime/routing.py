@@ -72,6 +72,13 @@ def route_after_snapshot(graph_state: RuntimeGraphState) -> str:
     return "list_slots"
 
 
+def route_after_slot_lookup(graph_state: RuntimeGraphState) -> str:
+    state = load_state(graph_state)
+    if not state.user_availability_windows:
+        return "need_availability_information"
+    return "select_slot"
+
+
 def route_resolved_existing(graph_state: RuntimeGraphState) -> str:
     state = load_state(graph_state)
     if state.active_ticket_id:

@@ -12,7 +12,12 @@ from langgraph.graph.state import CompiledStateGraph
 from app.agent_runtime.context import NodeContext, RuntimeDependencies
 from app.agent_runtime.execution_context import current_execution_context
 from app.agent_runtime.nodes.interpretation import interpret_message
-from app.agent_runtime.nodes.interrupts import need_information, select_duplicate, select_slot
+from app.agent_runtime.nodes.interrupts import (
+    need_availability_information,
+    need_information,
+    select_duplicate,
+    select_slot,
+)
 from app.agent_runtime.nodes.policy import retrieve_policy
 from app.agent_runtime.nodes.property import resolve_property
 from app.agent_runtime.nodes.response import (
@@ -41,6 +46,7 @@ from app.agent_runtime.routing import (
     route_after_interpret,
     route_after_policy,
     route_after_property,
+    route_after_slot_lookup,
     route_after_snapshot,
     route_duplicates,
     route_resolved_existing,
@@ -163,6 +169,7 @@ def build_agent_graph(
     add_node("resolve_property", partial(resolve_property, context))
     add_node("interpret", partial(interpret_message, context))
     add_node("need_information", need_information)
+    add_node("need_availability_information", need_availability_information)
     add_node("retrieve_policy", partial(retrieve_policy, context))
     add_node("find_duplicates", partial(find_duplicates, context))
     add_node("select_duplicate", select_duplicate)
@@ -205,7 +212,8 @@ def build_agent_graph(
     graph.add_conditional_edges(
         "refresh_snapshot", traced_route("refresh_snapshot", route_after_snapshot)
     )
-    graph.add_edge("list_slots", "select_slot")
+    graph.add_conditional_edges("list_slots", traced_route("list_slots", route_after_slot_lookup))
+    graph.add_edge("need_availability_information", "interpret")
     graph.add_edge("select_slot", "refresh_snapshot")
     graph.add_edge("prepare_book", "book")
     graph.add_edge("book", "refresh_snapshot")
