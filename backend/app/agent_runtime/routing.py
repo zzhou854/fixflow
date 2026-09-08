@@ -49,6 +49,8 @@ def route_duplicates(graph_state: RuntimeGraphState) -> str:
 
 def route_after_snapshot(graph_state: RuntimeGraphState) -> str:
     state = load_state(graph_state)
+    if state.escalation_reason == "OVERDUE_APPOINTMENT_REVIEW_REQUIRED":
+        return "finish_overdue_appointment"
     if state.task_intent is AgentIntent.NEW_REPAIR and state.active_ticket_id is None:
         # A duplicate candidate may have become terminal while the resident was
         # choosing it.  Re-query instead of adopting stale checkpoint facts.

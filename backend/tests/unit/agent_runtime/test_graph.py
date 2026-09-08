@@ -581,6 +581,54 @@ async def test_single_exact_duplicate_is_adopted_without_creating_a_second_ticke
 
 
 @pytest.mark.asyncio
+async def test_overdue_booked_duplicate_routes_to_human_review_without_false_success() -> None:
+    resident_id, property_id = uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    mcp.booked = True
+    mcp.duplicate_tickets = (
+        OpenRepairTicketItem(
+            ticket_id=mcp.ticket_id,
+            ticket_version=2,
+            resident_id=resident_id,
+            property_id=property_id,
+            issue_category=IssueCategory.WATER_LEAK,
+            issue_location="厨房水槽下",
+            severity=Severity.MEDIUM,
+            ticket_status=TicketStatus.SCHEDULED,
+            rework_count=0,
+        ),
+    )
+    orchestrator = _orchestrator(
+        mcp,
+        {
+            "utterance_intent": "NEW_REPAIR",
+            "issue_category": "WATER_LEAK",
+            "issue_location": "厨房水槽下",
+            "issue_description_update": "厨房水槽下仍在漏水",
+            "user_availability_windows": [
+                {
+                    "starts_at": "2026-07-23T12:00:00Z",
+                    "ends_at": "2026-07-23T18:00:00Z",
+                }
+            ],
+        },
+    )
+    turn = _turn(resident_id, property_id).model_copy(
+        update={"reference_time": datetime(2026, 7, 22, 10, tzinfo=UTC)}
+    )
+
+    result = await orchestrator.start_turn(turn)
+
+    assert result.run_status is RunStatus.NEEDS_HUMAN_REVIEW
+    assert result.error_code == "OVERDUE_APPOINTMENT_REVIEW_REQUIRED"
+    assert result.assistant_message == (
+        "这条报修原来的上门时间已经过期，但处理结果尚未确认，已请物业工作人员核实。"
+    )
+    assert all(name != "create_repair_ticket" for name, _ in mcp.calls)
+    assert all(name != "list_available_slots" for name, _ in mcp.calls)
+
+
+@pytest.mark.asyncio
 async def test_multiple_exact_duplicates_require_a_bound_selection_interrupt() -> None:
     resident_id, property_id = uuid4(), uuid4()
     mcp = FakePropertyOperationsClient(resident_id, property_id)

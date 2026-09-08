@@ -18,6 +18,7 @@ from app.agent_runtime.nodes.property import resolve_property
 from app.agent_runtime.nodes.response import (
     compose,
     finish_manual_request,
+    finish_overdue_appointment,
     finish_policy_review,
     finish_safety,
     finish_unsupported,
@@ -180,6 +181,7 @@ def build_agent_graph(
     add_node("finish_safety", finish_safety)
     add_node("finish_policy_review", finish_policy_review)
     add_node("finish_manual_request", finish_manual_request)
+    add_node("finish_overdue_appointment", finish_overdue_appointment)
     add_node("finish_unsupported", finish_unsupported)
 
     graph.add_edge(START, "resolve_property")
@@ -215,6 +217,7 @@ def build_agent_graph(
         "finish_safety",
         "finish_policy_review",
         "finish_manual_request",
+        "finish_overdue_appointment",
         "finish_unsupported",
     ):
         graph.add_edge(terminal, END)

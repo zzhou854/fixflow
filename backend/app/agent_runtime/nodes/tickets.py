@@ -190,6 +190,18 @@ async def refresh_snapshot(
         "severity": data.severity,
         "snapshot_refresh_required": False,
     }
+    reference_time = state.current_reference_time
+    if active is not None and reference_time is not None and active.scheduled_end <= reference_time:
+        # A BOOKED row is a database fact, but a booking whose end time has
+        # already passed is no longer a trustworthy promise of future service.
+        # Do not invent a NO_SHOW/COMPLETED event or silently reschedule it;
+        # surface the inconsistent business state for operator reconciliation.
+        updates.update(
+            workflow_stage=WorkflowStage.HUMAN_REVIEW,
+            escalation_reason="OVERDUE_APPOINTMENT_REVIEW_REQUIRED",
+            pending_action=PendingAction.NONE,
+            pending_operation=None,
+        )
     if stale_slot:
         updates.update(
             candidate_slots=(), candidate_slots_fingerprint=None, selected_candidate_slot=None

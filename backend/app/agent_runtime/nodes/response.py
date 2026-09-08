@@ -150,3 +150,21 @@ async def finish_unsupported(graph_state: RuntimeGraphState) -> RuntimeGraphStat
             },
         )
     )
+
+
+async def finish_overdue_appointment(graph_state: RuntimeGraphState) -> RuntimeGraphState:
+    """Stop when a still-BOOKED appointment is already in the past."""
+
+    state = load_state(graph_state)
+    return dump_state(
+        finish_with_assistant_message(
+            state,
+            message="这条报修原来的上门时间已经过期，但处理结果尚未确认，已请物业工作人员核实。",
+            updates={
+                "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                "escalation_reason": "OVERDUE_APPOINTMENT_REVIEW_REQUIRED",
+                "pending_action": PendingAction.NONE,
+                "pending_operation": None,
+            },
+        )
+    )

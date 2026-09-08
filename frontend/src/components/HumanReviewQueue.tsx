@@ -61,6 +61,7 @@ const REASON_LABELS: Record<string, string> = {
   PROPERTY_CONTEXT_REQUIRED: '需要核实住户与房屋关系',
   POLICY_EVIDENCE_INSUFFICIENT: '现有服务依据不足，需要人工判断',
   POLICY_CONFLICT: '服务依据存在冲突，需要人工判断',
+  OVERDUE_APPOINTMENT_REVIEW_REQUIRED: '原上门时间已过，但维修结果尚未确认',
 }
 
 function reasonLabel(code: string): string {

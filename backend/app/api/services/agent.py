@@ -667,6 +667,8 @@ class AgentApiService:
             return HumanReviewFailureStage.PROPERTY_AUTHORIZATION
         if code in {"RECONCILIATION_PENDING", "MANUAL_REVIEW"}:
             return HumanReviewFailureStage.MUTATION_RECONCILIATION
+        if code == "OVERDUE_APPOINTMENT_REVIEW_REQUIRED":
+            return HumanReviewFailureStage.SCHEDULING
         if code in {"UNSUPPORTED_AUTOMATION", "RESIDENT_MANUAL_REQUEST"}:
             return HumanReviewFailureStage.UNSUPPORTED_REQUEST
         if result.workflow_stage in {

@@ -86,6 +86,21 @@ test('claims with the optimistic version and reloads the queue', async () => {
   )
 })
 
+test('explains an overdue appointment in business language', async () => {
+  vi.mocked(api.humanReviewCases).mockResolvedValue({
+    items: [reviewCase({
+      failure_stage: 'SCHEDULING',
+      reason_code: 'OVERDUE_APPOINTMENT_REVIEW_REQUIRED',
+      summary: '原预约已经过期，需要核实维修结果',
+    })],
+    limit: 100,
+    offset: 0,
+  })
+  render(<HumanReviewQueue token="token" />)
+  await userEvent.click(await screen.findByRole('button', { name: /查看/ }))
+  expect(screen.getByText('原上门时间已过，但维修结果尚未确认')).toBeInTheDocument()
+})
+
 test('refreshes instead of overwriting an optimistic conflict', async () => {
   vi.mocked(api.transitionHumanReview).mockRejectedValue(
     new ApiError(
