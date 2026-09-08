@@ -30,7 +30,9 @@
 2. 正式在线发布资格：最新已记录 Structured 2.2.0（180）、Grounded 1.2.0（90）为 SEALED / PENDING_HUMAN_SIGNATURE，live_call_count=0；未有本版本正式 Qualification、Shadow、生产 Canary 或生产 Baseline 的完成证据。本轮未重新核验私有资产。
 3. 封存资产质量：外审前核对语料自然性、覆盖与 Golden/生产一致性。Golden 回填自测只证明评分自洽；增加无关句子降低相似度不能证明样本独立。缺陷以追加 disposition 记录，不覆盖封存文件。
 4. 产品闭环缺口：住户取消、验收/拒绝验收尚未贯通。先明确人工承接是否满足演示，再决定最小增量。状态查询已实现，移除其待开发条目。
-5. 真实政策适配：获取代表性政策和失败实例后再决定是否需要在线 Embedding。
+5. 真实政策适配：已完成第一轮官方公开资料研究并形成
+   `PROPERTY_OPERATIONS_REFERENCE.md`；正式小区仍需提供适用合同、地区规则和审批，
+   再决定是否导入真实 Corpus 及是否需要在线 Embedding。
 6. 正式上线运营：明确部署、账号、备份恢复、支持责任和放量回退方案。
 
 ## 下一步按收益排序

@@ -7,6 +7,10 @@ Policy corpus is synthetic demonstration data for FixFlow. It is maintained in
 rule, or the official policy of a property-management company. The strict JSON
 schema rejects undeclared fields and executable configuration.
 
+公开物业运行参考、住户最小输入原则及正式小区政策接入边界见
+`docs/PROPERTY_OPERATIONS_REFERENCE.md`。公开资料只用于形成产品原则；当前合成
+Corpus 不会被悄悄改写成“真实法规”，地方时限也不会被冒充全国统一规则。
+
 Task 7 implements a provider-neutral, read-only policy-evidence boundary:
 
 ```text
