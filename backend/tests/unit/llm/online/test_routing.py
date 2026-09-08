@@ -150,6 +150,24 @@ async def test_two_flash_transport_failures_fall_back_to_pro() -> None:
 
 
 @pytest.mark.asyncio
+async def test_flash_only_runtime_exhausts_without_contacting_another_model() -> None:
+    flash = FakeProvider(
+        _error(LLMProviderErrorCode.TIMEOUT),
+        _error(LLMProviderErrorCode.CONNECTION_FAILED),
+    )
+    router = DeepSeekStructuredRouter(
+        flash=flash,
+        policy=RoutingPolicy(retry_delay_seconds=0, per_call_timeout_seconds=20),
+    )
+
+    with pytest.raises(ProviderExhaustedError) as caught:
+        await _call(router)
+
+    assert caught.value.model == "deepseek-v4-flash"
+    assert [item.phase for item in router.observations] == ["flash", "flash"]
+
+
+@pytest.mark.asyncio
 async def test_schema_failure_gets_exactly_one_controlled_repair() -> None:
     flash = FakeProvider(
         _error(LLMProviderErrorCode.SCHEMA_VALIDATION_FAILED),

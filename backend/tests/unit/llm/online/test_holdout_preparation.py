@@ -173,7 +173,7 @@ def test_frozen_suite_identities_cover_prompt_schema_scorer_gate_and_router() ->
         assert len(identity.normalization_sha256) == 64
         assert len(identity.scorer_sha256) == 64
         assert len(identity.gate_sha256) == 64
-        assert identity.provider_router_version == "deepseek-flash-pro-router-v1"
+        assert identity.provider_router_version == "deepseek-flash-router-v2"
 
     root = Path(__file__).parents[5]
     assert structured.scorer_sha256 == sha256_file(

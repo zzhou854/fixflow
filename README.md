@@ -2,7 +2,7 @@
 
 > **Current status (2026-09-08): core engineering implemented; product acceptance
 > and formal online qualification remain open.** Default provider: `scripted`.
-> Authenticated development allowlisting supports DeepSeek Flash/Pro; this is
+> Authenticated development allowlisting supports DeepSeek Flash; this is
 > not production activation. See [current roadmap](docs/IMPLEMENTATION_ROADMAP.md).
 > Historical completion reports and test totals are evidence, not current guarantees.
 
@@ -83,7 +83,7 @@ in the current roadmap; implementation does not imply production readiness:
 - a single current roadmap and risk-based verification rules in `AGENTS.md`.
 
 GLM-5.1 is a historical adapter, not the current optimization target.
-DeepSeek-V4 Flash/Pro supports controlled development allowlisting; production
+DeepSeek-V4 Flash supports controlled development allowlisting; production
 activation is separate. Historical Architecture 3.0
 passed Smoke, both development repeats, and both formal Regression repeats, but
 its only permitted locked engineering Holdout failed six absolute quality
@@ -189,7 +189,7 @@ are disabled in `.env.example` and Docker production configuration. See
 `docs/ONLINE_PROVIDER.md` and `docs/MESSAGE_OUTCOME_CONTRACT.md`.
 
 Commercial-hardening phase 1B adds an inactive controlled DeepSeek candidate:
-Flash-first structured fact extraction, one bounded repair, Pro fallback, a
+Flash-only structured fact extraction, one bounded repair, then human review, a
 single 25-second request budget, independent circuit breakers, deterministic
 grounded-response templates, explicit qualification gates, and sanitized
 Shadow-ready evidence. Revision `20260730_0008` stores only non-authoritative

@@ -1,4 +1,4 @@
-"""Bounded Flash-first structured routing with one repair and Pro fallback."""
+"""Bounded Flash-only structured routing with one controlled schema repair."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from app.llm.online.budget import ModelCallBudget, current_model_call_budget
 from app.llm.online.circuit import CircuitBreaker, CircuitBreakerRegistry
 
 Sleeper = Callable[[float], Awaitable[None]]
-PROVIDER_ROUTER_VERSION = "deepseek-flash-pro-router-v1"
+PROVIDER_ROUTER_VERSION = "deepseek-flash-router-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +63,7 @@ class DeepSeekStructuredRouter:
         self,
         *,
         flash: LLMProvider,
-        pro: LLMProvider,
+        pro: LLMProvider | None = None,
         flash_model: str = "deepseek-v4-flash",
         pro_model: str = "deepseek-v4-pro",
         policy: RoutingPolicy | None = None,
@@ -77,7 +77,9 @@ class DeepSeekStructuredRouter:
         self._policy = policy or RoutingPolicy()
         self._circuits = circuits or CircuitBreakerRegistry()
         self._flash_circuit = self._circuits.get(self.provider_name, flash_model)
-        self._pro_circuit = self._circuits.get(self.provider_name, pro_model)
+        self._pro_circuit = (
+            self._circuits.get(self.provider_name, pro_model) if pro is not None else None
+        )
         self._sleeper = sleeper
         self.observations: list[RoutingObservation] = []
 
@@ -127,7 +129,12 @@ class DeepSeekStructuredRouter:
                 raise
             last_error = exc
 
+        if self._pro is None:
+            assert last_error is not None
+            raise self._exhausted(last_error)
+
         try:
+            assert self._pro_circuit is not None
             result, schema_error = await self._route_model(
                 provider=self._pro,
                 model=self._pro_model,
@@ -148,14 +155,18 @@ class DeepSeekStructuredRouter:
                 raise
             last_error = exc
         assert last_error is not None
-        raise ProviderExhaustedError(
+        raise self._exhausted(last_error)
+
+    @staticmethod
+    def _exhausted(last_error: LLMProviderError) -> ProviderExhaustedError:
+        return ProviderExhaustedError(
             last_error.code,
             provider=last_error.provider,
             model=last_error.model,
             retryable=False,
             request_id=last_error.request_id,
             attempt_count=last_error.attempt_count,
-            safe_detail="all authorized structured providers were exhausted",
+            safe_detail="the authorized structured provider was exhausted",
             cause_type=last_error.cause_type,
             schema_error_summary=last_error.schema_error_summary,
         )
@@ -321,10 +332,12 @@ class DeepSeekStructuredRouter:
         )
 
     async def health_check(self) -> bool:
-        return await self._flash.health_check() and await self._pro.health_check()
+        return await self._flash.health_check()
 
     async def close(self) -> None:
         for provider in (self._flash, self._pro):
+            if provider is None:
+                continue
             close = getattr(provider, "close", None)
             if close is not None:
                 await close()

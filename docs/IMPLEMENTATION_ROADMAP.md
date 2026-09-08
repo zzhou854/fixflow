@@ -7,7 +7,7 @@
 
 核心工程和演示界面已实现，开发账号在线链路已有历史纵向证据；正式在线质量资格和真实使用验收仍未完成。停止使用“100% 完成”或“生产就绪”作为当前总体结论。
 
-开发助手使用 GPT-6 Astra；应用使用 DeepSeek-V4-Flash / Pro。产品仍限于住宅漏水、电气、门锁。
+应用在线候选使用 DeepSeek-V4-Flash；Flash 耗尽后转人工，不再调用 Pro。产品仍限于住宅漏水、电气、门锁。
 
 ## 已实现及实际边界
 
@@ -19,7 +19,7 @@
 | 产品与身份 | JWT、Fetch SSE、持久消息、中文界面、最近五条/全部会话/归档恢复、物业工作台 | 本轮未重新验证运行环境和交互体验 |
 | 人工处理 | human_review_cases、工单前任务、认领/处理、分层审查 | 仍需实际操作演练 |
 | 可靠性 | Outbox、Trace、UNKNOWN_COMMIT 对账、故障注入、隔离 Replay、Recovery Console | Replay 不恢复生产数据库或重发 Mutation |
-| 在线模型 | 认证白名单、Flash/Pro、修复/重试/预算/熔断、受控 Grounded 与模板降级 | 默认 scripted；开发调用不等于生产开放 |
+| 在线模型 | 认证白名单、Flash 有限重试/修复/预算/熔断、耗尽后转人工、受控 Grounded 与模板降级 | 默认 scripted；开发调用不等于生产开放 |
 | 交付与评测 | Compose、Seed、Runner、Scorer、Gate、输入投影、版本与哈希治理 | 离线 Golden 自测不能代替资格结果 |
 
 最近记录的验收为 2026-08-01：后端 1664 passed、前端 42 passed、静态检查与构建通过、Alembic 零漂移。这是历史证据，不是本次重跑结果，也不是未来测试数量门槛。

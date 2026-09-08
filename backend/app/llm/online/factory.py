@@ -97,18 +97,10 @@ def _build_router(
         config=config("deepseek-v4-flash"),
         api_key=api_key,
     )
-    pro = DeepSeekStructuredInterpretationProvider(
-        prompt=prompt,
-        parser=parser,
-        config=config("deepseek-v4-pro"),
-        api_key=api_key,
-    )
     return DeepSeekStructuredRouter(
         flash=flash,
-        pro=pro,
         policy=RoutingPolicy(
             flash_transport_attempts=2,
-            pro_transport_attempts=1,
             per_call_timeout_seconds=min(
                 settings.deepseek_request_timeout_seconds,
                 settings.llm_model_budget_seconds,

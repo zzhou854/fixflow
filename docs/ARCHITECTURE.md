@@ -19,7 +19,7 @@ flowchart LR
     API --> Orchestrator["Single typed orchestrator"]
     Orchestrator --> Services["Deterministic application services"]
     Orchestrator --> LLM["Typed interpret/compose core"]
-    LLM --> Online["Allowlisted DeepSeek Flash / Pro; scripted default"]
+    LLM --> Online["Allowlisted DeepSeek Flash; scripted default"]
     Orchestrator --> MCPClient["Streamable HTTP MCP client"]
     MCPClient --> MCP["property-operations-mcp"]
     MCP --> Services
@@ -308,8 +308,8 @@ runs from persisted facts without replaying MCP or Application mutations.
 Commercial-hardening phase 1B keeps the Single Orchestrator and adds two narrow
 language ports. Structured Understanding extracts facts into the deterministic
 hybrid decision pipeline; Grounded Response can only select presentation over
-server-owned templates and allowlisted facts. A Flash/Pro router owns the shared
-deadline, bounded repair/fallback, and independent circuits. Provider exhaustion
+server-owned templates and allowlisted facts. A Flash-only router owns the shared
+deadline, bounded retry, one schema repair, and circuit. Provider exhaustion
 becomes a typed Agent failure; the existing reliability transaction, not the
 provider, creates the human-review case. Optional Shadow execution is
 zero-influence and commits sanitized evidence independently.
