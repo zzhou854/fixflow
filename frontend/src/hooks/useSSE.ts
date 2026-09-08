@@ -69,7 +69,11 @@ export function useSSE(
         }
       }
     })()
-    return () => { controller.abort(); void reader?.cancel(); setStatus('closed') }
+    return () => {
+      controller.abort()
+      void reader?.cancel().catch(() => undefined)
+      setStatus('closed')
+    }
   }, [reconcile, threadId, token])
   return status
 }

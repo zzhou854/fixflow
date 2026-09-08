@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons'
 import {
   Alert,
+  App as AntdApp,
   Button,
   Card,
   Descriptions,
@@ -14,7 +15,6 @@ import {
   Empty,
   Input,
   List,
-  Modal,
   Segmented,
   Space,
   Tag,
@@ -79,6 +79,7 @@ function safetyColor(level: HumanReviewSafetyLevel): string {
 }
 
 export function HumanReviewQueue({ token }: { token: string }) {
+  const { modal } = AntdApp.useApp()
   const [items, setItems] = useState<HumanReviewCase[]>([])
   const [status, setStatus] = useState<HumanReviewStatus>('OPEN')
   const [search, setSearch] = useState('')
@@ -168,7 +169,7 @@ export function HumanReviewQueue({ token }: { token: string }) {
 
   function resolve(item: HumanReviewCase, target: 'RESOLVED' | 'DISMISSED') {
     let note = ''
-    Modal.confirm({
+    modal.confirm({
       title: target === 'RESOLVED' ? '确认问题已经处理？' : '确认关闭这条任务？',
       content: (
         <Input.TextArea
