@@ -290,4 +290,5 @@ async def test_flash_and_pro_circuit_state_is_independent() -> None:
     router = _router(flash, pro)
     await _call(router)
     assert router._flash_circuit.snapshot().state is CircuitState.OPEN
+    assert router._pro_circuit is not None
     assert router._pro_circuit.snapshot().state is CircuitState.CLOSED
