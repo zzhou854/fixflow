@@ -25,7 +25,7 @@ export function InterruptPanel({
           description="不用填写代码或英文，像平时聊天一样描述即可。"
         />
         <Typography.Paragraph className="interrupt-explanation">
-          {interrupt.message}
+          可以直接用一句话补充，不需要填写编号或专业术语。
         </Typography.Paragraph>
         <Form
           onFinish={(value: { information: string }) =>
@@ -104,7 +104,7 @@ export function InterruptPanel({
         showIcon
         type="info"
         message="请选择一个方便的候选时间"
-        description="候选时间并非预约保证；提交后系统还会进行并发冲突校验。"
+        description="提交后会再次确认是否预约成功；如时间已被占用，我们会请您重新选择。"
       />
       <List
         dataSource={interrupt.slots}

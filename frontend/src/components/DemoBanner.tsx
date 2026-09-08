@@ -1,5 +1,5 @@
 import { Alert } from 'antd'
 
 export function DemoBanner() {
-  return <Alert banner type="info" message="系统演示环境 · 业务操作、权限和预约仍由确定性规则校验" />
+  return <Alert banner type="info" message="服务试运行中 · 如果自动处理遇到问题，物业工作人员会继续跟进" />
 }

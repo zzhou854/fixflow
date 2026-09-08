@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, vi } from 'vitest'
 import { api } from '../api/client'
@@ -97,6 +97,36 @@ test('uses the resume endpoint when chatting during a need-information interrupt
       intent_version: 3,
       user_message: '厨房水槽下方',
     }),
+    expect.any(String),
   )
   expect(api.sendMessage).not.toHaveBeenCalled()
+})
+
+test('reuses the same request identity when the resident retries a failed send', async () => {
+  vi.mocked(api.properties).mockResolvedValue([{ property_id: 'p', community_name: '星河花园', building_no: '3', unit_no: '2', room_no: '1201', address_text: '星河花园 1201' }])
+  vi.mocked(api.createThread)
+    .mockRejectedValueOnce(new Error('network unavailable'))
+    .mockResolvedValue({
+      thread_id: 'retry-thread', trace_id: 'trace', message_id: 'message', workflow_stage: 'NEED_INFO',
+      run_status: 'INTERRUPTED', message_outcome: 'COMPLETED', business_status: 'NEED_INFORMATION', template_id: 'NEED_INFORMATION', required_user_action: 'PROVIDE_DETAILS', display_action_text: '请补充位置', assistant_message: '请补充位置',
+      interrupt: null, active_ticket: null, active_appointment: null,
+      policy_status: { sufficiency: null, conflict: false, evidence_ids: [] },
+      structured_issue: { issue_category: 'WATER_LEAK', issue_location: null, issue_description: '漏水', severity: null },
+      safety_review_required: false, error_code: null, development_mode: true,
+      conversation_messages: [{ role: 'USER', content: '家里漏水', created_at: '2026-09-08T10:00:00+08:00' }],
+    })
+
+  render(<ResidentPage />)
+  await screen.findByText('星河花园 1201')
+  const input = await screen.findByPlaceholderText('请描述问题，例如：厨房水龙头漏水，明天下午有空')
+  await userEvent.type(input, '家里漏水')
+  await userEvent.click(screen.getByRole('button', { name: /发送/ }))
+  await waitFor(() => expect(api.createThread).toHaveBeenCalledTimes(1))
+  await screen.findByText('这次没有处理完成')
+  await userEvent.click(await screen.findByRole('button', { name: /重试这条消息/ }))
+
+  expect(api.createThread).toHaveBeenCalledTimes(2)
+  expect(vi.mocked(api.createThread).mock.calls[1]).toEqual(
+    vi.mocked(api.createThread).mock.calls[0],
+  )
 })

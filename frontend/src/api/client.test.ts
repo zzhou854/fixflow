@@ -30,3 +30,26 @@ test('sends an Asia/Shanghai reference time with the matching UTC offset', async
   expect(payload.reference_time).toMatch(/\+08:00$/)
   vi.unstubAllGlobals()
 })
+
+test('uses one stable message id and timestamp for a retryable message request', async () => {
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+  vi.stubGlobal('fetch', fetchMock)
+  await api.sendMessage(
+    'token',
+    'thread',
+    '厨房漏水',
+    '59bf30c8-6dd0-49b1-a71b-abfc51ad97fc',
+    '2026-09-08T10:00:00+08:00',
+  )
+  const request = fetchMock.mock.calls[0]?.[1] as RequestInit
+  const payload = JSON.parse(String(request.body)) as {
+    message_id: string
+    reference_time: string
+  }
+  expect(new Headers(request.headers).get('Idempotency-Key')).toBe(
+    '59bf30c8-6dd0-49b1-a71b-abfc51ad97fc',
+  )
+  expect(payload.message_id).toBe('59bf30c8-6dd0-49b1-a71b-abfc51ad97fc')
+  expect(payload.reference_time).toBe('2026-09-08T10:00:00+08:00')
+  vi.unstubAllGlobals()
+})

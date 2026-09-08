@@ -38,6 +38,16 @@ interface ChatMessage {
 
 type FailedAction = { label: string; retry: () => Promise<void> }
 
+const RESIDENT_ERROR_MESSAGES: Record<string, string> = {
+  PROPERTY_CONTEXT_REQUIRED: '请先选择需要维修的房屋。',
+  PERMISSION_DENIED: '当前账号不能处理这套房屋，请联系物业核实。',
+  THREAD_IDENTITY_CONFLICT: '这段会话不属于当前账号，请重新选择会话。',
+  VERSION_CONFLICT: '信息刚刚发生了变化，请刷新后再试。',
+  TIME_CONFLICT: '这个上门时间刚刚被占用，请重新选择。',
+  STALE_RESUME: '页面信息已经更新，请刷新后重新选择。',
+  SERVICE_UNAVAILABLE: '服务暂时繁忙，请稍后重试或请物业工作人员协助。',
+}
+
 function conversation(thread: AgentThread): ChatMessage[] {
   return (thread.conversation_messages ?? []).map((item) => ({
     role: item.role === 'USER' ? 'user' : 'assistant',
@@ -46,7 +56,13 @@ function conversation(thread: AgentThread): ChatMessage[] {
 }
 
 function friendlyError(reason: unknown): string {
-  if (reason instanceof ApiError) return reason.body.message
+  if (reason instanceof ApiError) {
+    return RESIDENT_ERROR_MESSAGES[reason.body.code]
+      ?? '这次处理没有完成，请重试或请物业工作人员协助。'
+  }
+  if (reason instanceof DOMException && reason.name === 'AbortError') {
+    return '处理时间有点长，请重试或请物业工作人员协助。'
+  }
   return '服务暂时没有响应，请稍后重试或转交物业工作人员。'
 }
 
@@ -65,6 +81,7 @@ export function ResidentPage() {
   const [conversationDrawerOpen, setConversationDrawerOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [failedAction, setFailedAction] = useState<FailedAction | null>(null)
+  const [pendingStep, setPendingStep] = useState<string | null>(null)
   const messageListRef = useRef<HTMLDivElement>(null)
 
   const apply = useCallback((next: AgentThread) => {
@@ -113,7 +130,19 @@ export function ResidentPage() {
   const awaitingSelection =
     thread?.interrupt?.kind === 'DUPLICATE_TICKET_SELECTION' ||
     thread?.interrupt?.kind === 'APPOINTMENT_SLOT_SELECTION'
-  const progress = progressLabel(thread, busy)
+  const progress = pendingStep ?? progressLabel(thread, busy)
+
+  const beginProgress = () => {
+    setPendingStep('正在理解您的需求')
+    const timers = [
+      window.setTimeout(() => setPendingStep('正在核对房屋和服务信息'), 3_000),
+      window.setTimeout(() => setPendingStep('正在确认处理结果，请稍候'), 9_000),
+    ]
+    return () => {
+      timers.forEach(window.clearTimeout)
+      setPendingStep(null)
+    }
+  }
 
   useEffect(() => {
     if (!token) return
@@ -156,15 +185,18 @@ export function ResidentPage() {
 
   const resume = async (body: object) => {
     if (!token || !thread) return
+    const idempotencyKey = crypto.randomUUID()
     const run = async () => {
       setBusy(true)
+      const endProgress = beginProgress()
       try {
-        apply(await api.resume(token, thread.thread_id, body))
+        apply(await api.resume(token, thread.thread_id, body, idempotencyKey))
         await refreshThreads()
       } catch (reason) {
         setFailedAction({ label: '重新提交', retry: run })
         toast.error(friendlyError(reason))
       } finally {
+        endProgress()
         setBusy(false)
       }
     }
@@ -175,12 +207,15 @@ export function ResidentPage() {
     const trimmed = text.trim()
     if (!token || !propertyId || !trimmed || awaitingSelection) return
     const existingThread = thread
+    const idempotencyKey = crypto.randomUUID()
+    const referenceTime = shanghaiReferenceTime()
     setMessages((current) => [...current, { role: 'user', text: trimmed }])
     setBusy(true)
     setInput('')
     setFailedAction(null)
     const run = async () => {
       setBusy(true)
+      const endProgress = beginProgress()
       try {
         let next: AgentThread
         if (existingThread && awaitingInformation) {
@@ -188,13 +223,25 @@ export function ResidentPage() {
             kind: 'PROVIDE_INFORMATION',
             intent_version: existingThread.interrupt!.intent_version,
             user_message: trimmed,
-            reference_time: shanghaiReferenceTime(),
+            reference_time: referenceTime,
             timezone_name: 'Asia/Shanghai',
-          })
+          }, idempotencyKey)
         } else if (existingThread) {
-          next = await api.sendMessage(token, existingThread.thread_id, trimmed)
+          next = await api.sendMessage(
+            token,
+            existingThread.thread_id,
+            trimmed,
+            idempotencyKey,
+            referenceTime,
+          )
         } else {
-          next = await api.createThread(token, propertyId, trimmed)
+          next = await api.createThread(
+            token,
+            propertyId,
+            trimmed,
+            idempotencyKey,
+            referenceTime,
+          )
         }
         apply(next)
         await refreshThreads()
@@ -202,6 +249,7 @@ export function ResidentPage() {
         setFailedAction({ label: '重试这条消息', retry: run })
         toast.error(friendlyError(reason))
       } finally {
+        endProgress()
         setBusy(false)
       }
     }

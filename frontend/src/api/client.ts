@@ -2,6 +2,7 @@ import type { AgentRun, AgentThread, ApiErrorBody, HumanReviewCase, HumanReviewE
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const SHANGHAI_OFFSET_MILLISECONDS = 8 * 60 * 60 * 1000
+const API_REQUEST_TIMEOUT_MILLISECONDS = 40_000
 
 export function shanghaiReferenceTime(now: Date = new Date()): string {
   return new Date(now.getTime() + SHANGHAI_OFFSET_MILLISECONDS)
@@ -19,9 +20,18 @@ export async function apiRequest<T>(path: string, token: string | null, init: Re
   const headers = new Headers(init.headers)
   headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers })
-  if (!response.ok) throw new ApiError(await response.json() as ApiErrorBody, response.status)
-  return await response.json() as T
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MILLISECONDS)
+  const abort = () => controller.abort()
+  init.signal?.addEventListener('abort', abort, { once: true })
+  try {
+    const response = await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller.signal })
+    if (!response.ok) throw new ApiError(await response.json() as ApiErrorBody, response.status)
+    return await response.json() as T
+  } finally {
+    window.clearTimeout(timeout)
+    init.signal?.removeEventListener('abort', abort)
+  }
 }
 
 export const api = {
@@ -95,15 +105,15 @@ export const api = {
   restoreThread: (token: string, threadId: string, expectedVersion: number) => apiRequest<{thread_id: string; lifecycle_status: 'ACTIVE'; archived_at: null; version: number}>(`/api/v1/agent/threads/${threadId}/restore`, token, {
     method: 'POST', body: JSON.stringify({ expected_version: expectedVersion }),
   }),
-  createThread: (token: string, property_id: string, initial_message: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>('/api/v1/agent/threads', token, {
+  createThread: (token: string, property_id: string, initial_message: string, idempotencyKey: string = crypto.randomUUID(), referenceTime: string = shanghaiReferenceTime()) => apiRequest<AgentThread>('/api/v1/agent/threads', token, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ property_id, initial_message, timezone_name: 'Asia/Shanghai', reference_time: shanghaiReferenceTime() }),
+    body: JSON.stringify({ property_id, initial_message, timezone_name: 'Asia/Shanghai', reference_time: referenceTime }),
   }),
-  sendMessage: (token: string, threadId: string, message: string, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}/messages`, token, {
+  sendMessage: (token: string, threadId: string, message: string, idempotencyKey: string = crypto.randomUUID(), referenceTime: string = shanghaiReferenceTime()) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}/messages`, token, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ message, message_id: crypto.randomUUID(), timezone_name: 'Asia/Shanghai', reference_time: shanghaiReferenceTime() }),
+    body: JSON.stringify({ message, message_id: idempotencyKey, timezone_name: 'Asia/Shanghai', reference_time: referenceTime }),
   }),
   resume: (token: string, threadId: string, body: object, idempotencyKey: string = crypto.randomUUID()) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}/resume`, token, {
     method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(body),
