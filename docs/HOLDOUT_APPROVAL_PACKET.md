@@ -1,5 +1,9 @@
 # Phase 1D-B revised Holdout approval packet
 
+> Historical 2.1.0 / 1.1.0 package, not the latest approval request. See
+> HOLDOUT_REVISION_V2.md for Structured 2.2.0 / Grounded 1.2.0. This file grants
+> no approval and must not be used to launch qualification of an obsolete version.
+
 ## Decision requested
 
 This packet requests a new independent review of every revised Golden case. It

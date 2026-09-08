@@ -1,5 +1,9 @@
 # Final project completion report
 
+> Historical report, not current project status. Its “100%” and production-ready
+> labels are superseded by IMPLEMENTATION_ROADMAP.md (2026-09-08). Retained for
+> audit history; test counts and environment checks below have not been rerun today.
+
 ## Status
 
 ```text

@@ -1,11 +1,10 @@
 # FixFlow
 
-> **Project status: COMPLETE.** Core product:
-> `PRODUCTION_READY_WITH_SCRIPTED_PROVIDER`. The online model is
-> `EXPERIMENTAL_NOT_QUALIFIED`, isolation is enforced, Shadow mode is available
-> but off by default, activation is prohibited, and the default provider is
-> `scripted`. The frontend has zero known High npm vulnerabilities. See
-> `docs/FINAL_PROJECT_COMPLETION_REPORT.md`.
+> **Current status (2026-09-08): core engineering implemented; product acceptance
+> and formal online qualification remain open.** Default provider: `scripted`.
+> Authenticated development allowlisting supports DeepSeek Flash/Pro; this is
+> not production activation. See [current roadmap](docs/IMPLEMENTATION_ROADMAP.md).
+> Historical completion reports and test totals are evidence, not current guarantees.
 
 The current model-quality work is a non-activated hybrid interpretation
 candidate: an LLM extracts evidence-backed language facts and deterministic code
@@ -24,15 +23,14 @@ demo.
 
 ## Current status
 
-All planned product, reliability, deployment, and release-audit work is
-committed. Online-model qualification remains a separate, non-activated
-research track:
+Implemented capabilities below must be read with the limitations and priorities
+in the current roadmap; implementation does not imply production readiness:
 
 - Python 3.12 and uv project configuration;
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
 - PostgreSQL with pgvector through Docker Compose, validated healthy;
 - frozen domain states and pure transition rules;
-- SQLAlchemy persistence mappings and three reviewable Alembic migrations;
+- SQLAlchemy persistence mappings and eight Alembic migrations (head `20260730_0008`);
 - PostgreSQL constraints and disposable-database integration tests;
 - focused Repository ports and SQLAlchemy implementations;
 - explicit ORM/domain mapping and Unit of Work;
@@ -82,18 +80,19 @@ research track:
 - an Operator-only, ticket-linked Recovery Console with read-only recommendations;
 - a 120-case versioned synthetic interpretation corpus, deterministic scorer,
   regression comparison, release policy, resumable Runner, and safe local artifacts;
-- the implementation roadmap and mandatory task-alignment gates.
+- a single current roadmap and risk-based verification rules in `AGENTS.md`.
 
-GLM-5.1 and DeepSeek-V4 Flash/Pro structured interpretation adapters remain
-available only behind explicit experimental configuration. Architecture 3.0
+GLM-5.1 is a historical adapter, not the current optimization target.
+DeepSeek-V4 Flash/Pro supports controlled development allowlisting; production
+activation is separate. Historical Architecture 3.0
 passed Smoke, both development repeats, and both formal Regression repeats, but
 its only permitted locked engineering Holdout failed six absolute quality
 gates. Repeat 2 was not run; no Baseline or Release Candidate was created.
-Activation remains prohibited and the qualified online candidate is **None**.
-See `docs/HYBRID_3_0_QUALIFICATION_BLOCKER.md`. Online-model improvement,
-real-distribution Shadow evidence, drift monitoring, cost optimization, and
-optional activation remain research work; they do not block the complete
-scripted-provider product.
+No formally qualified production candidate is established by that evidence.
+See `docs/HYBRID_3_0_QUALIFICATION_BLOCKER.md` for historical results and
+`docs/HOLDOUT_REVISION_V2.md` for the later review package. New evaluation runs
+require a concrete release decision; indefinite prompt/Holdout iteration is not
+the default work plan. Prioritize actual resident and operator usability.
 Replay verifies control-plane determinism;
 it is not Event Sourcing, database time travel, or automatic repair.
 
@@ -256,20 +255,13 @@ and never maintained manually.
 - [Phase 1D-B Holdout revision report](docs/HOLDOUT_REVISION_1D_B.md)
 - [Commercial hardening acceptance](docs/COMMERCIAL_HARDENING_ACCEPTANCE.md)
 
-## Week-1 delivery order
+## Next work and verification
 
-Each item is implemented and accepted separately; the next item starts only
-after relevant tests pass.
-
-1. Database engine, session lifecycle, pgvector extension, and migration smoke test.
-2. Users, properties, and resident-property relations with authorization tests.
-3. Repair-ticket schema, approved status matrix, and domain transition tests.
-4. Workers, skills, service areas, and availability windows.
-5. Appointments, versioning, and PostgreSQL overlap exclusion constraints.
-6. Idempotency records and duplicate-request behavior.
-7. Small application services for ticket and appointment use cases.
-8. Independent MCP tools that call those application services.
-9. API, repository integration, MCP contract, and deterministic end-to-end tests.
+Use [the current roadmap](docs/IMPLEMENTATION_ROADMAP.md), not historical task
+checklists. Standard commands above are available tools, not a requirement to
+rerun every suite for every edit. Documentation changes require diff/link/fact
+checks; code changes require focused risk-based regression. Full acceptance is
+reserved for release or material cross-layer changes.
 
 ## License and policy data
 

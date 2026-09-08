@@ -1,7 +1,8 @@
 # Architecture
 
-> The scripted-provider product architecture is complete and
-> production-packaged. The container topology is PostgreSQL -> one-shot
+> Core architecture is implemented; deployment packaging is not proof of
+> production readiness. Current progress is in IMPLEMENTATION_ROADMAP.md.
+> The container topology is PostgreSQL -> one-shot
 > Migration and Checkpoint initialization -> independent MCP -> API ->
 > frontend. Production startup validates database head, JWT secret, Debug,
 > CORS, Allowed Hosts, primary provider, and experimental-mode isolation before
@@ -18,7 +19,7 @@ flowchart LR
     API --> Orchestrator["Single typed orchestrator"]
     Orchestrator --> Services["Deterministic application services"]
     Orchestrator --> LLM["Typed interpret/compose core"]
-    LLM --> GLM["Optional GLM-5.1 structured interpretation"]
+    LLM --> Online["Allowlisted DeepSeek Flash / Pro; scripted default"]
     Orchestrator --> MCPClient["Streamable HTTP MCP client"]
     MCPClient --> MCP["property-operations-mcp"]
     MCP --> Services
@@ -35,7 +36,7 @@ use the same Pydantic request and result schemas.
 ## Current implementation status
 
 Completed foundations now include project initialization, the approved domain
-state design, pure domain transitions, SQLAlchemy persistence mappings, two
+state design, pure domain transitions, SQLAlchemy persistence mappings, eight
 reviewable business migrations, focused Repository ports and SQLAlchemy
 implementations, Unit of Work, deterministic application services, and real
 PostgreSQL transaction/concurrency tests.
@@ -55,9 +56,10 @@ retrieval evaluation. Embedding-space identity is persisted and must match
 exactly before vector comparison; evidence IDs survive clean database rebuilds,
 and stale retrieval results cannot merge into a newer intent. Task 6 adds the strict Agent State, deterministic
 `intent_version` invalidation, provider-neutral LLM contract, versioned prompts,
-and independently tested interpret/compose nodes. FastAPI business endpoints,
-online LLM/embedding integration, Harness, and full system evaluation remain
-later roadmap stages. Task 9 adds the trusted JWT caller boundary,
+and independently tested interpret/compose nodes. Online production qualification
+and real-policy retrieval quality remain open; see the current roadmap rather
+than treating the following historical task sequence as a future checklist.
+Task 9 adds the trusted JWT caller boundary,
 sanitised Agent/Resident/Operator APIs, bounded development SSE, and the first
 React resident and operator surfaces. It does not move business rules into
 routers or the browser.
@@ -209,8 +211,8 @@ and revision `20260719_0002` adds Task 4 audit links without rewriting it;
 | `outbox_events` | Same-transaction domain events with lease, retry/backoff, dispatch, and dead-letter state |
 
 Official Checkpoint tables remain in the isolated Checkpoint database. Replay,
-fault-harness, evaluation, and any additional ticket event stream remain later
-roadmap work.
+fault-injection tests and evaluation infrastructure are implemented; their
+existence does not establish online-model quality or authorize new event streams.
 
 ## Concurrency and transaction boundary
 

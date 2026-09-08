@@ -2,6 +2,11 @@
 
 ## Product objective
 
+Current implementation status and delivery priorities are maintained only in
+IMPLEMENTATION_ROADMAP.md. Historical stage checklists below explain the original
+plan, not standing instructions to rebuild completed work or expand evaluation.
+Frozen business rules remain in force.
+
 FixFlow turns an unstructured and changing resident repair request into a
 constrained business workflow and reliably coordinates a long-running repair
 across a resident, property operator, and maintenance worker.
@@ -19,7 +24,7 @@ Supported issue categories:
 2. electrical faults;
 3. door-lock faults.
 
-User surfaces planned for later phases:
+Implemented user surfaces:
 
 - resident agent chat;
 - property-operator workbench.
@@ -60,7 +65,7 @@ conversation work state but cannot replace current domain snapshots.
 - PostgreSQL, pgvector, JSONB for trace/tool snapshots, and PostgreSQL FTS;
 - pytest, pytest-asyncio, httpx, structlog, Pydantic Settings;
 - official Python MCP SDK with a separate Streamable HTTP server;
-- later: LangGraph, React, TypeScript, Vite, and Ant Design;
+- LangGraph, React, TypeScript, Vite, and Ant Design;
 - uv with `pyproject.toml` and committed `uv.lock` is the only dependency source.
 
 ## Explicit non-goals
@@ -84,4 +89,3 @@ Stage 0 creates only the minimum week-1 skeleton, uv configuration, PostgreSQL
 Compose service, Alembic environment, smoke test, architecture documents, week-1
 sequence, and candidate domain-state matrices. Domain enums are not implemented
 until the matrices are approved.
-

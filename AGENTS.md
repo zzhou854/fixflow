@@ -1,140 +1,52 @@
-# FixFlow development instructions
+# FixFlow 开发规则
 
-This file applies to the entire repository.
+适用于整个仓库。按用户 2026-09-08 决策整理。
 
-## Authority and scope
+## 目标与权威入口
 
-- `docs/PROJECT_SPEC.md` records the frozen product scope.
-- `docs/ARCHITECTURE.md` records component and data-ownership boundaries.
-- `docs/STATE_MACHINE.md` records the user-approved domain states and transitions.
-- `docs/MCP_CONTRACTS.md` owns MCP transport and tool-contract rules.
-- `docs/IMPLEMENTATION_ROADMAP.md` preserves the north star, delivery stages,
-  mandatory capabilities, and alignment gates.
-- Do not silently broaden the three supported issue categories: water leak,
-  electrical fault, and door-lock fault.
+- 目标：让漏水、电气、门锁三类报修实际可用、可解释、可恢复，形成可信的项目演示。
+- 当前进度和下一步只维护在 docs/IMPLEMENTATION_ROADMAP.md。旧任务报告是历史证据，不是待执行指令。
+- 后续开发助手使用 gpt-6-astra；这是用户的开发模型选择，不是应用 Provider。不能切换当前会话时不得声称已切换。
+- 应用模型保持 DeepSeek-V4-Flash 主、DeepSeek-V4-Pro 降级；默认 scripted，允许后端认证开发白名单在线调用。正式激活仍需独立发布授权。
+- 用户最新明确决定优先，其次是当前领域/架构契约。旧任务的临时阶段限制、Migration 上限、测试数量不自动延续。
+- PROJECT_SPEC 管范围，STATE_MACHINE 管状态，ARCHITECTURE 管分层，MCP_CONTRACTS 和 MESSAGE_OUTCOME_CONTRACT 管接口。
+- 读取与变更相关的文档和代码，不必每次重读全部文档或输出七项对齐表。
+- 已有明确批准证据的过时文档直接同步；只有业务语义、数据保留或发布权限存在实质歧义时才询问。
 
-When instructions conflict, apply this priority:
+## 业务边界
 
-1. later design decisions explicitly approved by the user;
-2. currently approved and frozen repository documents;
-3. committed migrations, domain rules, and tests;
-4. the original project's goal, scope, and final-delivery requirements;
-5. local implementation suggestions in one task prompt.
+- Single Orchestrator；LLM 负责理解及受约束回复，确定性代码负责权限、状态、排班和写库。
+- PostgreSQL 是业务事实源；恢复工作流刷新数据库快照。
+- Router、Graph Node、MCP Handler 不管理 ORM 事务；Application/UoW 负责事务和幂等。
+- 保留权限、版本、审计与恢复边界。不通过重发历史 Mutation 修复不确定提交。
+- 人工任务可以先于工单存在；不得伪造工单。
+- 会话删除是可恢复归档，不删除业务、Checkpoint、Trace 或 Replay 历史。
+- 不修改已提交 Migration；真实必要的 Schema 变更使用新 Revision。
 
-The original specification protects the final product goal. Later frozen
-documents may replace early implementation candidates. A task cannot silently
-change the goal, product surfaces, release scope, or core architecture. If code
-and documents disagree, stop and report the conflict instead of assuming the
-code is authoritative.
+## 工作必须推进项目
 
-## Delivery discipline
+- 每项工作用一句话说明实际用户问题、交付阻塞或维护收益，然后实施最小改动。
+- 删除重复说明、失效待办、无用脚手架和确认无引用的重复代码；删除前核对调用和数据影响。
+- “删除无关事情”不授权删除历史证据、封存资产、业务数据或全部测试。
+- 不再自主循环 Prompt/Challenge、扩张 Harness、ReAct 或消融；仅在缺陷分析或发布决策明确需要时开展。
+- 保留用户现有工作；按问题拆分提交。未要求本次提交时保留可审查差异。
+- 不给假设中的需求增加表、框架、服务或依赖。
 
-1. Read the applicable documents and existing implementation before editing.
-2. State the smallest task goal and the minimum required change.
-3. Keep domain rules out of API controllers, LangGraph nodes, and MCP handlers.
-4. Run formatting, type checks, and task-relevant tests.
-5. Do not claim completion while required checks fail.
-6. Report changed files, design reasons, commands, results, remaining issues,
-   and the next recommended task.
+## 验证纪律
 
-Do not generate broad placeholder trees, `pass`-only modules, fake online
-services, or unapproved future-week features.
+- 文档修改：检查差异、引用和事实；不跑全量测试、Docker 构建或在线评测。
+- 局部代码修改：运行能复现问题和验证修复的最小测试，必要时检查受影响类型/格式。
+- 事务、权限、Migration、恢复修改：运行对应数据库/集成测试。
+- 全量测试仅用于跨层重大改动、明确回归风险或发布闸门；同一代码和环境已有通过证据时直接复用。
+- 新失败、代码或环境变化才触发相关重跑；先定位，不机械重复整套命令。
+- 不以测试数量、重复成功次数或覆盖率代替产品验收。
+- 新测试必须防止具体回归，不镜像实现、不重复已有断言、不为低风险文档整理增加测试。
+- 在线调用必须有目的和预算；封存 Holdout 不用于调参、不自动审批或执行。
+- 汇报区分本次验证与历史结果，说明限制，不声称未经证实的生产就绪。
 
-## Mandatory task alignment
+## 工具和保密
 
-Before implementation begins, report:
-
-1. which roadmap capabilities the task advances;
-2. which capabilities the task explicitly does not implement;
-3. whether the task changes the business scope;
-4. whether the task changes an architecture boundary;
-5. whether it introduces a new technology;
-6. whether it delays an existing roadmap item;
-7. whether it conflicts with a frozen document or committed constraint.
-
-If the goal, scope, product shape, architecture, technology commitment, or a
-mandatory capability would change, stop and wait for explicit approval.
-
-After implementation, report:
-
-1. which roadmap items were completed or advanced;
-2. the tests or other evidence that prove this;
-3. which capabilities remain deferred;
-4. whether any original requirement was removed, weakened, or substituted;
-5. any new technical debt;
-6. effects on later Agent, RAG, Trace, Harness, or evaluation work;
-7. whether `docs/IMPLEMENTATION_ROADMAP.md` was synchronized.
-
-Passing tests alone is not a complete task report. Every report must explain how
-the change serves the final Agent product.
-
-## Architecture rules
-
-- Use one orchestrator, typed workflow state, few LLM nodes, and deterministic services.
-- PostgreSQL is the only source of business truth.
-- A LangGraph checkpoint never overrides current ticket or appointment state.
-- LLM output must pass Pydantic validation before entering workflow state.
-- LangGraph nodes and MCP handlers do not manage ORM transactions directly.
-- Mutating operations require actor, trace, idempotency, and expected-version data.
-- Worker behavior is append-only event data; it does not replace ticket or appointment state.
-- Prefer the simplest testable design; add no middleware merely to showcase technology.
-
-## Backend expansion guard
-
-- Do not create generic CRUD, workflow, repository, event-sourcing, Saga, or
-  idempotency frameworks.
-- Do not introduce a complex dependency-injection container.
-- Do not introduce Redis, Kafka, Celery, Kubernetes, unnecessary microservices,
-  or another business database.
-- Do not spend project time on administrative features unrelated to the frozen
-  demonstration loop.
-- Do not create tables, modules, or abstractions for hypothetical future needs.
-- Every infrastructure design must directly support a frozen fault scenario,
-  Agent flow, or evaluation goal.
-
-If backend work cannot be tied to at least one of business-loop completion,
-authorization, state consistency, idempotency, concurrency, recovery, Trace,
-fault injection, or evaluation, stop for scope review.
-
-## Tooling
-
-- Python is fixed to 3.12.
-- Use `uv`, `pyproject.toml`, and committed `uv.lock` only.
-- Install with `uv sync`; test with `uv run pytest`.
-- Do not introduce Poetry, PDM, or a manually maintained `requirements.txt`.
-- Online code uses PostgreSQL, not Redis, MySQL, MongoDB, or a separate vector store.
-
-## Current phase
-
-Stage A is complete: the domain and persistence model, transactional Application
-services, deterministic scheduling, and the independent MCP server are committed.
-Task 6 typed Agent State and Task 7 auditable policy retrieval are committed.
-Tasks 9–11 are committed. The current approved boundary is Task 12:
-Deterministic Replay, Replay-safe evidence capture, the read-only Operator
-Recovery Console, repeatability verification, and migration `20260723_0006`.
-Tasks 13-15 are committed. Task 16 Prompt remediation and versioned scorer work
-is implemented but not yet committed. The current approved goal is to make
-online GLM-5.1 evaluation rate-limit aware, iterate versioned interpretation
-Prompts without changing the formal Schema or frozen corpora, complete formal
-requalification, and create a verified Initial Baseline and Release Candidate.
-Production activation remains forbidden: the default Provider stays scripted,
-the model cannot call MCP, and no migration after `20260723_0006` is authorized.
-
-### Current-phase override (later approved)
-
-Commercial-hardening phase 1A is committed at tag
-`commercial-hardening-phase-1a`. Phase 1B is authorized to add only controlled
-online-provider infrastructure and revision `20260730_0008` for sanitized
-Shadow-ready evidence. This later instruction supersedes the stale migration
-limit above. Phase 1C development evidence is committed at
-`commercial-hardening-phase-1c`. Phase 1D-A produced two external Holdout
-suites, but independent assisted review returned
-`REVIEW_FAILED_CHANGES_REQUIRED`. Those sealed assets and review evidence are
-immutable and have an append-only adverse disposition. Phase 1D-B created
-revised `resident_interpretation_holdout@2.1.0` and
-`grounded_response_holdout@1.1.0` packages with scorer/gate `1.1.0`.
-They are `SEALED`, `PENDING_APPROVAL`, have zero live calls, and still require
-a fresh independent review of all 240 cases. The default Provider remains
-`scripted`; Holdout inference, online business traffic, formal Shadow, Canary,
-and production activation remain forbidden until separately approved and
-evidenced.
+- Python 3.12，uv + pyproject.toml + uv.lock；前端使用现有 npm/package-lock。
+- 工具不可用先查现有运行时，不引入另一套锁文件或修改全局环境。
+- 不提交 .env、凭据、日志、缓存或私有 Dataset/Golden。
+- 不新增 Redis/Kafka/Celery/Kubernetes、通用 CRUD/Saga 或复杂 DI 框架。

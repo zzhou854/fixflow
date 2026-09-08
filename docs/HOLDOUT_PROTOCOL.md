@@ -1,6 +1,13 @@
 # Independent Holdout qualification protocol
 
-## Current state
+## Current review pointer
+
+The latest repository-recorded package is Structured 2.2.0 / Grounded 1.2.0;
+see HOLDOUT_REVISION_V2.md. It remains subject to independent human approval.
+Before any execution, verify the private manifests and signatures; repository
+documentation alone is not authorization. No qualification is run by this update.
+
+## Historical phase 1D-B state
 
 Commercial-hardening phase 1D-B prepares revised synthetic qualification
 suites after phase 1D-A independent-assisted review returned
