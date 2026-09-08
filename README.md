@@ -1,10 +1,11 @@
 # FixFlow
 
-> **Current status (2026-09-08): core engineering implemented; product acceptance
-> and formal online qualification remain open.** Default provider: `scripted`.
+> **Current status (2026-09-09): stable local interview-demo candidate; formal
+> online qualification and production activation remain open.** Default provider: `scripted`.
 > Authenticated development allowlisting supports DeepSeek Flash; this is
 > not production activation. See [current roadmap](docs/IMPLEMENTATION_ROADMAP.md).
 > Historical completion reports and test totals are evidence, not current guarantees.
+> See the latest [browser and operational acceptance evidence](docs/PRODUCT_ACCEPTANCE_20260909.md).
 
 The current model-quality work is a non-activated hybrid interpretation
 candidate: an LLM extracts evidence-backed language facts and deterministic code
