@@ -10,12 +10,15 @@ vi.mock('../api/client', async (load) => {
   return { ...actual, api: { ...actual.api, operatorTickets: vi.fn(), operatorTicket: vi.fn(), operatorEscalate: vi.fn(), reconciliationCase: vi.fn(), humanReviewCases: vi.fn().mockResolvedValue({ items: [], limit: 100, offset: 0 }), transitionHumanReview: vi.fn(), humanReviewEvents: vi.fn() } }
 })
 
-test('renders ticket data and the explicit known-thread review control', async () => {
+test('shows business work first and keeps thread inspection under processing rationale', async () => {
   vi.mocked(api.operatorTickets).mockResolvedValue({ items: [{ ticket_id: 'ticket-1', resident_id: 'r', resident_username: 'resident_demo', property_id: 'p', property_label: '星河花园 1201', issue_category: 'ELECTRICAL', issue_location: '客厅', severity: 'HIGH', ticket_status: 'OPEN', rework_count: 0, version: 1, appointment: null, updated_at: '2026-07-21T00:00:00Z' }] })
   render(<OperatorPage />)
   expect(await screen.findByText('ticket-1')).toBeInTheDocument()
   expect(screen.getByText('电气报修')).toBeInTheDocument()
-  expect(screen.getByLabelText('Agent Thread ID')).toBeInTheDocument()
+  expect(screen.queryByLabelText('关联会话编号')).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('tab', { name: '处理依据' }))
+  expect(screen.getByLabelText('关联会话编号')).toBeInTheDocument()
+  expect(screen.queryByText('Workflow Stage')).not.toBeInTheDocument()
 })
 
 test('keeps an uncertain escalation disabled until NOT_COMMITTED permits the same-key retry', async () => {

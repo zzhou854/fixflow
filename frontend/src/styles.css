@@ -189,8 +189,17 @@ button, input, textarea { font: inherit; }
 .summary-card .ant-descriptions-item-content { word-break: break-word; }
 .drawer-stack { width: 100%; }
 .operator-content { min-height: 0; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.operator-workspace-tabs > .ant-tabs-nav { position: sticky; top: -20px; z-index: 5; margin: 0 0 14px; padding: 10px 4px 0; background: #eef5f3; }
+.operator-workspace-tabs .ant-tabs-tab { font-weight: 600; }
+.operator-workspace-tabs .ant-tabs-content-holder,
+.operator-workspace-tabs .ant-tabs-content,
+.operator-workspace-tabs .ant-tabs-tabpane { min-width: 0; }
+.operator-workspace-tabs .ant-tabs-tabpane-active { display: flex; flex-direction: column; gap: 14px; }
+.operator-workspace-tabs .ant-tabs-tabpane-hidden { display: none; }
+.thread-review-search { margin: 14px 0; }
 .review-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .review-toolbar .ant-input-search { width: min(360px, 100%); }
+.review-case-list { max-height: 340px; overflow-y: auto; padding-right: 4px; }
 .review-case-list .ant-list-item { padding: 14px 4px; }
 .technical-audit-card summary { cursor: pointer; color: var(--brand-700); font-weight: 600; padding: 4px 0 12px; }
 .technical-audit-card details[open] summary { margin-bottom: 8px; border-bottom: 1px solid var(--line); }
@@ -220,4 +229,5 @@ button, input, textarea { font: inherit; }
   .operator-content { padding: 10px; }
   .review-toolbar { align-items: stretch; flex-direction: column; }
   .review-toolbar .ant-segmented { overflow-x: auto; }
+  .review-case-list { max-height: 44vh; }
 }
