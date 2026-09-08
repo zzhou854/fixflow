@@ -6,6 +6,7 @@ from app.agent.enums import PendingAction
 from app.agent.state import CandidateSlot, ToolResultSummary
 from app.agent_runtime.context import NodeContext
 from app.agent_runtime.idempotency import build_pending_operation
+from app.agent_runtime.rules import RESIDENT_SLOT_RESULT_LIMIT
 from app.agent_runtime.runtime_state import (
     RuntimeGraphState,
     dump_state,
@@ -38,6 +39,7 @@ async def list_slots(context: NodeContext, graph_state: RuntimeGraphState) -> Ru
             search_window_start=window.starts_at,
             search_window_end=window.ends_at,
             requested_duration_minutes=state.service_duration_minutes,
+            max_results=RESIDENT_SLOT_RESULT_LIMIT,
         )
     )
     data = require_data(response)

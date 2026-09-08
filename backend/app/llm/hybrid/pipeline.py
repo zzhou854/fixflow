@@ -22,6 +22,7 @@ from app.agent.models import (
     TimeWindow,
 )
 from app.agent.ports import LLMProvider
+from app.agent.time_resolution import resolve_common_daypart
 from app.llm.errors import LLMProviderError
 from app.llm.hybrid.decision import (
     InterpretationConflictDetector,
@@ -35,6 +36,7 @@ from app.llm.hybrid.models import (
     REQUIREMENTS_POLICY_VERSION,
     SAFETY_POLICY_VERSION,
     ControlledVerificationResult,
+    ExtractedAvailabilityWindow,
     ExtractedResidentFactsV2,
     HybridDecision,
     HybridInterpretationMetadata,
@@ -135,6 +137,20 @@ class HybridInterpretationNode:
             extracted,
             current_user_message=node_input.current_user_message,
         )
+        deterministic_windows = resolve_common_daypart(
+            node_input.current_user_message,
+            reference_time=node_input.reference_time,
+            timezone_name=node_input.timezone_name,
+        )
+        if deterministic_windows is not None:
+            facts = facts.model_copy(
+                update={
+                    "availability_windows": tuple(
+                        ExtractedAvailabilityWindow.model_validate(window.model_dump())
+                        for window in deterministic_windows
+                    )
+                }
+            )
         semantic_acts = derive_semantic_acts(facts, node_input=node_input)
         decision = self._decision.decide(facts, node_input=node_input)
         conflicts = self._conflicts.detect(facts, decision, node_input=node_input)
