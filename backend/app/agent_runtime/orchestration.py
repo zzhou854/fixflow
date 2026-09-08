@@ -63,6 +63,25 @@ class AgentOrchestrator:
         )
         return blocked
 
+    async def _route_language_failure_to_human(self, state: AgentState, code: str) -> AgentState:
+        """Persist a terminal, resident-visible state after language automation fails."""
+
+        message = self._failure_message(code)
+        blocked = state.model_copy(
+            update={
+                "workflow_stage": WorkflowStage.HUMAN_REVIEW,
+                "pending_action": PendingAction.NONE,
+                "pending_operation": None,
+                "escalation_reason": code,
+                "last_assistant_message": message,
+            }
+        )
+        await self._graph.aupdate_state(
+            self._config(state.thread_id),
+            RuntimeGraphState(state_json=blocked.model_dump_json()),
+        )
+        return blocked
+
     async def _refresh_reconciliation(self, state: AgentState) -> AgentState:
         case_id = state.pending_reconciliation_case_id
         if case_id is None or self._reconciliation is None:
@@ -313,9 +332,15 @@ class AgentOrchestrator:
                     return self._failure(turn, current, exc.code)
                 except ProviderExhausted:
                     current = await self._stored_state(turn.thread_id) or existing
+                    current = await self._route_language_failure_to_human(
+                        current, "PROVIDER_EXHAUSTED"
+                    )
                     return self._failure(turn, current, "PROVIDER_EXHAUSTED")
                 except AgentError:
                     current = await self._stored_state(turn.thread_id) or existing
+                    current = await self._route_language_failure_to_human(
+                        current, "LANGUAGE_INTERPRETATION_FAILED"
+                    )
                     return self._failure(turn, current, "LANGUAGE_INTERPRETATION_FAILED")
                 return await self._result(
                     turn.thread_id,
@@ -377,9 +402,13 @@ class AgentOrchestrator:
             return self._failure(turn, current, exc.code)
         except ProviderExhausted:
             current = await self._stored_state(turn.thread_id) or state
+            current = await self._route_language_failure_to_human(current, "PROVIDER_EXHAUSTED")
             return self._failure(turn, current, "PROVIDER_EXHAUSTED")
         except AgentError:
             current = await self._stored_state(turn.thread_id) or state
+            current = await self._route_language_failure_to_human(
+                current, "LANGUAGE_INTERPRETATION_FAILED"
+            )
             return self._failure(turn, current, "LANGUAGE_INTERPRETATION_FAILED")
         return await self._result(turn.thread_id, turn.trace_id, cast(RuntimeGraphState, output))
 
@@ -609,7 +638,7 @@ class AgentOrchestrator:
             thread_id=thread_id,
             trace_id=trace_id,
             run_status=RunStatus.FAILED_SAFE,
-            assistant_message="请求未执行，线程上下文校验失败。",
+            assistant_message=AgentOrchestrator._failure_message(code),
             workflow_stage=state.workflow_stage,
             active_ticket_id=state.active_ticket_id,
             active_appointment_id=state.active_appointment_id,
@@ -618,6 +647,20 @@ class AgentOrchestrator:
             pending_reconciliation_status=state.pending_reconciliation_status,
             pending_reconciliation_action=state.pending_reconciliation_action,
         )
+
+    @staticmethod
+    def _failure_message(code: str) -> str:
+        if code in {"PROVIDER_EXHAUSTED", "LANGUAGE_INTERPRETATION_FAILED"}:
+            return "自动处理暂时未能完成，已转交物业工作人员继续处理。"
+        if code in {"MANUAL_REVIEW", "POLICY_REVIEW_REQUIRED"}:
+            return "这次情况需要物业工作人员核对，已经转交人工处理。"
+        if code == "RECONCILIATION_PENDING":
+            return "系统正在核对本次操作是否已经完成，请勿重复提交。"
+        if code == "PROPERTY_CONTEXT_REQUIRED":
+            return "请先选择您已绑定的服务房屋，再继续报修。"
+        if code == "PERMISSION_DENIED":
+            return "当前账号无法使用这处房屋，请联系物业核对。"
+        return "请求未执行，线程上下文校验失败。"
 
     @staticmethod
     def _public_failure(thread_id: UUID, trace_id: UUID, code: str) -> AgentRunResult:

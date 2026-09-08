@@ -359,10 +359,18 @@ async def test_interpretation_provider_failure_stops_before_business_mutation() 
         ),
         checkpointer=InMemorySaver(),
     )
-    result = await AgentOrchestrator(graph, mcp).start_turn(_turn(resident_id, property_id))
+    orchestrator = AgentOrchestrator(graph, mcp)
+    result = await orchestrator.start_turn(_turn(resident_id, property_id))
     assert result.run_status is RunStatus.FAILED_SAFE
     assert result.error_code == "LANGUAGE_INTERPRETATION_FAILED"
+    assert result.workflow_stage is WorkflowStage.HUMAN_REVIEW
+    assert result.assistant_message == "自动处理暂时未能完成，已转交物业工作人员继续处理。"
     assert [name for name, _ in mcp.calls] == ["get_resident_property"]
+
+    stored = await orchestrator._stored_state(result.thread_id)
+    assert stored is not None
+    assert stored.workflow_stage is WorkflowStage.HUMAN_REVIEW
+    assert stored.escalation_reason == "LANGUAGE_INTERPRETATION_FAILED"
 
 
 @pytest.mark.asyncio
