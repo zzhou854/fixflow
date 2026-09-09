@@ -2,7 +2,8 @@
 
 ## 简历项目标题
 
-**FixFlow｜可恢复、可审计的住宅维修协调 Agent**  
+**FixFlow｜可恢复、可审计的住宅维修协调 Agent**
+
 Python 3.12 / FastAPI / LangGraph / MCP / PostgreSQL / pgvector / SQLAlchemy / React / TypeScript
 
 ## 简历三条版
@@ -55,4 +56,3 @@ Python 3.12 / FastAPI / LangGraph / MCP / PostgreSQL / pgvector / SQLAlchemy / R
 - 历史测试总数只表示当时仓库证据，不把它包装成业务指标；
 - “召回率”“稳定性”必须说明对应合成集、开发集还是锁定 Holdout；
 - 没有真实线上流量时，不声称生产成功率、SLA 或节省人工比例。
-
