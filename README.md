@@ -6,6 +6,7 @@
 > not production activation. See [current roadmap](docs/IMPLEMENTATION_ROADMAP.md).
 > Historical completion reports and test totals are evidence, not current guarantees.
 > See the latest [browser and operational acceptance evidence](docs/PRODUCT_ACCEPTANCE_20260909.md).
+> Interview preparation is collected in the [FixFlow interview package](docs/interview/README.md).
 
 The current model-quality work is a non-activated hybrid interpretation
 candidate: an LLM extracts evidence-backed language facts and deterministic code
