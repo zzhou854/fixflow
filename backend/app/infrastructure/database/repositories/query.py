@@ -294,6 +294,7 @@ class SqlAlchemyQueryRepository:
         skill: WorkerSkillType,
         search_window_start: datetime,
         search_window_end: datetime,
+        excluded_appointment_id: UUID | None = None,
     ) -> list[SlotWorkerSource]:
         workers = list(
             await self._session.scalars(
@@ -316,15 +317,18 @@ class SqlAlchemyQueryRepository:
                 )
             )
         ).all()
+        booking_query = select(Appointment.worker_id, Appointment.scheduled_range).where(
+            Appointment.worker_id.in_(worker_ids),
+            Appointment.status == AppointmentStatus.BOOKED,
+            Appointment.scheduled_range.op("&&")(
+                func.tstzrange(search_window_start, search_window_end, "[)")
+            ),
+        )
+        if excluded_appointment_id is not None:
+            booking_query = booking_query.where(Appointment.id != excluded_appointment_id)
         booking_rows = (
             await self._session.execute(
-                select(Appointment.worker_id, Appointment.scheduled_range).where(
-                    Appointment.worker_id.in_(worker_ids),
-                    Appointment.status == AppointmentStatus.BOOKED,
-                    Appointment.scheduled_range.op("&&")(
-                        func.tstzrange(search_window_start, search_window_end, "[)")
-                    ),
-                )
+                booking_query
             )
         ).all()
         terminal = (TicketStatus.CANCELLED, TicketStatus.CLOSED)

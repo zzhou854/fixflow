@@ -158,6 +158,7 @@ class FixFlowQueryService:
                 skill=ISSUE_CATEGORY_REQUIRED_SKILL[query.issue_category],
                 search_window_start=query.search_window_start,
                 search_window_end=query.search_window_end,
+                excluded_appointment_id=query.excluded_appointment_id,
             )
             return generate_available_slots(
                 sources=tuple(sources),

@@ -23,7 +23,9 @@ caller but never replaces the database property-authorisation check.
 
 ## Authentication
 
-`POST /api/v1/auth/login` accepts `username` and `password`; `GET
+`POST /api/v1/auth/login` accepts `username` and `password`; `POST
+/api/v1/auth/register/resident` creates a resident and atomically binds an existing,
+active property identified by community, building, unit, and room; `GET
 /api/v1/auth/me` returns the current safe user view. Passwords are verified with
 Argon2 and only hashes are stored. Failed logins deliberately do not disclose
 whether a username exists.
@@ -44,22 +46,31 @@ allow-list. Wildcard origins are rejected and CORS is not authentication.
 | Method | Route | Role | Purpose |
 | --- | --- | --- | --- |
 | POST | `/api/v1/auth/login` | public | issue an access token |
+| POST | `/api/v1/auth/register/resident` | public | create a resident and bind an existing property |
 | GET | `/api/v1/auth/me` | authenticated | safe caller profile |
 | GET | `/api/v1/resident/properties` | resident | authorised properties |
 | GET | `/api/v1/resident/tickets` | resident | paged own tickets |
 | GET | `/api/v1/resident/tickets/{ticket_id}` | resident | own ticket detail |
+| POST | `/api/v1/resident/tickets/{ticket_id}/accept` | resident | confirm an on-site repair from `SCHEDULED`, `IN_PROGRESS`, or `PENDING_ACCEPTANCE`; close the ticket and fulfill any active booking |
 | POST | `/api/v1/agent/threads` | resident | create a verified thread |
 | POST | `/api/v1/agent/threads/{thread_id}/messages` | resident | continue a thread |
 | POST | `/api/v1/agent/threads/{thread_id}/resume` | resident | strict typed resume |
 | GET | `/api/v1/agent/threads?archive_status=active|archived|all` | resident | recent/all thread registry |
 | POST | `/api/v1/agent/threads/{thread_id}/archive` | resident | recoverable soft archive |
 | POST | `/api/v1/agent/threads/{thread_id}/restore` | resident | restore archived thread |
+| POST | `/api/v1/agent/threads/{thread_id}/delete` | resident | irreversibly hide an eligible archived thread |
 | GET | `/api/v1/agent/threads/{thread_id}` | resident | sanitised state view |
 | GET | `/api/v1/agent/threads/{thread_id}/events` | resident | authenticated SSE |
 | GET | `/api/v1/operator/tickets` | operator | filtered paged work list |
 | GET | `/api/v1/operator/tickets/{ticket_id}` | operator | histories and latest event |
+| POST | `/api/v1/operator/tickets/{ticket_id}/repair-progress` | operator | record start, completed-awaiting-confirmation, or failed visit outcome |
 | GET | `/api/v1/operator/threads/{thread_id}` | operator | known thread review |
 | GET | `/api/v1/operator/threads/{thread_id}/runs` | operator | paged sanitized runs |
+
+Permanent removal is allowed only after archival and is rejected while the
+linked ticket is non-terminal. It removes the conversation from resident-visible
+lists and disables restoration; tickets, appointments, checkpoints, trace,
+replay, and property audit facts remain intact.
 | GET | `/api/v1/operator/runs/{run_id}` | operator | one authorized run |
 | GET | `/api/v1/operator/runs/{run_id}/events` | operator | paged/filterable trace events |
 | POST | `/api/v1/operator/tickets/{ticket_id}/escalate` | operator | formal escalation service |

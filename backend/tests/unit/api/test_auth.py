@@ -8,6 +8,7 @@ from app.application.auth import (
     AuthenticationError,
     AuthService,
     AuthUser,
+    RegistrationError,
 )
 from app.domain.enums import ActorType
 from argon2 import PasswordHasher
@@ -24,6 +25,24 @@ class FakeAuthRepository:
 
     async def find_by_id(self, user_id: UUID) -> AuthUser | None:
         return next((user for user in self.users if user.user_id == user_id), None)
+
+    async def register_resident(
+        self,
+        *,
+        username: str,
+        password_hash: str,
+        community_name: str,
+        building_no: str,
+        unit_no: str,
+        room_no: str,
+    ) -> AuthUser:
+        if any(user.username == username for user in self.users):
+            raise RegistrationError("USERNAME_TAKEN")
+        if (community_name, building_no, unit_no, room_no) != ("星河花园", "3", "2", "1201"):
+            raise RegistrationError("PROPERTY_NOT_FOUND")
+        user = AuthUser(uuid4(), username, ActorType.RESIDENT, True, password_hash)
+        self.users.append(user)
+        return user
 
 
 @pytest.fixture
@@ -73,6 +92,31 @@ def test_password_hash_is_not_plaintext(auth_fixture: tuple[AuthService, AuthUse
     _, user = auth_fixture
     assert user.password_hash != "correct-password"
     assert user.password_hash.startswith("$argon2")
+
+
+@pytest.mark.asyncio
+async def test_resident_registration_binds_an_existing_property_and_issues_token(
+    auth_fixture: tuple[AuthService, AuthUser],
+) -> None:
+    service, _ = auth_fixture
+    identity, token = await service.register_resident(
+        "new_resident", "new-password", "星河花园", "3栋", "2单元", "1201室"
+    )
+    assert identity.username == "new_resident"
+    assert identity.actor_type is ActorType.RESIDENT
+    assert token.token
+    assert await service.authenticate(token.token) == identity
+
+
+@pytest.mark.asyncio
+async def test_resident_registration_rejects_an_unknown_property(
+    auth_fixture: tuple[AuthService, AuthUser],
+) -> None:
+    service, _ = auth_fixture
+    with pytest.raises(RegistrationError, match="PROPERTY_NOT_FOUND"):
+        await service.register_resident(
+            "new_resident", "new-password", "不存在的小区", "3", "2", "1201"
+        )
 
 
 @pytest.mark.asyncio

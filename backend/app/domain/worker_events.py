@@ -164,7 +164,6 @@ def _validate_sequence(request: WorkerEventRequest) -> None:
     required_predecessor = {
         WorkerEventType.DEPARTED: WorkerEventType.ACCEPTED,
         WorkerEventType.ARRIVED: WorkerEventType.DEPARTED,
-        WorkerEventType.STARTED: WorkerEventType.ARRIVED,
         WorkerEventType.COMPLETED: WorkerEventType.STARTED,
         WorkerEventType.FAILED_TO_COMPLETE: WorkerEventType.STARTED,
     }.get(event)

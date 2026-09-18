@@ -49,7 +49,7 @@ export const STAGE_LABELS: Record<WorkflowStage, string> = {
 export const FIELD_LABELS: Record<string, string> = {
   PROPERTY: '需要维修的房屋',
   ISSUE_CATEGORY: '是哪类问题（漏水、用电或门锁）',
-  ISSUE_LOCATION: '问题发生在哪里（例如厨房、卫生间、客厅或入户门）',
+  ISSUE_LOCATION: '问题在哪个房间（例如卧室、厨房或卫生间，说明到房间即可）',
   ISSUE_DESCRIPTION: '具体出现了什么情况',
   AVAILABILITY: '您方便维修人员上门的时间',
 }

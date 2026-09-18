@@ -67,6 +67,15 @@ def route_after_snapshot(graph_state: RuntimeGraphState) -> str:
         and state.cached_ticket_snapshot.active_appointment is not None
     ):
         return "compose"
+    if (
+        state.task_intent is AgentIntent.RESCHEDULE_APPOINTMENT
+        and state.cached_ticket_snapshot is not None
+        and state.cached_ticket_snapshot.active_appointment is not None
+        and state.last_tool_result is not None
+        and state.last_tool_result.resource_id
+        == state.cached_ticket_snapshot.active_appointment.appointment_id
+    ):
+        return "compose"
     if state.task_intent is AgentIntent.QUERY_TICKET_STATUS:
         return "compose"
     return "list_slots"
@@ -74,9 +83,14 @@ def route_after_snapshot(graph_state: RuntimeGraphState) -> str:
 
 def route_after_slot_lookup(graph_state: RuntimeGraphState) -> str:
     state = load_state(graph_state)
-    if not state.user_availability_windows:
+    if not state.user_availability_windows or not state.candidate_slots:
         return "need_availability_information"
     return "select_slot"
+
+
+def route_after_slot_selection(graph_state: RuntimeGraphState) -> str:
+    state = load_state(graph_state)
+    return "__end__" if state.workflow_stage is WorkflowStage.DONE else "refresh_snapshot"
 
 
 def route_resolved_existing(graph_state: RuntimeGraphState) -> str:

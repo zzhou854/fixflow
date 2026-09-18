@@ -42,6 +42,8 @@ function reviewCase(overrides: Partial<HumanReviewCase> = {}): HumanReviewCase {
     resolved_at: null,
     resolution_code: null,
     resolution_note: null,
+    resident_username: 'resident_test',
+    property_address: '星河花园 1 栋 1 单元 101',
     ...overrides,
   }
 }
@@ -60,9 +62,11 @@ test('renders a prioritized pre-ticket review without fabricating a ticket', asy
   render(<HumanReviewQueue token="token" />)
   expect(await screen.findByText('住户报告电线冒烟，需要物业立即核实')).toBeInTheDocument()
   expect(screen.getByText('紧急')).toBeInTheDocument()
+  expect(screen.getByText('星河花园 1 栋 1 单元 101')).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: /查看/ }))
   expect(await screen.findByText('尚未创建工单')).toBeInTheDocument()
   expect(screen.getByText('存在需要物业核实的安全风险')).toBeInTheDocument()
+  expect(screen.getByText('服务房屋')).toBeInTheDocument()
   expect(screen.getByText(/系统不会为可见性伪造工单/)).toBeInTheDocument()
   expect(screen.getByText('技术审计')).toBeInTheDocument()
 })
@@ -84,6 +88,20 @@ test('claims with the optimistic version and reloads the queue', async () => {
     undefined,
     undefined,
   )
+})
+
+test('can hide seeded demonstration tasks from a clean operator workspace', async () => {
+  vi.mocked(api.humanReviewCases).mockResolvedValue({
+    items: [
+      reviewCase({ case_id: 'demo-case', resident_username: 'resident_demo' }),
+      reviewCase({ case_id: 'test-case', summary: '用户测试任务' }),
+    ],
+    limit: 100,
+    offset: 0,
+  })
+  render(<HumanReviewQueue token="token" excludedResidentUsername="resident_demo" />)
+  expect(await screen.findByText('用户测试任务')).toBeInTheDocument()
+  expect(screen.queryByText('住户报告电线冒烟，需要物业立即核实')).not.toBeInTheDocument()
 })
 
 test('explains an overdue appointment in business language', async () => {

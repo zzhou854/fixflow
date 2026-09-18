@@ -32,7 +32,7 @@ in the current roadmap; implementation does not imply production readiness:
 - a FastAPI/JWT boundary with role-separated resident and operator APIs;
 - PostgreSQL with pgvector through Docker Compose, validated healthy;
 - frozen domain states and pure transition rules;
-- SQLAlchemy persistence mappings and eight Alembic migrations (head `20260730_0008`);
+- SQLAlchemy persistence mappings and nine Alembic migrations (head `20260909_0009`);
 - PostgreSQL constraints and disposable-database integration tests;
 - focused Repository ports and SQLAlchemy implementations;
 - explicit ORM/domain mapping and Unit of Work;
@@ -66,7 +66,7 @@ in the current roadmap; implementation does not imply production readiness:
 - an idempotent Argon2-backed development seed;
 - a React/TypeScript/Ant Design resident chat and operator workbench;
 - a fixed-height, responsive resident workspace with recent-five conversation
-  navigation, recoverable archive/restore, Chinese business-language statuses,
+  navigation, archive/restore plus guarded permanent removal, Chinese business-language statuses,
   and explicit progress/retry/handoff feedback;
 - a dedicated property-staff human-review queue with optimistic claim,
   release, resolution and dismissal controls plus layered audit details;
@@ -122,8 +122,13 @@ $env:PYTHONPATH = "backend"; uv run python -m app.agent_runtime.initialize_check
 uv run python -m app.dev_seed
 uv run python -m app.outbox.run
 uv run uvicorn app.main:app --app-dir backend --reload
-cd frontend && npm ci && npm run dev
+powershell -ExecutionPolicy Bypass -File scripts/operations/frontend.ps1 dev
 ```
+
+`uv.toml` keeps the Python cache under the writable project parent. On this
+workstation, use `scripts/operations/frontend.ps1` for frontend test, lint,
+typecheck, build and dev commands; it selects the bundled modern Node runtime
+instead of the outdated system `npm` runtime.
 
 Evaluation runs locally and writes only to ignored `.artifacts/evaluations/`:
 
@@ -162,9 +167,15 @@ event loop starts. Future Agent-host entrypoints use the same explicit setup.
 For a full local demonstration, start PostgreSQL, apply business migrations,
 initialise checkpoints, run the idempotent seed, then start MCP, API, and
 frontend in separate terminals. The seed creates `resident_demo` /
-`ResidentDemo!2026` and `operator_demo` / `OperatorDemo!2026`; these are
+`ResidentDemo!2026`, a clean resident testing account `resident_test` /
+`ResidentTest!2026`, `operator_demo` / `OperatorDemo!2026`, and a dedicated
+property testing account `operator_test` / `OperatorTest!2026`; these are
 fictitious local-only accounts. Put a strong local `FIXFLOW_JWT_SECRET` in the ignored
 `.env`. The UI clearly displays demo-runtime mode.
+
+Residents can also register from the login page by entering a username, password,
+and an existing property identity. The local demo property is 星河花园, 3 栋,
+2 单元, 1201. Public operator registration is not supported.
 
 Browser live updates use authenticated Fetch Streaming with a Bearer header;
 JWTs never enter SSE URLs. HTTP mutation responses and Thread State carry the

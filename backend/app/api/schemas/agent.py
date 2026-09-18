@@ -53,10 +53,17 @@ class SelectAppointmentSlotResumeRequest(ApiModel):
     rank: int = Field(ge=1)
 
 
+class CancelAppointmentSlotSelectionResumeRequest(ApiModel):
+    kind: Literal["CANCEL_APPOINTMENT_SLOT_SELECTION"]
+    intent_version: int = Field(ge=1)
+    candidates_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 ResumeRequest = Annotated[
     ProvideInformationResumeRequest
     | SelectDuplicateTicketResumeRequest
-    | SelectAppointmentSlotResumeRequest,
+    | SelectAppointmentSlotResumeRequest
+    | CancelAppointmentSlotSelectionResumeRequest,
     Field(discriminator="kind"),
 ]
 
@@ -133,6 +140,7 @@ class ResidentThreadSummaryResponse(ApiModel):
     active_ticket_id: UUID | None
     updated_at: datetime
     archived_at: datetime | None
+    can_delete: bool = False
     version: int
 
 
@@ -171,6 +179,7 @@ class ThreadLifecycleResponse(ApiModel):
     thread_id: UUID
     lifecycle_status: ThreadLifecycleStatus
     archived_at: datetime | None
+    deleted_at: datetime | None = None
     version: int
 
 

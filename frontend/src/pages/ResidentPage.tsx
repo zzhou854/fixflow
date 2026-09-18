@@ -46,13 +46,19 @@ const RESIDENT_ERROR_MESSAGES: Record<string, string> = {
   TIME_CONFLICT: '这个上门时间刚刚被占用，请重新选择。',
   STALE_RESUME: '页面信息已经更新，请刷新后重新选择。',
   SERVICE_UNAVAILABLE: '服务暂时繁忙，请稍后重试或请物业工作人员协助。',
+  APPOINTMENT_NOT_STARTED: '还没到预约上门时间，维修完成后再确认。',
 }
 
 function conversation(thread: AgentThread): ChatMessage[] {
-  return (thread.conversation_messages ?? []).map((item) => ({
-    role: item.role === 'USER' ? 'user' : 'assistant',
-    text: item.content,
-  }))
+  return (thread.conversation_messages ?? []).reduce<ChatMessage[]>((messages, item) => {
+    const next: ChatMessage = {
+      role: item.role === 'USER' ? 'user' : 'assistant',
+      text: item.content,
+    }
+    const previous = messages.at(-1)
+    if (previous?.role === next.role && previous.text === next.text) return messages
+    return [...messages, next]
+  }, [])
 }
 
 function friendlyError(reason: unknown): string {
@@ -73,9 +79,11 @@ export function ResidentPage() {
   const [threads, setThreads] = useState<ResidentThreadSummary[]>([])
   const [allThreads, setAllThreads] = useState<ResidentThreadSummary[]>([])
   const [thread, setThread] = useState<AgentThread | null>(null)
+  const [openingThreadId, setOpeningThreadId] = useState<string>()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [acceptingRepair, setAcceptingRepair] = useState(false)
   const [allLoading, setAllLoading] = useState(false)
   const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived' | 'all'>('active')
   const [conversationDrawerOpen, setConversationDrawerOpen] = useState(false)
@@ -194,6 +202,7 @@ export function ResidentPage() {
 
   const selectThread = async (threadId: string) => {
     if (!token) return
+    setOpeningThreadId(threadId)
     setBusy(true)
     try {
       apply(await api.getThread(token, threadId))
@@ -202,6 +211,7 @@ export function ResidentPage() {
     } catch (reason) {
       toast.error(friendlyError(reason))
     } finally {
+      setOpeningThreadId(undefined)
       setBusy(false)
     }
   }
@@ -306,6 +316,17 @@ export function ResidentPage() {
     }
   }
 
+  const deleteThread = async (item: ResidentThreadSummary) => {
+    if (!token) return
+    try {
+      await api.deleteThread(token, item.thread_id, item.version)
+      await Promise.all([refreshThreads(), loadAllThreads(archiveFilter)])
+      toast.success('会话已永久删除。')
+    } catch (reason) {
+      toast.error(friendlyError(reason))
+    }
+  }
+
   const newThread = () => {
     sessionStorage.removeItem('fixflow.demo.thread_id')
     setThread(null)
@@ -313,6 +334,26 @@ export function ResidentPage() {
     setInput('')
     setFailedAction(null)
     setMobileMenuOpen(false)
+  }
+
+  const acceptRepair = async () => {
+    if (!token || !thread?.active_ticket) return
+    const ticket = thread.active_ticket
+    setAcceptingRepair(true)
+    try {
+      await api.acceptRepair(
+        token,
+        ticket.ticket_id,
+        ticket.version,
+        ticket.appointment?.appointment_version,
+      )
+      await reconcile(thread.thread_id)
+      toast.success('已确认修好，本次工单已经完成。以后再次出现问题可以重新报修。')
+    } catch (reason) {
+      toast.error(friendlyError(reason))
+    } finally {
+      setAcceptingRepair(false)
+    }
   }
 
   const sidebar = (renderConversationDrawer: boolean) => (
@@ -338,6 +379,7 @@ export function ResidentPage() {
       >
         <ResidentConversationList
           currentThreadId={thread?.thread_id}
+          openingThreadId={openingThreadId}
           recentThreads={threads}
           allThreads={allThreads}
           allThreadsLoading={allLoading}
@@ -356,9 +398,14 @@ export function ResidentPage() {
           onSelect={selectThread}
           onArchive={archiveThread}
           onRestore={restoreThread}
+          onDelete={deleteThread}
         />
       </Card>
-      {thread?.active_ticket && <TicketSummary ticket={thread.active_ticket} />}
+      {thread?.active_ticket && <TicketSummary
+        ticket={thread.active_ticket}
+        accepting={acceptingRepair}
+        onAccept={() => void acceptRepair()}
+      />}
     </div>
   )
 
@@ -489,7 +536,7 @@ export function ResidentPage() {
                 />
               )}
               {thread?.interrupt && !reconciliationBlocked && (
-                <InterruptPanel interrupt={thread.interrupt} onResume={resume} />
+                <InterruptPanel interrupt={thread.interrupt} onResume={resume} busy={busy} />
               )}
             </div>
           </div>
@@ -509,7 +556,7 @@ export function ResidentPage() {
                 onPressEnter={() => void send(input)}
                 placeholder={
                   awaitingInformation
-                    ? '直接补充，例如：漏水位置在厨房水槽下方'
+                    ? '直接补充房间，例如：卧室'
                     : '请描述问题，例如：厨房水龙头漏水，明天下午有空'
                 }
                 aria-label="输入消息"
@@ -526,7 +573,7 @@ export function ResidentPage() {
             <div className="secondary-actions">
               <Button
                 disabled={reconciliationBlocked || Boolean(thread?.interrupt) || busy}
-                onClick={() => void send('我要改期，明天下午有空')}
+                onClick={() => void send('我要改期')}
               >
                 申请改期
               </Button>
@@ -538,7 +585,7 @@ export function ResidentPage() {
                 请物业协助
               </Button>
               <Typography.Text type="secondary">
-                取消工单、取消预约和确认维修结果目前由物业工作人员处理。
+                维修人员现场修好后，可在当前工单直接确认；仍未修好时，请直接告知维修人员继续处理。
               </Typography.Text>
             </div>
           </div>

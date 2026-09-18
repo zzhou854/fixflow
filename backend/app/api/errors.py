@@ -15,7 +15,7 @@ from app.application.agent_reliability import (
     AgentThreadNotFound,
     AgentThreadPermissionDenied,
 )
-from app.application.auth import AuthenticationError
+from app.application.auth import AuthenticationError, RegistrationError
 from app.application.errors import ApplicationError
 
 
@@ -86,6 +86,12 @@ def install_error_handlers(app: FastAPI) -> None:
             401 if exc.code in {"TOKEN_INVALID", "TOKEN_EXPIRED", "INVALID_CREDENTIALS"} else 403
         )
         return _response(request, status, exc.code, "认证失败，请重新登录。")
+
+    @app.exception_handler(RegistrationError)
+    async def registration_error(request: Request, exc: RegistrationError) -> JSONResponse:
+        if exc.code == "USERNAME_TAKEN":
+            return _response(request, 409, exc.code, "这个账号已被使用，请换一个。")
+        return _response(request, 400, exc.code, "未找到对应房屋，请检查小区和房号。")
 
     @app.exception_handler(ThreadIdentityConflict)
     async def thread_error(request: Request, exc: ThreadIdentityConflict) -> JSONResponse:

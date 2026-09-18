@@ -8,6 +8,7 @@ from app.domain.enums import (
     ActorType,
     AppointmentPurpose,
     AppointmentStatus,
+    FailureReason,
     IssueCategory,
     Severity,
     TicketStatus,
@@ -36,6 +37,25 @@ class AppointmentResponse(ApiModel):
     scheduled_start: datetime
     scheduled_end: datetime
     appointment_version: int
+
+
+class AvailableSlotResponse(ApiModel):
+    worker_id: UUID
+    worker_name: str
+    scheduled_start: datetime
+    scheduled_end: datetime
+    rank: int
+
+
+class AvailableSlotPageResponse(ApiModel):
+    items: tuple[AvailableSlotResponse, ...]
+
+
+class OperatorBookAppointmentRequest(ApiModel):
+    worker_id: UUID
+    scheduled_start: datetime
+    scheduled_end: datetime
+    expected_ticket_version: int = Field(ge=1)
 
 
 class TicketListItemResponse(ApiModel):
@@ -102,6 +122,21 @@ class EscalateTicketRequest(ApiModel):
     reason_code: str = Field(min_length=1, max_length=80)
     reason_text: str = Field(min_length=1, max_length=1000)
     evidence: tuple[str, ...] = Field(default=(), max_length=20)
+
+
+class RecordRepairProgressRequest(ApiModel):
+    appointment_id: UUID
+    worker_id: UUID
+    expected_ticket_version: int = Field(ge=1)
+    expected_appointment_version: int = Field(ge=1)
+    event_type: WorkerEventType
+    failure_reason: FailureReason | None = None
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class AcceptRepairRequest(ApiModel):
+    expected_ticket_version: int = Field(ge=1)
+    expected_appointment_version: int | None = Field(default=None, ge=1)
 
 
 class OperationResponse(ApiModel):

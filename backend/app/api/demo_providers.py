@@ -6,8 +6,9 @@ import hashlib
 import json
 import math
 import re
+from calendar import monthrange
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -39,9 +40,14 @@ class DemoScriptedLLMProvider:
         context = self._context(messages[-1].content)
         message = str(context.get("current_message", context.get("current_user_message", "")))
         known = dict(context.get("known_issue_fields", {}))
+        # The sanitized prompt exposes durable intent as a flat allowlisted
+        # field. Keep compatibility with older nested demo payloads as well.
         summary = dict(context.get("current_state_summary", {}))
+        if "task_intent" not in summary:
+            summary["task_intent"] = context.get("current_task_intent")
         lowered = message.casefold()
-        category = known.get("issue_category") or self._category(message)
+        message_category = self._category(message)
+        category = known.get("issue_category") or message_category
         intent = self._intent(message, summary)
         payload: dict[str, object] = {"utterance_intent": intent}
         if category:
@@ -49,14 +55,17 @@ class DemoScriptedLLMProvider:
         location = self._location(message)
         if location:
             payload["issue_location"] = location
-        if intent in {AgentIntent.NEW_REPAIR.value, AgentIntent.PROVIDE_INFORMATION.value}:
-            payload["issue_description_update"] = message
         flags = self._safety(lowered)
         if flags:
             payload["safety_flags"] = flags
         window = self._availability(message, context)
         if window:
             payload["user_availability_windows"] = [window]
+        if intent == AgentIntent.NEW_REPAIR.value or (
+            intent == AgentIntent.PROVIDE_INFORMATION.value
+            and (window is None or message_category is not None or location is not None)
+        ):
+            payload["issue_description_update"] = message
         if intent == AgentIntent.REQUEST_HUMAN.value:
             payload["requested_human"] = True
         return StructuredLLMResult(
@@ -117,7 +126,17 @@ class DemoScriptedLLMProvider:
 
     @staticmethod
     def _location(message: str) -> str | None:
-        for value in ("厨房", "卫生间", "客厅", "卧室", "入户门", "阳台"):
+        if re.search(r"(?:主|次|客|小)?卧(?:室)?", message):
+            return "卧室"
+        for value in (
+            "儿童房",
+            "厨房",
+            "卫生间",
+            "客厅",
+            "书房",
+            "入户门",
+            "阳台",
+        ):
             if value in message:
                 return value
         match = re.search(r"([一二三四五六七八九十\d]+(?:楼|层|号房|室))", message)
@@ -134,19 +153,184 @@ class DemoScriptedLLMProvider:
 
     @staticmethod
     def _availability(message: str, context: dict[str, Any]) -> dict[str, str] | None:
-        if not any(word in message for word in ("明天", "后天", "上午", "下午")):
+        date_match = re.search(
+            r"(?:\d{1,2}|[一二两三四五六七八九十]{1,3})[号日]", message
+        )
+        point_time_match = re.search(
+            r"(?:\d{1,2}|[零〇一二两三四五六七八九十]{1,3})点", message
+        )
+        colon_time_match = re.search(r"\d{1,2}\s*[:：]\s*\d{2}", message)
+        time_markers = ("今天", "明天", "后天", "上午", "下午", "中午", "晚上")
+        if (
+            not any(word in message for word in time_markers)
+            and date_match is None
+            and point_time_match is None
+            and colon_time_match is None
+        ):
             return None
         reference = str(context.get("reference_time"))
         timezone_name = str(context.get("timezone_name", "Asia/Shanghai"))
-        from datetime import datetime
 
         current = datetime.fromisoformat(reference).astimezone(ZoneInfo(timezone_name))
-        days = 2 if "后天" in message else 1
-        hour = 9 if "上午" in message else 14
-        start = (current + timedelta(days=days)).replace(
-            hour=hour, minute=0, second=0, microsecond=0
+        target_date = DemoScriptedLLMProvider._explicit_date(message, current)
+        if date_match is not None and target_date is None:
+            return None
+        if target_date is None:
+            # A clock without a day means today in ordinary conversation.  Do
+            # not silently roll an already-passed clock into tomorrow; the
+            # workflow validates it and asks the resident for a future time.
+            days = 2 if "后天" in message else 1 if "明天" in message else 0
+            target_date = current + timedelta(days=days)
+        explicit_range = DemoScriptedLLMProvider._explicit_time_range(message)
+        explicit_time = DemoScriptedLLMProvider._explicit_time(message)
+        if (point_time_match is not None or colon_time_match is not None) and explicit_time is None:
+            return None
+        if explicit_range is not None:
+            (hour, minute), (end_hour, end_minute) = explicit_range
+            duration = timedelta(hours=end_hour, minutes=end_minute) - timedelta(
+                hours=hour, minutes=minute
+            )
+            if duration <= timedelta(0):
+                return None
+        elif explicit_time is not None:
+            hour, minute = explicit_time
+            duration = timedelta(hours=2)
+        else:
+            hour = 9 if "上午" in message else 14
+            minute = 0
+            duration = timedelta(hours=4)
+        start = target_date.replace(
+            hour=hour, minute=minute, second=0, microsecond=0
         )
-        return {"starts_at": start.isoformat(), "ends_at": (start + timedelta(hours=4)).isoformat()}
+        return {"starts_at": start.isoformat(), "ends_at": (start + duration).isoformat()}
+
+    @staticmethod
+    def _explicit_time_range(
+        message: str,
+    ) -> tuple[tuple[int, int], tuple[int, int]] | None:
+        match = re.search(
+            r"(?P<start_period>上午|中午|下午|晚上)?\s*"
+            r"(?P<start_hour>\d{1,2}|[零〇一二两三四五六七八九十]{1,3})点"
+            r"(?P<start_half>半)?\s*(?:到|至|[-—~～])\s*"
+            r"(?P<end_period>上午|中午|下午|晚上)?\s*"
+            r"(?P<end_hour>\d{1,2}|[零〇一二两三四五六七八九十]{1,3})点"
+            r"(?P<end_half>半)?",
+            message,
+        )
+        if match is None:
+            return None
+
+        def clock(hour_text: str, half: str | None, period: str | None) -> tuple[int, int]:
+            hour = (
+                int(hour_text)
+                if hour_text.isdigit()
+                else DemoScriptedLLMProvider._chinese_number(hour_text)
+            )
+            if period in {"下午", "晚上"} and hour < 12:
+                hour += 12
+            elif period == "中午" and hour < 11:
+                hour += 12
+            return hour, 30 if half else 0
+
+        start_period = match.group("start_period")
+        start = clock(match.group("start_hour"), match.group("start_half"), start_period)
+        end = clock(
+            match.group("end_hour"),
+            match.group("end_half"),
+            match.group("end_period") or start_period,
+        )
+        if not all(0 <= hour <= 23 for hour in (start[0], end[0])):
+            return None
+        return start, end
+
+    @staticmethod
+    def _explicit_date(message: str, current: datetime) -> datetime | None:
+        match = re.search(
+            r"(?:(?P<year>\d{4})年)?"
+            r"(?:(?P<month>\d{1,2}|[一二两三四五六七八九十]{1,3})月)?"
+            r"(?P<day>\d{1,2}|[一二两三四五六七八九十]{1,3})[号日]",
+            message,
+        )
+        if match is None:
+            return None
+
+        def number(value: str) -> int:
+            return int(value) if value.isdigit() else DemoScriptedLLMProvider._chinese_number(value)
+
+        explicit_year = match.group("year")
+        explicit_month = match.group("month")
+        year = int(explicit_year) if explicit_year else current.year
+        month = number(explicit_month) if explicit_month else current.month
+        day = number(match.group("day"))
+
+        def valid_date(candidate_year: int, candidate_month: int) -> datetime | None:
+            if not 1 <= candidate_month <= 12:
+                return None
+            if not 1 <= day <= monthrange(candidate_year, candidate_month)[1]:
+                return None
+            return current.replace(year=candidate_year, month=candidate_month, day=day)
+
+        candidate = valid_date(year, month)
+        if candidate is None:
+            return None
+        if candidate.date() >= current.date() or explicit_year:
+            return candidate
+        if explicit_month:
+            return valid_date(year + 1, month)
+        next_month = 1 if month == 12 else month + 1
+        next_year = year + 1 if month == 12 else year
+        return valid_date(next_year, next_month)
+
+    @staticmethod
+    def _explicit_time(message: str) -> tuple[int, int] | None:
+        colon_match = re.search(
+            r"(?P<period>上午|中午|下午|晚上)?\s*"
+            r"(?P<hour>\d{1,2})\s*[:：]\s*(?P<minute>\d{2})",
+            message,
+        )
+        if colon_match is not None:
+            hour = int(colon_match.group("hour"))
+            minute = int(colon_match.group("minute"))
+            period = colon_match.group("period")
+            if period in {"下午", "晚上"} and hour < 12:
+                hour += 12
+            elif period == "中午" and hour < 11:
+                hour += 12
+            return (hour, minute) if 0 <= hour <= 23 and 0 <= minute <= 59 else None
+
+        match = re.search(
+            r"(?P<period>上午|中午|下午|晚上)?\s*"
+            r"(?P<hour>\d{1,2}|[零〇一二两三四五六七八九十]{1,3})点"
+            r"(?P<half>半)?",
+            message,
+        )
+        if match is None:
+            return None
+        raw_hour = match.group("hour")
+        hour = (
+            int(raw_hour)
+            if raw_hour.isdigit()
+            else DemoScriptedLLMProvider._chinese_number(raw_hour)
+        )
+        period = match.group("period")
+        if period in {"下午", "晚上"} and hour < 12:
+            hour += 12
+        elif period == "中午" and hour < 11:
+            hour += 12
+        if not 0 <= hour <= 23:
+            return None
+        return hour, 30 if match.group("half") else 0
+
+    @staticmethod
+    def _chinese_number(value: str) -> int:
+        digits = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
+                  "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+        if value == "十":
+            return 10
+        if "十" in value:
+            tens, ones = value.split("十", 1)
+            return (digits.get(tens, 1) * 10) + (digits.get(ones, 0) if ones else 0)
+        return digits[value]
 
 
 class DemoDeterministicEmbeddingProvider:

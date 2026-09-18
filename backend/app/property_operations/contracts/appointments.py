@@ -22,6 +22,7 @@ class ListAvailableSlotsRequest(ReadRequest):
     search_window_end: datetime
     requested_duration_minutes: int = Field(gt=0, le=1440)
     max_results: int = Field(default=20, ge=1, le=100)
+    excluded_appointment_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_window(self) -> "ListAvailableSlotsRequest":

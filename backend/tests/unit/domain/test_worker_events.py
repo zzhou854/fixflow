@@ -273,7 +273,6 @@ def test_no_show_preserves_resident_or_worker_subject(reason: NoShowReason) -> N
     [
         (WorkerEventType.DEPARTED, ()),
         (WorkerEventType.ARRIVED, (WorkerEventType.ACCEPTED,)),
-        (WorkerEventType.STARTED, (WorkerEventType.ACCEPTED,)),
         (WorkerEventType.COMPLETED, (WorkerEventType.ARRIVED,)),
         (WorkerEventType.REJECTED, (WorkerEventType.ACCEPTED,)),
         (WorkerEventType.REJECTED, (WorkerEventType.DEPARTED,)),
@@ -298,6 +297,22 @@ def test_illegal_event_order_is_rejected(
                 cancellation_reason=CancellationReason.WORKER_REJECTED,
             )
         )
+
+
+def test_operator_can_record_work_start_without_travel_tracking() -> None:
+    result = validate_worker_event(
+        WorkerEventRequest(
+            event_type=WorkerEventType.STARTED,
+            actor_type=ActorType.OPERATOR,
+            appointment_id=APPOINTMENT_ID,
+            ticket_status=TicketStatus.SCHEDULED,
+            appointment_status=AppointmentStatus.BOOKED,
+            appointment_purpose=AppointmentPurpose.INITIAL_REPAIR,
+        )
+    )
+
+    assert result.next_ticket_status is TicketStatus.IN_PROGRESS
+    assert result.next_appointment_status is AppointmentStatus.BOOKED
 
 
 def test_event_requires_appointment_id() -> None:

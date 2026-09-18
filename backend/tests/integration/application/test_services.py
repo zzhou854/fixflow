@@ -403,7 +403,8 @@ async def test_complete_worker_chain_then_resident_accepts_and_closes(
     application_env: ApplicationEnvironment,
 ) -> None:
     env = application_env
-    ticket_id = await _create_ticket(env)
+    location = f"kitchen-recurrence-{uuid4()}"
+    ticket_id = await _create_ticket(env, location=location)
     appointment_id = await _book(env, ticket_id)
     await _complete_repair(env, ticket_id, appointment_id)
     accepted = await env.service.review_repair(
@@ -416,6 +417,8 @@ async def test_complete_worker_chain_then_resident_accepts_and_closes(
     )
 
     assert accepted.ok
+    recurrence_id = await _create_ticket(env, location=location)
+    assert recurrence_id != ticket_id
     async with env.sessions() as session:
         ticket = await session.get(RepairTicket, ticket_id)
         appointment = await session.get(Appointment, appointment_id)
@@ -460,6 +463,68 @@ async def test_complete_worker_chain_then_resident_accepts_and_closes(
         AppointmentStatus.FULFILLED,
     ]
     assert all(item.trace_id.int != 0 for item in ticket_history + appointment_history)
+
+
+@pytest.mark.asyncio
+async def test_resident_can_close_scheduled_ticket_after_onsite_repair(
+    application_env: ApplicationEnvironment,
+) -> None:
+    env = application_env
+    ticket_id = await _create_ticket(env, location=f"resident-confirm-{uuid4()}")
+    appointment_id = await _book(env, ticket_id)
+
+    accepted = await env.service.review_repair(
+        ReviewRepairCommand(
+            metadata=_metadata(env, occurred_at=env.slot + timedelta(hours=1)),
+            ticket_id=ticket_id,
+            expected_ticket_version=2,
+            expected_appointment_version=1,
+            accepted=True,
+        )
+    )
+
+    assert accepted.ok
+    async with env.sessions() as session:
+        ticket = await session.get(RepairTicket, ticket_id)
+        appointment = await session.get(Appointment, appointment_id)
+        appointment_history = list(
+            await session.scalars(
+                select(AppointmentStatusHistory)
+                .where(AppointmentStatusHistory.appointment_id == appointment_id)
+                .order_by(AppointmentStatusHistory.version_after)
+            )
+        )
+    assert ticket is not None and appointment is not None
+    assert (ticket.status, ticket.version) == (TicketStatus.CLOSED, 3)
+    assert (appointment.status, appointment.version) == (AppointmentStatus.FULFILLED, 2)
+    assert appointment_history[-1].reason_code == "RESIDENT_CONFIRMED_COMPLETE"
+
+
+@pytest.mark.asyncio
+async def test_resident_cannot_close_scheduled_ticket_before_visit_starts(
+    application_env: ApplicationEnvironment,
+) -> None:
+    env = application_env
+    ticket_id = await _create_ticket(env, location=f"future-confirm-{uuid4()}")
+    appointment_id = await _book(env, ticket_id)
+
+    accepted = await env.service.review_repair(
+        ReviewRepairCommand(
+            metadata=_metadata(env, occurred_at=env.slot - timedelta(minutes=1)),
+            ticket_id=ticket_id,
+            expected_ticket_version=2,
+            expected_appointment_version=1,
+            accepted=True,
+        )
+    )
+
+    assert not accepted.ok
+    assert accepted.code == "appointment_not_started"
+    async with env.sessions() as session:
+        ticket = await session.get(RepairTicket, ticket_id)
+        appointment = await session.get(Appointment, appointment_id)
+    assert ticket is not None and ticket.status is TicketStatus.SCHEDULED
+    assert appointment is not None and appointment.status is AppointmentStatus.BOOKED
 
 
 @pytest.mark.asyncio
@@ -730,6 +795,40 @@ async def test_booking_rejects_worker_without_required_skill_and_rolls_back(
         )
     assert ticket is not None and (ticket.status, ticket.version) == (TicketStatus.OPEN, 1)
     assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_booking_and_rescheduling_reject_past_start_times(
+    application_env: ApplicationEnvironment,
+) -> None:
+    env = application_env
+    ticket_id = await _create_ticket(env)
+    past_booking = await env.service.book_appointment(
+        BookAppointmentCommand(
+            metadata=_metadata(env, occurred_at=env.slot),
+            ticket_id=ticket_id,
+            worker_id=env.worker_ids[0],
+            starts_at=env.slot - timedelta(minutes=30),
+            ends_at=env.slot + timedelta(minutes=30),
+            expected_ticket_version=1,
+        )
+    )
+    assert past_booking.code == "appointment_time_in_past"
+
+    appointment_id = await _book(env, ticket_id)
+    past_reschedule = await env.service.reschedule_appointment(
+        RescheduleAppointmentCommand(
+            metadata=_metadata(env, occurred_at=env.slot),
+            ticket_id=ticket_id,
+            appointment_id=appointment_id,
+            worker_id=env.worker_ids[0],
+            starts_at=env.slot - timedelta(minutes=30),
+            ends_at=env.slot + timedelta(minutes=30),
+            expected_ticket_version=2,
+            expected_appointment_version=1,
+        )
+    )
+    assert past_reschedule.code == "appointment_time_in_past"
 
 
 @pytest.mark.asyncio
@@ -1093,8 +1192,8 @@ async def test_worker_event_replay_sequence_and_atomic_failure(
         replace(
             base,
             metadata=_metadata(env, actor_type=ActorType.WORKER, actor_id=env.worker_ids[0]),
-            event_type=WorkerEventType.STARTED,
-            external_event_key=f"started-{uuid4()}",
+            event_type=WorkerEventType.ARRIVED,
+            external_event_key=f"arrived-{uuid4()}",
         )
     )
     assert invalid.code == "missing_predecessor"

@@ -32,12 +32,17 @@ from app.api.services.operator import OperatorActionService, OperatorEscalationE
 from app.api.services.operator_replay import OperatorReplayService
 from app.api.services.operator_review import OperatorThreadReviewService
 from app.api.services.sse import SSEEventBus
-from app.application.auth import AuthenticatedIdentity, AuthService, AuthUser
+from app.application.auth import (
+    AuthenticatedIdentity,
+    AuthService,
+    AuthUser,
+    RegistrationError,
+)
 from app.application.errors import AuthorizationFailed, PersistenceConflict, ResourceNotFound
-from app.application.models import OperationResult
+from app.application.models import OperationResult, RecordWorkerEventCommand, ReviewRepairCommand
 from app.application.query_models import QueryActor, ResidentPropertyReadModel
 from app.application.services import FixFlowApplicationService
-from app.domain.enums import ActorType, WorkflowStage
+from app.domain.enums import ActorType, WorkerEventType, WorkflowStage
 from app.infrastructure.database.models.observability import (
     AgentRunStatus,
     AgentRunTrigger,
@@ -64,12 +69,31 @@ class FakeAuthRepository:
     async def find_by_id(self, user_id: UUID) -> AuthUser | None:
         return next((user for user in self.users if user.user_id == user_id), None)
 
+    async def register_resident(
+        self,
+        *,
+        username: str,
+        password_hash: str,
+        community_name: str,
+        building_no: str,
+        unit_no: str,
+        room_no: str,
+    ) -> AuthUser:
+        if any(user.username == username for user in self.users):
+            raise RegistrationError("USERNAME_TAKEN")
+        if (community_name, building_no, unit_no, room_no) != ("星河花园", "3", "2", "1201"):
+            raise RegistrationError("PROPERTY_NOT_FOUND")
+        user = AuthUser(uuid4(), username, ActorType.RESIDENT, True, password_hash)
+        self.users.append(user)
+        return user
+
 
 class FakeApplication:
     def __init__(self, property_: ResidentPropertyReadModel) -> None:
         self.property = property_
         self.last_actor: QueryActor | None = None
         self.last_query: dict[str, object] = {}
+        self.last_mutation: RecordWorkerEventCommand | ReviewRepairCommand | None = None
 
     async def list_resident_properties(
         self, actor: QueryActor
@@ -92,6 +116,26 @@ class FakeApplication:
     async def get_ticket_detail(self, actor: QueryActor, ticket_id: UUID) -> None:
         self.last_actor = actor
         raise AuthorizationFailed("resident_not_authorized")
+
+    async def record_worker_event(self, command: RecordWorkerEventCommand) -> OperationResult:
+        self.last_mutation = command
+        return OperationResult(
+            ok=True,
+            code="WORKER_EVENT_RECORDED",
+            resource_type="worker_event",
+            resource_id=uuid4(),
+            resource_version=1,
+        )
+
+    async def review_repair(self, command: ReviewRepairCommand) -> OperationResult:
+        self.last_mutation = command
+        return OperationResult(
+            ok=True,
+            code="REPAIR_ACCEPTED",
+            resource_type="repair_ticket",
+            resource_id=command.ticket_id,
+            resource_version=command.expected_ticket_version + 1,
+        )
 
 
 class FakeAgentApi:
@@ -393,6 +437,27 @@ async def test_login_and_me_return_only_safe_identity(api_context: ApiContext) -
 
 
 @pytest.mark.asyncio
+async def test_resident_can_register_against_an_existing_property(
+    api_context: ApiContext,
+) -> None:
+    app, *_ = api_context
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/register/resident",
+            json={
+                "username": "new_resident",
+                "password": "new-password",
+                "community_name": "星河花园",
+                "building_no": "3",
+                "unit_no": "2",
+                "room_no": "1201",
+            },
+        )
+    assert response.status_code == 201
+    assert response.json()["user"]["actor_type"] == "RESIDENT"
+
+
+@pytest.mark.asyncio
 async def test_bad_password_and_missing_user_share_error(api_context: ApiContext) -> None:
     app, *_ = api_context
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -477,6 +542,57 @@ async def test_roles_are_separated_in_both_directions(api_context: ApiContext) -
             "/api/v1/resident/properties", headers={"Authorization": f"Bearer {operator}"}
         )
     assert operator_denied.status_code == resident_denied.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_operator_records_direct_repair_start_with_authenticated_identity(
+    api_context: ApiContext,
+) -> None:
+    app, auth, application, _, _, operator_id, _ = api_context
+    token = await _token(auth, "operator", "operator-pass")
+    ticket_id, appointment_id, worker_id = uuid4(), uuid4(), uuid4()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/api/v1/operator/tickets/{ticket_id}/repair-progress",
+            json={
+                "appointment_id": str(appointment_id),
+                "worker_id": str(worker_id),
+                "expected_ticket_version": 2,
+                "expected_appointment_version": 1,
+                "event_type": "STARTED",
+            },
+            headers=_mutation_headers(token),
+        )
+
+    assert response.status_code == 200
+    command = application.last_mutation
+    assert isinstance(command, RecordWorkerEventCommand)
+    assert command.metadata.actor_id == operator_id
+    assert command.event_type is WorkerEventType.STARTED
+    assert command.ticket_id == ticket_id
+
+
+@pytest.mark.asyncio
+async def test_resident_can_only_confirm_completed_repair_as_self(
+    api_context: ApiContext,
+) -> None:
+    app, auth, application, _, resident_id, _, _ = api_context
+    token = await _token(auth, "resident", "resident-pass")
+    ticket_id = uuid4()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/api/v1/resident/tickets/{ticket_id}/accept",
+            json={"expected_ticket_version": 4, "expected_appointment_version": 2},
+            headers=_mutation_headers(token),
+        )
+
+    assert response.status_code == 200
+    command = application.last_mutation
+    assert isinstance(command, ReviewRepairCommand)
+    assert command.metadata.actor_id == resident_id
+    assert command.ticket_id == ticket_id
+    assert command.accepted is True
+    assert command.expected_appointment_version == 2
 
 
 @pytest.mark.asyncio

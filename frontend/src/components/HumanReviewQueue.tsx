@@ -33,8 +33,8 @@ import type {
 const STATUS_LABELS: Record<HumanReviewStatus, string> = {
   OPEN: '待处理',
   CLAIMED: '处理中',
-  RESOLVED: '已解决',
-  DISMISSED: '已关闭',
+  RESOLVED: '处理完成',
+  DISMISSED: '无需处理',
 }
 
 const SAFETY_LABELS: Record<HumanReviewSafetyLevel, string> = {
@@ -78,7 +78,15 @@ function safetyColor(level: HumanReviewSafetyLevel): string {
   return 'blue'
 }
 
-export function HumanReviewQueue({ token }: { token: string }) {
+export function HumanReviewQueue({
+  token,
+  excludedResidentUsername,
+  onOpenTicket,
+}: {
+  token: string
+  excludedResidentUsername?: string
+  onOpenTicket?: (ticketId: string) => void | Promise<void>
+}) {
   const { modal } = AntdApp.useApp()
   const [items, setItems] = useState<HumanReviewCase[]>([])
   const [status, setStatus] = useState<HumanReviewStatus>('OPEN')
@@ -113,6 +121,7 @@ export function HumanReviewQueue({ token }: { token: string }) {
     const keyword = search.trim().toLocaleLowerCase()
     return [...items]
       .filter((item) => {
+        if (item.resident_username === excludedResidentUsername) return false
         if (!keyword) return true
         return `${item.summary} ${item.reason_code} ${item.failure_stage}`
           .toLocaleLowerCase()
@@ -124,7 +133,7 @@ export function HumanReviewQueue({ token }: { token: string }) {
           right.safety_level.localeCompare(left.safety_level) ||
           left.created_at.localeCompare(right.created_at),
       )
-  }, [items, search])
+  }, [excludedResidentUsername, items, search])
 
   async function inspect(item: HumanReviewCase) {
     setSelected(item)
@@ -170,7 +179,7 @@ export function HumanReviewQueue({ token }: { token: string }) {
   function resolve(item: HumanReviewCase, target: 'RESOLVED' | 'DISMISSED') {
     let note = ''
     modal.confirm({
-      title: target === 'RESOLVED' ? '确认问题已经处理？' : '确认关闭这条任务？',
+      title: target === 'RESOLVED' ? '确认这项人工处理已完成？' : '确认这项请求无需处理？',
       content: (
         <Input.TextArea
           aria-label="处理说明"
@@ -181,7 +190,7 @@ export function HumanReviewQueue({ token }: { token: string }) {
           }}
         />
       ),
-      okText: target === 'RESOLVED' ? '标记已解决' : '关闭任务',
+      okText: target === 'RESOLVED' ? '处理完成' : '无需处理',
       cancelText: '取消',
       onOk: () =>
         transition(
@@ -210,8 +219,8 @@ export function HumanReviewQueue({ token }: { token: string }) {
           options={[
             { label: '待处理', value: 'OPEN' },
             { label: '处理中', value: 'CLAIMED' },
-            { label: '已解决', value: 'RESOLVED' },
-            { label: '已关闭', value: 'DISMISSED' },
+            { label: '处理完成', value: 'RESOLVED' },
+            { label: '无需处理', value: 'DISMISSED' },
           ]}
           onChange={(value) => setStatus(value as HumanReviewStatus)}
         />
@@ -261,12 +270,15 @@ export function HumanReviewQueue({ token }: { token: string }) {
                     <Tag>{STATUS_LABELS[item.status]}</Tag>
                   </Space>
                 }
-                description={
-                  <span>
+                description={<Space direction="vertical" size={2}>
+                  <Typography.Text>
+                    {item.property_address ?? '房屋待核实'}
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
                     {STAGE_LABELS[item.failure_stage] ?? '需要人工核实'} · 优先级 {item.priority} ·{' '}
                     {new Date(item.created_at).toLocaleString('zh-CN')}
-                  </span>
-                }
+                  </Typography.Text>
+                </Space>}
               />
             </List.Item>
           )}
@@ -292,6 +304,9 @@ export function HumanReviewQueue({ token }: { token: string }) {
             </Card>
             <Card size="small" title="处理依据">
               <Descriptions column={1} size="small">
+                <Descriptions.Item label="服务房屋">
+                  {selected.property_address ?? '房屋待核实'}
+                </Descriptions.Item>
                 <Descriptions.Item label="需要人工的环节">
                   {STAGE_LABELS[selected.failure_stage] ?? '需要人工核实'}
                 </Descriptions.Item>
@@ -326,29 +341,48 @@ export function HumanReviewQueue({ token }: { token: string }) {
                 )}
                 {selected.status === 'CLAIMED' && (
                   <>
+                    {selected.ticket_id && onOpenTicket && (
+                      <Button
+                        icon={<EyeOutlined />}
+                        onClick={() => {
+                          setSelected(null)
+                          void onOpenTicket(selected.ticket_id as string)
+                        }}
+                      >
+                        处理关联工单
+                      </Button>
+                    )}
                     <Button
                       loading={transitioning}
                       onClick={() => void transition(selected, 'OPEN')}
                     >
-                      释放任务
+                      退回待处理
                     </Button>
                     <Button
                       type="primary"
                       icon={<CheckCircleOutlined />}
                       onClick={() => resolve(selected, 'RESOLVED')}
                     >
-                      标记已解决
+                      处理完成
                     </Button>
                     <Button
                       danger
                       icon={<CloseCircleOutlined />}
                       onClick={() => resolve(selected, 'DISMISSED')}
                     >
-                      关闭任务
+                      无需处理
                     </Button>
                   </>
                 )}
               </Space>
+              {selected.status === 'CLAIMED' && !selected.ticket_id && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message="这项请求尚未生成工单"
+                  description="请根据上方住址线下核实情况；处理完成或确认无需处理后，在这里记录结果。"
+                />
+              )}
             </Card>
             <Card size="small" title="技术审计" className="technical-audit-card">
               <details>

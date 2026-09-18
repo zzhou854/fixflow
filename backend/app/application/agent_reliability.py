@@ -97,6 +97,8 @@ class AgentReliabilityService:
                 raise AgentThreadNotFound
             if thread.resident_id != resident_id:
                 raise AgentThreadPermissionDenied
+            if thread.lifecycle_status is ThreadLifecycleStatus.DELETED:
+                raise AgentThreadNotFound
             return await uow.reliability.list_messages(thread_id)
 
     async def require_active_thread(self, *, thread_id: UUID, resident_id: UUID) -> ThreadRecord:
@@ -110,6 +112,17 @@ class AgentReliabilityService:
                 raise AgentReliabilityConflict("archived thread must be restored first")
             return thread
 
+    async def require_archived_thread(self, *, thread_id: UUID, resident_id: UUID) -> ThreadRecord:
+        async with self._uow_factory() as uow:
+            thread = await uow.reliability.get_thread(thread_id)
+            if thread is None or thread.lifecycle_status is ThreadLifecycleStatus.DELETED:
+                raise AgentThreadNotFound
+            if thread.resident_id != resident_id:
+                raise AgentThreadPermissionDenied
+            if thread.lifecycle_status is not ThreadLifecycleStatus.ARCHIVED:
+                raise AgentReliabilityConflict("thread must be archived before deletion")
+            return thread
+
     async def latest_public_result(
         self, *, thread_id: UUID, resident_id: UUID
     ) -> PublicRunResult | None:
@@ -119,6 +132,8 @@ class AgentReliabilityService:
                 raise AgentThreadNotFound
             if thread.resident_id != resident_id:
                 raise AgentThreadPermissionDenied
+            if thread.lifecycle_status is ThreadLifecycleStatus.DELETED:
+                raise AgentThreadNotFound
             return await uow.reliability.latest_public_result(thread_id)
 
     async def list_threads(
@@ -154,6 +169,16 @@ class AgentReliabilityService:
                 raise AgentThreadPermissionDenied
             if current.version != expected_version:
                 raise AgentReliabilityConflict
+            allowed = {
+                ThreadLifecycleStatus.ACTIVE: {ThreadLifecycleStatus.ARCHIVED},
+                ThreadLifecycleStatus.ARCHIVED: {
+                    ThreadLifecycleStatus.ACTIVE,
+                    ThreadLifecycleStatus.DELETED,
+                },
+                ThreadLifecycleStatus.DELETED: set(),
+            }
+            if lifecycle_status not in allowed[current.lifecycle_status]:
+                raise AgentReliabilityConflict("invalid thread lifecycle transition")
             updated = await uow.reliability.set_thread_lifecycle(
                 thread_id=thread_id,
                 resident_id=resident_id,

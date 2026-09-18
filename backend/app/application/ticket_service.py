@@ -2,7 +2,7 @@
 
 from dataclasses import asdict, replace
 
-from app.application.errors import AuthorizationFailed, ResourceNotFound
+from app.application.errors import ApplicationError, AuthorizationFailed, ResourceNotFound
 from app.application.events import AggregateType, DomainEventType, build_domain_event
 from app.application.models import (
     CreateTicketCommand,
@@ -13,7 +13,15 @@ from app.application.models import (
 )
 from app.application.ports import TicketHistoryRecord, UnitOfWork
 from app.application.service_support import TransactionalService
-from app.domain.enums import ActorType, EscalationDisposition, TicketAction, TicketStatus
+from app.domain.appointments import AppointmentTransitionRequest, transition_appointment
+from app.domain.enums import (
+    ActorType,
+    AppointmentAction,
+    AppointmentStatus,
+    EscalationDisposition,
+    TicketAction,
+    TicketStatus,
+)
 from app.domain.invariants import ensure_aggregate_consistency
 from app.domain.models import AcceptanceRejection, TicketSnapshot
 from app.domain.tickets import (
@@ -153,6 +161,12 @@ class TicketApplicationService(TransactionalService):
         ensure_aggregate_consistency(
             ticket.status, (appointment,), events[-1].event_type if events else None
         )
+        if (
+            command.accepted
+            and ticket.status is TicketStatus.SCHEDULED
+            and command.metadata.occurred_at < appointment.starts_at
+        ):
+            raise ApplicationError("appointment_not_started")
         rejection = None
         action = TicketAction.RESIDENT_ACCEPT
         if not command.accepted:
@@ -174,6 +188,36 @@ class TicketApplicationService(TransactionalService):
                 current_rework_count=ticket.rework_count,
             )
         )
+        if command.accepted and appointment.status is AppointmentStatus.BOOKED:
+            appointment_decision = transition_appointment(
+                AppointmentTransitionRequest(
+                    current_status=appointment.status,
+                    action=AppointmentAction.FULFILL,
+                    actor_type=command.metadata.actor_type,
+                    expected_version=(
+                        command.expected_appointment_version or appointment.version
+                    ),
+                    actual_version=appointment.version,
+                )
+            )
+            updated_appointment = replace(
+                appointment,
+                status=appointment_decision.next_status,
+                version=appointment_decision.next_version,
+            )
+            await uow.appointments.update(
+                updated_appointment,
+                expected_version=appointment.version,
+            )
+            await uow.appointments.add_history(
+                self._appointment_history(
+                    appointment,
+                    updated_appointment,
+                    command.metadata,
+                    reason_code="RESIDENT_CONFIRMED_COMPLETE",
+                    reason_text="住户现场确认维修已完成",
+                )
+            )
         updated = replace(
             ticket,
             status=decision.next_status,

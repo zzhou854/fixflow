@@ -20,7 +20,7 @@
 - Router、Graph Node、MCP Handler 不管理 ORM 事务；Application/UoW 负责事务和幂等。
 - 保留权限、版本、审计与恢复边界。不通过重发历史 Mutation 修复不确定提交。
 - 人工任务可以先于工单存在；不得伪造工单。
-- 会话删除是可恢复归档，不删除业务、Checkpoint、Trace 或 Replay 历史。
+- 进行中工单的会话只能归档。已归档且没有进行中工单的会话可由住户永久移除，移除后不可恢复、不可见；业务工单、预约及审计事实继续保留。
 - 住户只负责描述可观察事实。房间级位置（如“书房”）和生活化故障表现（如“开关坏了”）足以进入报修；品牌、型号、零件名称、成因和维修方案不得作为建单必填项，由维修人员现场确认。
 - 只追问继续服务真正需要且住户能够回答的信息；不把内部字段名、技术枚举或专业诊断暴露给住户。
 - 不修改已提交 Migration；真实必要的 Schema 变更使用新 Revision。
@@ -49,6 +49,8 @@
 ## 工具和保密
 
 - Python 3.12，uv + pyproject.toml + uv.lock；前端使用现有 npm/package-lock。
+- 仓库根目录的 `uv.toml` 已固定可写缓存；直接运行 `uv`，不要重复设置 `UV_CACHE_DIR`。
+- 前端检查和启动统一使用 `scripts/operations/frontend.ps1 <test|lint|typecheck|build|dev>`；脚本会选择 Codex 自带的新 Node，禁止先调用系统默认 `npm` 再发现版本过旧。
 - 工具不可用先查现有运行时，不引入另一套锁文件或修改全局环境。
 - 不提交 .env、凭据、日志、缓存或私有 Dataset/Golden。
 - 不新增 Redis/Kafka/Celery/Kubernetes、通用 CRUD/Saga 或复杂 DI 框架。

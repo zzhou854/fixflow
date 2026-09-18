@@ -41,6 +41,7 @@ from app.infrastructure.database.models.observability import (
     OutboxStatus,
     TraceSource,
 )
+from app.infrastructure.database.models.user import Property, User
 
 
 class SqlAlchemyAgentReliabilityRepository:
@@ -207,6 +208,10 @@ class SqlAlchemyAgentReliabilityRepository:
         )
         if lifecycle_status is not None:
             statement = statement.where(AgentThreadRecordRow.lifecycle_status == lifecycle_status)
+        else:
+            statement = statement.where(
+                AgentThreadRecordRow.lifecycle_status != ThreadLifecycleStatus.DELETED
+            )
         rows = await self._session.scalars(
             statement.order_by(
                 AgentThreadRecordRow.last_activity_at.desc(),
@@ -238,9 +243,27 @@ class SqlAlchemyAgentReliabilityRepository:
             "lifecycle_status": lifecycle_status,
             "updated_at": now,
             "version": expected_version + 1,
-            "archived_at": now if lifecycle_status is ThreadLifecycleStatus.ARCHIVED else None,
+            "archived_at": (
+                now
+                if lifecycle_status is ThreadLifecycleStatus.ARCHIVED
+                else (
+                    AgentThreadRecordRow.archived_at
+                    if lifecycle_status is ThreadLifecycleStatus.DELETED
+                    else None
+                )
+            ),
             "archived_by_actor_id": (
-                actor_id if lifecycle_status is ThreadLifecycleStatus.ARCHIVED else None
+                actor_id
+                if lifecycle_status is ThreadLifecycleStatus.ARCHIVED
+                else (
+                    AgentThreadRecordRow.archived_by_actor_id
+                    if lifecycle_status is ThreadLifecycleStatus.DELETED
+                    else None
+                )
+            ),
+            "deleted_at": now if lifecycle_status is ThreadLifecycleStatus.DELETED else None,
+            "deleted_by_actor_id": (
+                actor_id if lifecycle_status is ThreadLifecycleStatus.DELETED else None
             ),
         }
         statement = (
@@ -265,18 +288,31 @@ class SqlAlchemyAgentReliabilityRepository:
         limit: int,
         offset: int,
     ) -> Sequence[HumanReviewCaseRecord]:
-        statement = select(HumanReviewCaseRow)
+        statement = (
+            select(HumanReviewCaseRow, User.username, Property.address_text)
+            .join(User, User.id == HumanReviewCaseRow.resident_id)
+            .outerjoin(Property, Property.id == HumanReviewCaseRow.property_id)
+        )
         if status is not None:
             statement = statement.where(HumanReviewCaseRow.status == status)
-        rows = await self._session.scalars(
+        rows = (
+            await self._session.execute(
             statement.order_by(
                 HumanReviewCaseRow.priority.desc(),
                 HumanReviewCaseRow.created_at.asc(),
             )
             .limit(limit)
             .offset(offset)
+            )
+        ).all()
+        return tuple(
+            self._case(
+                row,
+                resident_username=resident_username,
+                property_address=property_address,
+            )
+            for row, resident_username, property_address in rows
         )
-        return tuple(self._case(row) for row in rows)
 
     async def transition_human_review(
         self, command: HumanReviewTransition
@@ -348,7 +384,19 @@ class SqlAlchemyAgentReliabilityRepository:
             occurred_at=now,
         )
         await self._session.flush()
-        return self._case(row)
+        resident_username, property_address = (
+            await self._session.execute(
+                select(User.username, Property.address_text)
+                .select_from(User)
+                .outerjoin(Property, Property.id == row.property_id)
+                .where(User.id == row.resident_id)
+            )
+        ).one()
+        return self._case(
+            row,
+            resident_username=resident_username,
+            property_address=property_address,
+        )
 
     async def list_human_review_events(self, case_id: UUID) -> Sequence[HumanReviewEventRecord]:
         exists = await self._session.get(HumanReviewCaseRow, case_id)
@@ -757,6 +805,7 @@ class SqlAlchemyAgentReliabilityRepository:
             created_at=row.created_at,
             updated_at=row.updated_at,
             archived_at=row.archived_at,
+            deleted_at=row.deleted_at,
             version=row.version,
         )
 
@@ -773,7 +822,12 @@ class SqlAlchemyAgentReliabilityRepository:
         )
 
     @staticmethod
-    def _case(row: HumanReviewCaseRow) -> HumanReviewCaseRecord:
+    def _case(
+        row: HumanReviewCaseRow,
+        *,
+        resident_username: str | None = None,
+        property_address: str | None = None,
+    ) -> HumanReviewCaseRecord:
         return HumanReviewCaseRecord(
             case_id=row.id,
             thread_id=row.thread_id,
@@ -798,6 +852,8 @@ class SqlAlchemyAgentReliabilityRepository:
             resolved_at=row.resolved_at,
             resolution_code=row.resolution_code,
             resolution_note=row.resolution_note,
+            resident_username=resident_username,
+            property_address=property_address,
         )
 
     @staticmethod

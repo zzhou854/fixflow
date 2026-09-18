@@ -1,4 +1,4 @@
-import type { AgentRun, AgentThread, ApiErrorBody, HumanReviewCase, HumanReviewEvent, HumanReviewStatus, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, ReplayExecution, ReplayRun, ReplayRunDetail, ResidentThreadSummary, Ticket, TicketDetail, TraceEvent } from '../types'
+import type { AgentRun, AgentThread, ApiErrorBody, AvailableSlot, HumanReviewCase, HumanReviewEvent, HumanReviewStatus, LoginResult, OperationResponse, OperatorThread, Property, ReconciliationCase, RegisterResidentInput, ReplayExecution, ReplayRun, ReplayRunDetail, ResidentThreadSummary, Ticket, TicketDetail, TraceEvent } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const SHANGHAI_OFFSET_MILLISECONDS = 8 * 60 * 60 * 1000
@@ -38,11 +38,23 @@ export const api = {
   login: (username: string, password: string) => apiRequest<LoginResult>('/api/v1/auth/login', null, {
     method: 'POST', body: JSON.stringify({ username, password }),
   }),
+  registerResident: (input: RegisterResidentInput) => apiRequest<LoginResult>('/api/v1/auth/register/resident', null, {
+    method: 'POST', body: JSON.stringify(input),
+  }),
   me: (token: string) => apiRequest<LoginResult['user']>('/api/v1/auth/me', token),
   properties: (token: string) => apiRequest<Property[]>('/api/v1/resident/properties', token),
   residentTickets: (token: string) => apiRequest<{ items: Ticket[] }>('/api/v1/resident/tickets', token),
   operatorTickets: (token: string, query = '') => apiRequest<{ items: Ticket[] }>(`/api/v1/operator/tickets${query}`, token),
   operatorTicket: (token: string, ticketId: string) => apiRequest<TicketDetail>(`/api/v1/operator/tickets/${ticketId}`, token),
+  operatorAvailableSlots: (token: string, ticketId: string) => apiRequest<{ items: AvailableSlot[] }>(`/api/v1/operator/tickets/${ticketId}/available-slots`, token),
+  operatorBookAppointment: (token: string, ticketId: string, slot: AvailableSlot, expectedTicketVersion: number, idempotencyKey: string = crypto.randomUUID()) => apiRequest<OperationResponse>(`/api/v1/operator/tickets/${ticketId}/appointment`, token, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify({
+      worker_id: slot.worker_id,
+      scheduled_start: slot.scheduled_start,
+      scheduled_end: slot.scheduled_end,
+      expected_ticket_version: expectedTicketVersion,
+    }),
+  }),
   operatorThread: (token: string, threadId: string) => apiRequest<OperatorThread>(`/api/v1/operator/threads/${threadId}`, token),
   operatorRuns: (token: string, threadId: string, query = '') => apiRequest<{ items: AgentRun[] }>(`/api/v1/operator/threads/${threadId}/runs${query}`, token),
   operatorRunEvents: (token: string, runId: string, query = '') => apiRequest<{ items: TraceEvent[] }>(`/api/v1/operator/runs/${runId}/events${query}`, token),
@@ -93,9 +105,28 @@ export const api = {
     body: JSON.stringify({
       expected_version: expectedVersion,
       reason_code: 'OPERATOR_REVIEW',
-      reason_text: '物业工作台人工升级',
+      reason_text: '物业工作人员转交主管处理',
       evidence: [],
     }),
+  }),
+  recordRepairProgress: (
+    token: string,
+    ticketId: string,
+    body: {
+      appointment_id: string
+      worker_id: string
+      expected_ticket_version: number
+      expected_appointment_version: number
+      event_type: 'STARTED' | 'COMPLETED' | 'FAILED_TO_COMPLETE'
+      failure_reason?: string | null
+      note?: string | null
+    },
+    idempotencyKey: string = crypto.randomUUID(),
+  ) => apiRequest<OperationResponse>(`/api/v1/operator/tickets/${ticketId}/repair-progress`, token, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(body),
+  }),
+  acceptRepair: (token: string, ticketId: string, expectedVersion: number, expectedAppointmentVersion?: number, idempotencyKey: string = crypto.randomUUID()) => apiRequest<OperationResponse>(`/api/v1/resident/tickets/${ticketId}/accept`, token, {
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify({ expected_ticket_version: expectedVersion, expected_appointment_version: expectedAppointmentVersion ?? null }),
   }),
   getThread: (token: string, threadId: string) => apiRequest<AgentThread>(`/api/v1/agent/threads/${threadId}`, token),
   residentThreads: (token: string, archiveStatus: 'active'|'archived'|'all' = 'active', limit = 5, offset = 0) => apiRequest<{ items: ResidentThreadSummary[]; limit: number; offset: number }>(`/api/v1/agent/threads?archive_status=${archiveStatus}&limit=${limit}&offset=${offset}`, token),
@@ -103,6 +134,9 @@ export const api = {
     method: 'POST', body: JSON.stringify({ expected_version: expectedVersion }),
   }),
   restoreThread: (token: string, threadId: string, expectedVersion: number) => apiRequest<{thread_id: string; lifecycle_status: 'ACTIVE'; archived_at: null; version: number}>(`/api/v1/agent/threads/${threadId}/restore`, token, {
+    method: 'POST', body: JSON.stringify({ expected_version: expectedVersion }),
+  }),
+  deleteThread: (token: string, threadId: string, expectedVersion: number) => apiRequest<{thread_id: string; lifecycle_status: 'DELETED'; archived_at: string; deleted_at: string; version: number}>(`/api/v1/agent/threads/${threadId}/delete`, token, {
     method: 'POST', body: JSON.stringify({ expected_version: expectedVersion }),
   }),
   createThread: (token: string, property_id: string, initial_message: string, idempotencyKey: string = crypto.randomUUID(), referenceTime: string = shanghaiReferenceTime()) => apiRequest<AgentThread>('/api/v1/agent/threads', token, {

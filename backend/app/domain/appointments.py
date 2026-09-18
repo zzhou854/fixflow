@@ -80,7 +80,7 @@ _APPOINTMENT_TRANSITIONS: Mapping[
         ),
         AppointmentAction.FULFILL: (
             AppointmentStatus.FULFILLED,
-            frozenset({ActorType.WORKER, ActorType.OPERATOR}),
+            frozenset({ActorType.RESIDENT, ActorType.WORKER, ActorType.OPERATOR}),
         ),
         AppointmentAction.MARK_NO_SHOW: (
             AppointmentStatus.NO_SHOW,

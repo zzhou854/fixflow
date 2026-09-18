@@ -10,12 +10,17 @@ and embedding providers are deterministic offline demonstrations.
 The resident page supports login/logout, authorised property selection, a new
 or continued Agent conversation, live SSE status, the three typed interrupt
 forms, and refreshed ticket/appointment summaries. Rescheduling and requests
-for human handling use the Agent path. Cancellation and acceptance/rejection
-remain property-staff operations in this first product slice.
+for human handling use the Agent path. When a completed visit is awaiting
+confirmation, the resident can confirm that the issue is fixed and close the
+ticket. The UI does not ask the resident to record each unsuccessful repair
+attempt; while the worker remains on site, they continue directly.
 
 The operator page provides a dedicated pre-ticket “待人工处理” queue, ticket
 status/category/severity filters, business details, ticket and appointment
-histories, and the latest Worker Event. Queue items are ordered by priority,
+histories, and the latest Worker Event. It also records the three material visit
+events: work started, repair completed pending resident confirmation, and visit
+failed with a reason requiring follow-up or escalation. Travel-status clicks are
+not required to begin an on-site repair. Queue items are ordered by priority,
 filterable by lifecycle status, searchable, and use the existing optimistic
 `OPEN`/`CLAIMED`/`RESOLVED`/`DISMISSED` transitions. Version conflicts refresh
 the authoritative queue instead of overwriting another operator. Details are
@@ -47,11 +52,12 @@ The resident page is a fixed-height application shell. Its recent-conversation
 rail and message region scroll independently, while the composer remains
 anchored at the bottom of the chat region. The rail shows at most the five most
 recently active conversations. “全部会话” opens a searchable drawer with
-active/archived filters and recoverable archive/restore controls. Archive never
-deletes Checkpoint, Trace, Replay, ticket, appointment, or audit facts. When a
-thread is linked to a ticket the action is explicitly labelled “归档会话”; for
-an unlinked thread “移除会话” still opens a confirmation explaining that the
-operation is recoverable archive rather than permanent deletion.
+active/archived filters and archive/restore controls. Every active conversation
+uses the single action label “归档会话”. In the archived view, conversations with
+an in-progress ticket can only be restored; eligible conversations can also be
+permanently removed after a destructive confirmation. Permanent removal cannot
+be restored, but it never cancels or deletes Checkpoint, Trace, Replay, ticket,
+appointment, or audit facts.
 
 Resident-visible workflow, ticket, severity, and missing-field labels are
 Chinese business language. Internal enum names, worker UUIDs, SSE terminology,
@@ -60,6 +66,13 @@ current authoritative stage (understanding, policy check, ticket creation,
 slot lookup, result reconciliation, or human handoff). A failed request keeps
 its HTTP result boundary visible and offers retry or property-staff assistance;
 SSE remains a notification channel rather than the source of truth.
+
+For a scheduled or in-progress visit, the resident ticket card exposes
+“确认已修好”. The resident uses it only after confirming the result with the
+worker on site; property staff do not need to submit a separate completion
+step first. “申请改期” starts a reschedule request without inventing an
+availability window, then asks the resident to provide the desired date and
+time range.
 
 The public SSE terminal events are `message.completed`, `message.failed`, and
 `message.escalated`. HTTP and the refreshed Thread State remain authoritative;
@@ -71,14 +84,16 @@ refresh after a malformed or disconnected stream.
 Use Node.js 20 or newer:
 
 ```bash
-cd frontend
-npm ci
-npm run dev
-npm run lint
-npm run typecheck
-npm run test
-npm run build
+powershell -ExecutionPolicy Bypass -File scripts/operations/frontend.ps1 dev
+powershell -ExecutionPolicy Bypass -File scripts/operations/frontend.ps1 lint
+powershell -ExecutionPolicy Bypass -File scripts/operations/frontend.ps1 typecheck
+powershell -ExecutionPolicy Bypass -File scripts/operations/frontend.ps1 test
+powershell -ExecutionPolicy Bypass -File scripts/operations/frontend.ps1 build
 ```
+
+Run these commands from the repository root. The wrapper selects Node 20 or
+newer and invokes the checked-in frontend tools directly, avoiding the outdated
+system `npm` runtime on this workstation.
 
 The default API is `http://127.0.0.1:8000`; set `VITE_API_BASE_URL` only for a
 different local endpoint. Vite defaults to `http://127.0.0.1:5173`.

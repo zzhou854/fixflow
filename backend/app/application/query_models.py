@@ -53,6 +53,7 @@ class ListAvailableSlotsQuery:
     search_window_end: datetime
     requested_duration_minutes: int
     max_results: int
+    excluded_appointment_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

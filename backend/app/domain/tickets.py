@@ -175,6 +175,12 @@ _transition_data: dict[tuple[TicketStatus, TicketAction], _TransitionSpec] = {
     (TicketStatus.SCHEDULED, TicketAction.REVIEWED_NO_SHOW): _TransitionSpec(
         TicketStatus.ESCALATED, _SYSTEM_OPERATOR
     ),
+    (TicketStatus.SCHEDULED, TicketAction.RESIDENT_ACCEPT): _TransitionSpec(
+        TicketStatus.CLOSED, frozenset({ActorType.RESIDENT})
+    ),
+    (TicketStatus.IN_PROGRESS, TicketAction.RESIDENT_ACCEPT): _TransitionSpec(
+        TicketStatus.CLOSED, frozenset({ActorType.RESIDENT})
+    ),
     (TicketStatus.IN_PROGRESS, TicketAction.COMPLETE_WORK): _TransitionSpec(
         TicketStatus.PENDING_ACCEPTANCE, _WORKER_OPERATOR
     ),

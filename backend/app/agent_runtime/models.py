@@ -116,8 +116,18 @@ class SelectAppointmentSlotResume(AgentModel):
     trace_id: UUID
 
 
+class CancelAppointmentSlotSelectionResume(AgentModel):
+    kind: Literal["CANCEL_APPOINTMENT_SLOT_SELECTION"]
+    intent_version: int = Field(ge=1)
+    candidates_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    trace_id: UUID
+
+
 AgentResume = Annotated[
-    ProvideInformationResume | SelectDuplicateTicketResume | SelectAppointmentSlotResume,
+    ProvideInformationResume
+    | SelectDuplicateTicketResume
+    | SelectAppointmentSlotResume
+    | CancelAppointmentSlotSelectionResume,
     Field(discriminator="kind"),
 ]
 AGENT_RESUME_ADAPTER: TypeAdapter[AgentResume] = TypeAdapter(AgentResume)

@@ -77,12 +77,16 @@ button, input, textarea { font: inherit; }
   transition: background .16s ease, border-color .16s ease;
 }
 .thread-history-item:hover { background: #f0fdfa; }
+.thread-history-item:disabled { cursor: wait; opacity: .72; background: #f0fdfa; }
 .thread-history-item:focus-visible { outline: 3px solid rgba(15, 118, 110, .2); }
 .thread-history-item.active { border-color: #5eead4; background: #ecfdf5; }
 .thread-history-item strong,
 .thread-history-item span { display: block; }
 .thread-history-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-history-item span { margin-top: 4px; color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.recent-thread-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 4px; }
+.recent-thread-row .thread-history-item { min-width: 0; flex: 1; }
+.recent-thread-archive { flex: none; }
 .drawer-thread-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 8px; }
 .drawer-thread-row .thread-history-item { min-width: 0; }
 
@@ -181,12 +185,43 @@ button, input, textarea { font: inherit; }
 .secondary-actions .ant-typography { margin-left: auto; font-size: 12px; }
 
 .interrupt-card {
-  border: 1px solid #f6c453;
-  box-shadow: 0 8px 24px rgba(250, 173, 20, .10);
+  border: 1px solid #d9e7e4;
+  box-shadow: 0 8px 24px rgba(19, 78, 74, .07);
 }
 .interrupt-card .ant-alert { margin-bottom: 14px; }
 .interrupt-explanation { margin-top: 12px; }
 .summary-card .ant-descriptions-item-content { word-break: break-word; }
+.appointment-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #b7e3cb;
+  border-radius: 12px;
+  color: #174b3d;
+  background: linear-gradient(145deg, #f2fbf5, #ebf8f2);
+}
+.appointment-summary > .anticon { margin-top: 3px; color: #2f9e68; font-size: 18px; }
+.appointment-summary div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.appointment-summary span { color: #5a746d; font-size: 12px; }
+.appointment-summary strong { line-height: 1.45; }
+.appointment-summary b { color: #0f766e; font-size: 19px; line-height: 1.35; }
+.ticket-summary-details { margin-bottom: 14px; }
+.repair-confirmation {
+  padding: 13px;
+  border-radius: 12px;
+  background: #f4f8f7;
+}
+.repair-confirmation-copy { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 11px; }
+.repair-confirmation-copy > .anticon { margin-top: 3px; color: #0f8f83; }
+.repair-confirmation-copy div { display: flex; flex-direction: column; gap: 3px; }
+.repair-confirmation-copy span { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.slot-list .ant-list-item { padding: 14px 4px; }
+.slot-row { display: flex; align-items: center; gap: 16px; }
+.slot-time { min-width: 145px; display: flex; flex-direction: column; gap: 3px; }
+.slot-time span { color: var(--text-muted); font-size: 13px; }
+.slot-time strong { color: #153f3a; font-size: 17px; }
 .drawer-stack { width: 100%; }
 .operator-content { min-height: 0; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .operator-workspace-tabs > .ant-tabs-nav { position: sticky; top: -20px; z-index: 5; margin: 0 0 14px; padding: 10px 4px 0; background: #eef5f3; }

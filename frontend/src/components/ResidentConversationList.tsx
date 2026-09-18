@@ -14,6 +14,7 @@ type ArchiveFilter = 'active' | 'archived' | 'all'
 
 interface Props {
   currentThreadId?: string
+  openingThreadId?: string
   recentThreads: ResidentThreadSummary[]
   allThreads: ResidentThreadSummary[]
   allThreadsLoading: boolean
@@ -26,15 +27,18 @@ interface Props {
   onSelect: (threadId: string) => Promise<void>
   onArchive: (thread: ResidentThreadSummary) => Promise<void>
   onRestore: (thread: ResidentThreadSummary) => Promise<void>
+  onDelete: (thread: ResidentThreadSummary) => Promise<void>
 }
 
 function ThreadButton({
   item,
   active,
+  opening,
   onSelect,
 }: {
   item: ResidentThreadSummary
   active: boolean
+  opening: boolean
   onSelect: () => void
 }) {
   return (
@@ -42,11 +46,15 @@ function ThreadButton({
       type="button"
       className={`thread-history-item ${active ? 'active' : ''}`}
       onClick={onSelect}
+      disabled={opening}
+      aria-busy={opening}
     >
       <strong>{threadTitle(item)}</strong>
       <span>
-        {residentStageLabel(item.workflow_stage)} ·{' '}
-        {new Date(item.updated_at).toLocaleString('zh-CN')}
+        {opening
+          ? '正在打开会话…'
+          : <>{residentStageLabel(item.workflow_stage)} ·{' '}
+            {new Date(item.updated_at).toLocaleString('zh-CN')}</>}
       </span>
     </button>
   )
@@ -56,6 +64,8 @@ export function ResidentConversationList(props: Props) {
   const [query, setQuery] = useState('')
   const [archiveCandidate, setArchiveCandidate] = useState<ResidentThreadSummary | null>(null)
   const [archiveBusy, setArchiveBusy] = useState(false)
+  const [deleteCandidate, setDeleteCandidate] = useState<ResidentThreadSummary | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const visible = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase()
     if (!keyword) return props.allThreads
@@ -79,6 +89,17 @@ export function ResidentConversationList(props: Props) {
     }
   }
 
+  async function deleteSelected() {
+    if (!deleteCandidate) return
+    setDeleteBusy(true)
+    try {
+      await props.onDelete(deleteCandidate)
+      setDeleteCandidate(null)
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
   return (
     <>
       <div className="recent-thread-list" aria-label="最近会话">
@@ -90,11 +111,24 @@ export function ResidentConversationList(props: Props) {
             dataSource={props.recentThreads.slice(0, 5)}
             renderItem={(item) => (
               <List.Item>
-                <ThreadButton
-                  item={item}
-                  active={item.thread_id === props.currentThreadId}
-                  onSelect={() => void props.onSelect(item.thread_id)}
-                />
+                <div className="recent-thread-row">
+                  <ThreadButton
+                    item={item}
+                    active={item.thread_id === props.currentThreadId}
+                    opening={item.thread_id === props.openingThreadId}
+                    onSelect={() => void props.onSelect(item.thread_id)}
+                  />
+                  <Button
+                    className="recent-thread-archive"
+                    danger
+                    type="text"
+                    icon={<InboxOutlined />}
+                    aria-label={`归档会话：${threadTitle(item)}`}
+                    onClick={() => confirmArchive(item)}
+                  >
+                    归档
+                  </Button>
+                </div>
               </List.Item>
             )}
           />
@@ -138,23 +172,26 @@ export function ResidentConversationList(props: Props) {
             renderItem={(item) => (
               <List.Item
                 actions={[
-                  item.lifecycle_status === 'ARCHIVED' ? (
-                    <Button
-                      key="restore"
-                      icon={<RollbackOutlined />}
-                      onClick={() => void props.onRestore(item)}
-                    >
+                  item.lifecycle_status === 'ARCHIVED' ? [
+                    <Button key="restore" icon={<RollbackOutlined />} onClick={() => void props.onRestore(item)}>
                       恢复
-                    </Button>
-                  ) : (
+                    </Button>,
+                    item.can_delete ? (
+                      <Button key="delete" danger type="text" icon={<DeleteOutlined />} onClick={() => setDeleteCandidate(item)}>
+                        永久删除
+                      </Button>
+                    ) : (
+                      <Typography.Text key="blocked" type="secondary">工单处理中，暂不可删除</Typography.Text>
+                    ),
+                  ] : (
                     <Button
                       key="archive"
                       danger
                       type="text"
-                      icon={item.active_ticket_id ? <InboxOutlined /> : <DeleteOutlined />}
+                      icon={<InboxOutlined />}
                       onClick={() => confirmArchive(item)}
                     >
-                      {item.active_ticket_id ? '归档会话' : '移除会话'}
+                      归档会话
                     </Button>
                   ),
                 ]}
@@ -163,6 +200,7 @@ export function ResidentConversationList(props: Props) {
                   <ThreadButton
                     item={item}
                     active={item.thread_id === props.currentThreadId}
+                    opening={item.thread_id === props.openingThreadId}
                     onSelect={() => void props.onSelect(item.thread_id)}
                   />
                   {item.lifecycle_status === 'ARCHIVED' && <Tag>已归档</Tag>}
@@ -173,9 +211,9 @@ export function ResidentConversationList(props: Props) {
         </Space>
       </Drawer>}
       <Modal
-        title={archiveCandidate?.active_ticket_id ? '归档这段会话？' : '移除这段会话？'}
+        title="归档这段会话？"
         open={archiveCandidate !== null}
-        okText={archiveCandidate?.active_ticket_id ? '归档会话' : '确认移除'}
+        okText="归档会话"
         cancelText="暂不处理"
         confirmLoading={archiveBusy}
         onOk={() => void archiveSelected()}
@@ -185,6 +223,20 @@ export function ResidentConversationList(props: Props) {
           {archiveCandidate?.active_ticket_id
             ? '会话将从最近列表隐藏，但不会取消已有工单、预约或删除审计记录，之后仍可恢复。'
             : '这不是永久删除。会话会被安全归档，之后可在“全部会话”中恢复。'}
+        </Typography.Paragraph>
+      </Modal>
+      <Modal
+        title="永久删除这段会话？"
+        open={deleteCandidate !== null}
+        okText="永久删除"
+        okButtonProps={{ danger: true }}
+        cancelText="取消"
+        confirmLoading={deleteBusy}
+        onOk={() => void deleteSelected()}
+        onCancel={() => setDeleteCandidate(null)}
+      >
+        <Typography.Paragraph>
+          删除后会话将无法恢复。已产生的工单、预约和物业审计记录不会被取消或删除。
         </Typography.Paragraph>
       </Modal>
     </>

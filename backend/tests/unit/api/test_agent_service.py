@@ -1,6 +1,8 @@
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -27,7 +29,7 @@ from app.application.agent_reliability_models import (
 )
 from app.application.auth import AuthenticatedIdentity
 from app.application.services import FixFlowApplicationService
-from app.domain.enums import ActorType, WorkflowStage
+from app.domain.enums import ActorType, TicketStatus, WorkflowStage
 from app.trace.runtime import TraceRuntime
 
 
@@ -125,6 +127,45 @@ def _identity() -> AuthenticatedIdentity:
     return AuthenticatedIdentity(actor_id, "resident", ActorType.RESIDENT)
 
 
+@pytest.mark.asyncio
+async def test_cannot_delete_archived_thread_while_ticket_is_still_in_progress() -> None:
+    identity = _identity()
+    thread_id, ticket_id = uuid4(), uuid4()
+    orchestrator = AsyncMock()
+    orchestrator.get_state.return_value = AgentStateView(
+        thread_id=thread_id,
+        intent_version=1,
+        workflow_stage=WorkflowStage.DONE,
+        property_id=uuid4(),
+        property_context_verified=True,
+        active_ticket_id=ticket_id,
+        active_appointment_id=None,
+        ticket_snapshot_version=2,
+        appointment_version=None,
+        last_assistant_message="已受理",
+        run_status=RunStatus.COMPLETED,
+        interrupt=None,
+    )
+    application = AsyncMock()
+    application.get_ticket_detail.return_value = SimpleNamespace(
+        ticket=SimpleNamespace(ticket_status=TicketStatus.SCHEDULED)
+    )
+    reliability = AsyncMock()
+    reliability.require_archived_thread.return_value = SimpleNamespace(version=2)
+    service = AgentApiService(
+        cast(AgentOrchestrator, orchestrator),
+        cast(FixFlowApplicationService, application),
+        SSEEventBus(),
+        reliability=cast(AgentReliabilityService, reliability),
+    )
+
+    with pytest.raises(ApiError) as raised:
+        await service.delete_thread(identity, thread_id=thread_id, expected_version=2)
+
+    assert raised.value.code == "THREAD_DELETE_BLOCKED"
+    reliability.set_thread_lifecycle.assert_not_awaited()
+
+
 async def _event_types(queue: asyncio.Queue[SSEEvent]) -> list[str]:
     types: list[str] = []
     while not queue.empty():
@@ -177,7 +218,7 @@ async def test_interrupted_turn_publishes_interrupt_required() -> None:
         workflow_stage=WorkflowStage.NEED_INFO,
     )
     async with events.subscribe(thread_id) as queue:
-        await _service(result, events).send_message(
+        response = await _service(result, events).send_message(
             _identity(),
             thread_id=thread_id,
             message="漏水",
@@ -185,6 +226,7 @@ async def test_interrupted_turn_publishes_interrupt_required() -> None:
             reference_time=datetime.now(UTC),
             timezone_name="UTC",
         )
+        assert response.assistant_message == "请补充位置"
         assert await _event_types(queue) == [
             "run_started",
             "workflow_updated",
@@ -194,14 +236,20 @@ async def test_interrupted_turn_publishes_interrupt_required() -> None:
 
 
 def test_default_message_tells_the_resident_what_to_do_next() -> None:
-    assert AgentApiService._default_assistant_message(
-        MessageOutcome.COMPLETED,
-        RequiredUserAction.SELECT_SLOT,
-    ) == "已经找到可选的上门时间，请在下方选择。"
-    assert AgentApiService._default_assistant_message(
-        MessageOutcome.ESCALATED,
-        RequiredUserAction.CONTACT_OPERATOR,
-    ) == "这次需要物业工作人员继续处理，请等待联系。"
+    assert (
+        AgentApiService._default_assistant_message(
+            MessageOutcome.COMPLETED,
+            RequiredUserAction.SELECT_SLOT,
+        )
+        == "已经找到可选的上门时间，请在下方选择。"
+    )
+    assert (
+        AgentApiService._default_assistant_message(
+            MessageOutcome.ESCALATED,
+            RequiredUserAction.CONTACT_OPERATOR,
+        )
+        == "这次需要物业工作人员继续处理，请等待联系。"
+    )
 
 
 @pytest.mark.asyncio

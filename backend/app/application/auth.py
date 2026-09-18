@@ -1,4 +1,4 @@
-"""Preset-account authentication and short-lived JWT access tokens."""
+"""Resident registration, authentication, and short-lived JWT access tokens."""
 
 from __future__ import annotations
 
@@ -18,6 +18,14 @@ class AuthenticationError(Exception):
     """Stable authentication failure without account-existence disclosure."""
 
     def __init__(self, code: str = "INVALID_CREDENTIALS") -> None:
+        super().__init__(code)
+        self.code = code
+
+
+class RegistrationError(Exception):
+    """Stable resident-registration failure."""
+
+    def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
 
@@ -53,9 +61,20 @@ class AuthUserRepository(Protocol):
 
     async def find_by_id(self, user_id: UUID) -> AuthUser | None: ...
 
+    async def register_resident(
+        self,
+        *,
+        username: str,
+        password_hash: str,
+        community_name: str,
+        building_no: str,
+        unit_no: str,
+        room_no: str,
+    ) -> AuthUser: ...
+
 
 class AuthService:
-    """Authenticate preset users and validate signed access-token claims."""
+    """Register residents, authenticate users, and validate signed tokens."""
 
     def __init__(
         self,
@@ -89,6 +108,27 @@ class AuthService:
         identity = self._identity(user)
         return identity, self._issue(identity)
 
+    async def register_resident(
+        self,
+        username: str,
+        password: str,
+        community_name: str,
+        building_no: str,
+        unit_no: str,
+        room_no: str,
+    ) -> tuple[AuthenticatedIdentity, AccessToken]:
+        normalized_username = username.strip()
+        user = await self._repository.register_resident(
+            username=normalized_username,
+            password_hash=self.hash_password(password),
+            community_name=community_name.strip(),
+            building_no=self._property_part(building_no, "栋", "号楼"),
+            unit_no=self._property_part(unit_no, "单元"),
+            room_no=self._property_part(room_no, "室", "号房"),
+        )
+        identity = self._identity(user)
+        return identity, self._issue(identity)
+
     async def authenticate(self, token: str) -> AuthenticatedIdentity:
         try:
             claims = jwt.decode(
@@ -112,7 +152,7 @@ class AuthService:
 
     def hash_password(self, password: str) -> str:
         if len(password) < 8:
-            raise ValueError("development account password must contain at least 8 characters")
+            raise ValueError("account password must contain at least 8 characters")
         return self._hasher.hash(password)
 
     def _verify(self, password_hash: str, password: str) -> bool:
@@ -137,6 +177,14 @@ class AuthService:
             algorithm=self._algorithm,
         )
         return AccessToken(token=token, expires_at=expires_at)
+
+    @staticmethod
+    def _property_part(value: str, *suffixes: str) -> str:
+        normalized = value.strip()
+        for suffix in suffixes:
+            if normalized.endswith(suffix):
+                return normalized[: -len(suffix)].strip()
+        return normalized
 
     @staticmethod
     def _identity(user: AuthUser) -> AuthenticatedIdentity:

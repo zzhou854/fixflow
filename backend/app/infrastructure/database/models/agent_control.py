@@ -36,8 +36,9 @@ class AgentThreadRecordRow(Base):
     __table_args__ = (
         CheckConstraint("version > 0", name="version_positive"),
         CheckConstraint(
-            "(lifecycle_status = 'ACTIVE' AND archived_at IS NULL) OR "
-            "(lifecycle_status = 'ARCHIVED' AND archived_at IS NOT NULL)",
+            "(lifecycle_status = 'ACTIVE' AND archived_at IS NULL AND deleted_at IS NULL) OR "
+            "(lifecycle_status = 'ARCHIVED' AND archived_at IS NOT NULL AND deleted_at IS NULL) OR "
+            "(lifecycle_status = 'DELETED' AND archived_at IS NOT NULL AND deleted_at IS NOT NULL)",
             name="archive_time_matches_status",
         ),
         CheckConstraint(
@@ -77,6 +78,10 @@ class AgentThreadRecordRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_by_actor_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by_actor_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

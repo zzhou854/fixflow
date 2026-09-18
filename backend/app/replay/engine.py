@@ -21,6 +21,7 @@ from app.replay.capture import GRAPH_SCHEMA_VERSION, REPLAY_BUNDLE_SCHEMA_VERSIO
 from app.replay.comparison import ReplayGraphObserver
 from app.replay.enums import ReplayExecutionStatus, ReplayMismatchType, ReplayStepKind
 from app.replay.models import (
+    CancelSlotSelectionReplayInput,
     MessageReplayInput,
     ProvideInformationReplayInput,
     ReplayBundleView,
@@ -202,6 +203,7 @@ class ReplayEngine:
             "PROVIDE_INFORMATION": "interpret",
             "SELECT_DUPLICATE_TICKET": "find_duplicates",
             "SELECT_APPOINTMENT_SLOT": "list_slots",
+            "CANCEL_APPOINTMENT_SLOT_SELECTION": "list_slots",
         }[input_envelope.kind]
         runtime = RuntimeGraphState(state_json=state.model_dump_json())
         await graph.aupdate_state(config, runtime, as_node=predecessor)
@@ -233,6 +235,13 @@ class ReplayEngine:
                 "intent_version": input_envelope.intent_version,
                 "candidates_fingerprint": input_envelope.candidate_fingerprint,
                 "rank": input_envelope.rank,
+                "trace_id": str(trace_id),
+            }
+        if isinstance(input_envelope, CancelSlotSelectionReplayInput):
+            return {
+                "kind": input_envelope.kind,
+                "intent_version": input_envelope.intent_version,
+                "candidates_fingerprint": input_envelope.candidate_fingerprint,
                 "trace_id": str(trace_id),
             }
         raise ValueError("invalid resume replay input")

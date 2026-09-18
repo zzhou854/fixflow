@@ -10,6 +10,14 @@ export type WorkflowStage =
 
 export interface User { user_id: string; username: string; actor_type: ActorType }
 export interface LoginResult { access_token: string; token_type: string; expires_at: string; user: User }
+export interface RegisterResidentInput {
+  username: string
+  password: string
+  community_name: string
+  building_no: string
+  unit_no: string
+  room_no: string
+}
 export interface Property {
   property_id: string; community_name: string; building_no: string; unit_no: string
   room_no: string; address_text: string
@@ -17,6 +25,9 @@ export interface Property {
 export interface Appointment {
   appointment_id: string; worker_id: string; purpose: string; status: string
   scheduled_start: string; scheduled_end: string; appointment_version: number
+}
+export interface AvailableSlot {
+  worker_id: string; worker_name: string; scheduled_start: string; scheduled_end: string; rank: number
 }
 export interface Ticket {
   ticket_id: string; resident_id: string; resident_username: string; property_id: string
@@ -60,7 +71,7 @@ export interface ResidentThreadSummary {
   run_status: 'COMPLETED' | 'INTERRUPTED' | 'NEEDS_HUMAN_REVIEW' | 'FAILED_SAFE'
   issue_category: string | null; issue_location: string | null
   active_ticket_id: string | null; updated_at: string
-  lifecycle_status: 'ACTIVE' | 'ARCHIVED'; archived_at: string | null; version: number
+  lifecycle_status: 'ACTIVE' | 'ARCHIVED'; archived_at: string | null; can_delete: boolean; version: number
 }
 export interface AgentThread {
   thread_id: string; trace_id: string; run_id?: string | null; message_id: string | null; workflow_stage: WorkflowStage
@@ -129,6 +140,8 @@ export interface HumanReviewCase {
   resolved_at: string | null
   resolution_code: string | null
   resolution_note: string | null
+  resident_username: string | null
+  property_address: string | null
 }
 export interface HumanReviewEvent {
   event_id: string

@@ -203,6 +203,18 @@ def _request(
             TicketStatus.ESCALATED,
         ),
         (
+            TicketStatus.SCHEDULED,
+            TicketAction.RESIDENT_ACCEPT,
+            ActorType.RESIDENT,
+            TicketStatus.CLOSED,
+        ),
+        (
+            TicketStatus.IN_PROGRESS,
+            TicketAction.RESIDENT_ACCEPT,
+            ActorType.RESIDENT,
+            TicketStatus.CLOSED,
+        ),
+        (
             TicketStatus.IN_PROGRESS,
             TicketAction.COMPLETE_WORK,
             ActorType.WORKER,

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from app.agent.enums import LLMRole, PendingAction
+from app.agent.enums import AgentIntent, LLMRole, PendingAction
 from app.agent.models import (
     AllowedPolicyEvidence,
     ComposeResponseInput,
@@ -22,6 +22,35 @@ from app.domain.enums import WorkflowStage
 
 async def compose(context: NodeContext, graph_state: RuntimeGraphState) -> RuntimeGraphState:
     state = load_state(graph_state)
+    if (
+        state.task_intent is AgentIntent.RESCHEDULE_APPOINTMENT
+        and state.cached_ticket_snapshot is not None
+        and state.cached_ticket_snapshot.active_appointment is not None
+        and state.last_tool_result is not None
+        and state.last_tool_result.resource_id
+        == state.cached_ticket_snapshot.active_appointment.appointment_id
+    ):
+        return dump_state(
+            finish_with_assistant_message(
+                state,
+                message="改期成功，新的上门时间已经更新。",
+                updates={"workflow_stage": WorkflowStage.DONE},
+            )
+        )
+    if (
+        state.task_intent is AgentIntent.NEW_REPAIR
+        and state.duplicate_ticket_candidates
+        and state.cached_ticket_snapshot is not None
+        and state.cached_ticket_snapshot.active_appointment is not None
+        and state.last_tool_result is None
+    ):
+        return dump_state(
+            finish_with_assistant_message(
+                state,
+                message=("检测到同一问题已有工单，并且已经安排上门；本次没有重复创建工单或预约。"),
+                updates={"workflow_stage": WorkflowStage.DONE},
+            )
+        )
     facts: list[VerifiedBusinessFact] = []
     if state.cached_ticket_snapshot:
         snapshot = state.cached_ticket_snapshot

@@ -83,6 +83,23 @@ async def restore_thread(
     )
 
 
+@router.post(
+    "/threads/{thread_id}/delete",
+    response_model=ThreadLifecycleResponse,
+)
+async def delete_thread(
+    thread_id: UUID,
+    request: ThreadLifecycleRequest,
+    identity: AuthenticatedIdentity = Depends(require_resident),
+    services: ApiServices = Depends(get_services),
+) -> ThreadLifecycleResponse:
+    return await services.agent.delete_thread(
+        identity,
+        thread_id=thread_id,
+        expected_version=request.expected_version,
+    )
+
+
 @router.post("/threads", response_model=AgentThreadResponse)
 async def create_thread(
     request: CreateThreadRequest,

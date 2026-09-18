@@ -615,7 +615,9 @@ class AgentOrchestrator:
             thread_id=thread_id,
             trace_id=trace_id,
             run_status=status,
-            assistant_message=state.last_assistant_message,
+            # An interrupt is a new response boundary. Reusing the previous
+            # terminal reply here makes the chat contradict the action panel.
+            assistant_message=None if payload is not None else state.last_assistant_message,
             interrupt=payload,
             workflow_stage=state.workflow_stage,
             active_ticket_id=state.active_ticket_id,

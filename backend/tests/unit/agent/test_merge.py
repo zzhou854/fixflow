@@ -102,6 +102,54 @@ def test_repeated_new_repair_does_not_increment(agent_state: AgentState) -> None
     assert merged.intent_version == 3
 
 
+def test_restarting_completed_reschedule_clears_one_time_plan(agent_state: AgentState) -> None:
+    completed = agent_state.model_copy(
+        update={
+            "task_intent": AgentIntent.RESCHEDULE_APPOINTMENT,
+            "utterance_intent": AgentIntent.RESCHEDULE_APPOINTMENT,
+            "workflow_stage": WorkflowStage.DONE,
+            "missing_fields": (),
+        }
+    )
+
+    merged = merge_interpretation(
+        completed,
+        _output(utterance_intent=AgentIntent.RESCHEDULE_APPOINTMENT),
+    )
+
+    assert merged.intent_version == completed.intent_version + 1
+    assert merged.user_availability_windows == ()
+    assert merged.last_tool_result is None
+    assert merged.missing_fields == (IssueField.AVAILABILITY,)
+    assert merged.workflow_stage is WorkflowStage.NEED_INFO
+
+
+def test_restarting_task_keeps_availability_supplied_in_same_message(
+    agent_state: AgentState,
+) -> None:
+    completed = agent_state.model_copy(
+        update={
+            "task_intent": AgentIntent.UNKNOWN,
+            "utterance_intent": AgentIntent.UNKNOWN,
+            "workflow_stage": WorkflowStage.DONE,
+            "user_availability_windows": (),
+            "missing_fields": (),
+        }
+    )
+    window = TimeWindow(
+        starts_at=datetime(2026, 9, 11, 14, tzinfo=UTC),
+        ends_at=datetime(2026, 9, 11, 16, tzinfo=UTC),
+    )
+
+    merged = merge_interpretation(
+        completed,
+        _output(user_availability_windows=(window,)),
+    )
+
+    assert merged.user_availability_windows == (window,)
+    assert merged.missing_fields == ()
+
+
 def test_format_equivalent_location_does_not_increment(agent_state: AgentState) -> None:
     merged = merge_interpretation(agent_state, _output(issue_location="  KITCHEN  "))
     assert merged.intent_version == 3

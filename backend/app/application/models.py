@@ -91,6 +91,7 @@ class ReviewRepairCommand:
     ticket_id: UUID
     expected_ticket_version: int
     accepted: bool
+    expected_appointment_version: int | None = None
     rejection_reason: AcceptanceRejectionReason | None = None
     explanation: str | None = None
 

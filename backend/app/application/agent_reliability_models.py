@@ -34,6 +34,7 @@ class ThreadPropertyResolutionStatus(StrEnum):
 class ThreadLifecycleStatus(StrEnum):
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
+    DELETED = "DELETED"
 
 
 class AgentMessageRole(StrEnum):
@@ -88,6 +89,7 @@ class ThreadRecord:
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
+    deleted_at: datetime | None
     version: int
 
 
@@ -116,6 +118,8 @@ class HumanReviewCaseRecord:
     resolved_at: datetime | None
     resolution_code: str | None
     resolution_note: str | None
+    resident_username: str | None = None
+    property_address: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

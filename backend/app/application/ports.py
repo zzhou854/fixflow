@@ -176,6 +176,7 @@ class QueryRepository(Protocol):
         skill: WorkerSkillType,
         search_window_start: datetime,
         search_window_end: datetime,
+        excluded_appointment_id: UUID | None = None,
     ) -> Sequence[SlotWorkerSource]: ...
     async def list_resident_properties(
         self, resident_id: UUID

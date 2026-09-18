@@ -143,7 +143,7 @@ history in the same transaction. Outbox is required in phase 3 once implemented.
 | `OPEN` | commit confirmed appointment | `SCHEDULED` | resident via service, operator | new non-overlapping `BOOKED` row commits atomically | yes | yes | phase 3 | roll back both aggregates |
 | `OPEN` | cancel ticket | `CANCELLED` | resident owner, operator | work not started; no active appointment; reason | yes | yes | phase 3 | reject with no mutation |
 | `OPEN` | escalate | `ESCALATED` | deterministic service, operator | typed reason/evidence; save prior status | yes | yes | phase 3 | reject with no mutation |
-| `SCHEDULED` | valid worker `STARTED` | `IN_PROGRESS` | subject worker via service, operator simulation | active `BOOKED`; valid order and identities | yes | yes | phase 3 | reject event/transition; trace attempt |
+| `SCHEDULED` | valid worker `STARTED` | `IN_PROGRESS` | subject worker via service, operator simulation | active `BOOKED`; valid identities; prior travel events are optional | yes | yes | phase 3 | reject event/transition; trace attempt |
 | `SCHEDULED` | reschedule atomically | `SCHEDULED` | resident owner, operator | old row -> `SUPERSEDED`; one replacement `BOOKED` succeeds | yes | yes, scheduling event | phase 3 | whole transaction rolls back |
 | `SCHEDULED` | worker `REJECTED` initial visit | `OPEN` | subject worker via service, operator simulation | valid event; appointment purpose `INITIAL_REPAIR` -> `CANCELLED`; reason `WORKER_REJECTED`; restart ordinary scheduling | yes | yes | phase 3 | reject event attempt; retain booking |
 | `SCHEDULED` | worker `REJECTED` rework visit | `REWORK_REQUIRED` | subject worker via service, operator simulation | valid event; appointment purpose `REWORK` -> `CANCELLED`; reason `WORKER_REJECTED`; preserve rework count and restart rework scheduling | yes | yes | phase 3 | reject event attempt; retain booking |
@@ -153,9 +153,12 @@ history in the same transaction. Outbox is required in phase 3 once implemented.
 | `SCHEDULED` | cancel ticket | `CANCELLED` | resident owner, operator | work not started; appointment cancelled atomically; reason | yes | yes | phase 3 | roll back both aggregates |
 | `SCHEDULED` | reviewed no-show/conflict | `ESCALATED` | operator, reconciliation service | appointment -> `NO_SHOW`; typed subject/evidence; save prior | yes | yes | phase 3 | stop automation; no mutation |
 | `SCHEDULED` | escalate | `ESCALATED` | deterministic service, operator | typed reason/evidence; save prior status | yes | yes | phase 3 | reject with no mutation |
+| `SCHEDULED` | resident confirms on-site repair | `CLOSED` | resident owner | explicit confirmation after the visit; active appointment -> `FULFILLED` atomically | ticket and appointment | yes | phase 3 | roll back both aggregates |
 | `IN_PROGRESS` | `worker_event_type.COMPLETED` | `PENDING_ACCEPTANCE` | subject worker via service, operator simulation | valid order; appointment `BOOKED -> FULFILLED`; completion statement/evidence | yes | yes | phase 3 | reject event and both transitions |
+| `IN_PROGRESS` | resident confirms on-site repair | `CLOSED` | resident owner | explicit confirmation after direct on-site communication; active appointment -> `FULFILLED` atomically | ticket and appointment | yes | phase 3 | roll back both aggregates |
 | `IN_PROGRESS` | ordinary `worker_event_type.FAILED_TO_COMPLETE` | `REWORK_REQUIRED` | subject worker via service, operator simulation | retry remains schedulable; appointment `BOOKED -> FULFILLED`; typed reason, evidence, worker statement; increment rework count/history | yes | yes | phase 3 | reject event and both transitions |
 | `IN_PROGRESS` | exceptional `worker_event_type.FAILED_TO_COMPLETE` | `ESCALATED` | subject worker via service, operator simulation | safety risk, responsibility conflict, special resource, or indeterminate classification; appointment `BOOKED -> FULFILLED`; typed reason, evidence, worker statement; save prior | yes | yes | phase 3 | reject event; stop automation |
+| `IN_PROGRESS` | worker continues on site after resident feedback | `IN_PROGRESS` | no system action | resident and worker communicate directly; the same visit continues | no | no | N/A | no new appointment or rework count |
 | `IN_PROGRESS` | escalate conflict/safety issue | `ESCALATED` | deterministic service, operator | typed reason/evidence; save prior status | yes | yes | phase 3 | reject with no mutation |
 | `PENDING_ACCEPTANCE` | resident accepts | `CLOSED` | resident owner | explicit acceptance; no unresolved conflict | yes | yes | phase 3 | reject/stale; never auto-close |
 | `PENDING_ACCEPTANCE` | resident rejects | `REWORK_REQUIRED` | resident owner | reason; increment count and append rework record | yes | yes | phase 3 | reject with no mutation |
@@ -232,7 +235,7 @@ and evidence, trace ID, source key, and request hash.
 | `REJECTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | initial purpose -> `OPEN`; rework purpose -> `REWORK_REQUIRED`; count unchanged | -> `CANCELLED`; actor worker; reason `WORKER_REJECTED` | idempotent replay only | only before `ACCEPTED`; require typed purpose consistent with rework count; never reactivate |
 | `DEPARTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | none | none | idempotent replay only | require `ACCEPTED` |
 | `ARRIVED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | none | none | idempotent replay only | require `DEPARTED` |
-| `STARTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | -> `IN_PROGRESS` | remains `BOOKED` | idempotent replay only | require `ARRIVED`, versions, no conflict |
+| `STARTED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | -> `IN_PROGRESS` | remains `BOOKED` | idempotent replay only | travel events may be omitted; require versions and no terminal contradiction |
 | `COMPLETED` | subject worker, operator simulation | `IN_PROGRESS` | `BOOKED` | -> `PENDING_ACCEPTANCE` | -> `FULFILLED` | idempotent replay only | require `STARTED`; reject terminal contradiction |
 | `FAILED_TO_COMPLETE` | subject worker, operator simulation | `IN_PROGRESS` | `BOOKED` | ordinary retry -> `REWORK_REQUIRED`; exceptional/indeterminate -> `ESCALATED` | -> `FULFILLED` | idempotent replay only | require `STARTED`, typed reason, evidence, worker statement |
 | `CANCELLED` | subject worker, operator simulation | `SCHEDULED` | `BOOKED` | initial -> `OPEN`; rework -> `REWORK_REQUIRED`; count unchanged | -> `CANCELLED`; reason `WORKER_CANCELLED` | idempotent replay only | require prior `ACCEPTED`; only before `STARTED`; otherwise outcome event |
@@ -352,7 +355,9 @@ Historical rows are intentional audit evidence, not meaningless data inflation.
 
 1. A ticket has at most one active `BOOKED` appointment.
 2. A worker has no overlapping active appointments.
-3. A ticket cannot close before `PENDING_ACCEPTANCE` and resident acceptance.
+3. A ticket closes only after explicit resident acceptance. The resident may
+   confirm directly from `SCHEDULED` or `IN_PROGRESS` after the on-site repair;
+   an active booking becomes `FULFILLED` in the same transaction.
 4. Worker `COMPLETED` cannot directly close a ticket.
 5. Resident rejection always enters same-ticket rework.
 6. `CLOSED` accepts no ordinary repair events or appointments.

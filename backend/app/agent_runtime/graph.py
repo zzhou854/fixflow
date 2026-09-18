@@ -47,6 +47,7 @@ from app.agent_runtime.routing import (
     route_after_policy,
     route_after_property,
     route_after_slot_lookup,
+    route_after_slot_selection,
     route_after_snapshot,
     route_duplicates,
     route_resolved_existing,
@@ -214,7 +215,9 @@ def build_agent_graph(
     )
     graph.add_conditional_edges("list_slots", traced_route("list_slots", route_after_slot_lookup))
     graph.add_edge("need_availability_information", "interpret")
-    graph.add_edge("select_slot", "refresh_snapshot")
+    graph.add_conditional_edges(
+        "select_slot", traced_route("select_slot", route_after_slot_selection)
+    )
     graph.add_edge("prepare_book", "book")
     graph.add_edge("book", "refresh_snapshot")
     graph.add_edge("prepare_reschedule", "reschedule")

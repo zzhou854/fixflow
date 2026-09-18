@@ -1,4 +1,6 @@
+from datetime import UTC, datetime, time, timedelta
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Query
 from fastapi.responses import JSONResponse
@@ -21,9 +23,13 @@ from app.api.schemas.replay import (
     ReplayRunPageResponse,
 )
 from app.api.schemas.tickets import (
+    AvailableSlotPageResponse,
+    AvailableSlotResponse,
     EscalateTicketRequest,
     OperationResponse,
+    OperatorBookAppointmentRequest,
     ReconciliationPendingResponse,
+    RecordRepairProgressRequest,
     TicketDetailResponse,
     TicketListItemResponse,
     TicketPageResponse,
@@ -39,8 +45,13 @@ from app.application.agent_reliability_models import (
     HumanReviewTransition,
 )
 from app.application.auth import AuthenticatedIdentity
-from app.application.query_models import QueryActor
-from app.domain.enums import IssueCategory, Severity, TicketStatus
+from app.application.models import (
+    BookAppointmentCommand,
+    MutationMetadata,
+    RecordWorkerEventCommand,
+)
+from app.application.query_models import ListAvailableSlotsQuery, QueryActor
+from app.domain.enums import IssueCategory, Severity, TicketStatus, WorkerEventType
 from app.infrastructure.database.models.observability import TraceSource
 from app.infrastructure.database.models.reconciliation import (
     ReconciliationAction,
@@ -352,6 +363,166 @@ async def get_ticket(
         QueryActor(identity.actor_type, identity.actor_id), ticket_id
     )
     return TicketDetailResponse.model_validate(detail)
+
+
+async def _operator_slots(
+    *,
+    ticket_id: UUID,
+    identity: AuthenticatedIdentity,
+    services: ApiServices,
+    max_results: int,
+) -> tuple[AvailableSlotResponse, ...]:
+    actor = QueryActor(identity.actor_type, identity.actor_id)
+    detail = await services.application.get_ticket_detail(actor, ticket_id)
+    if detail is None:
+        raise ApiError(404, "NOT_FOUND", "未找到工单。")
+    if detail.ticket.ticket_status not in {TicketStatus.OPEN, TicketStatus.REWORK_REQUIRED}:
+        raise ApiError(409, "TICKET_NOT_BOOKABLE", "当前工单不需要安排新的上门时间。")
+
+    timezone = ZoneInfo("Asia/Shanghai")
+    now = datetime.now(UTC)
+    local_now = now.astimezone(timezone)
+    slots: list[AvailableSlotResponse] = []
+    for day_offset in range(8):
+        day = local_now.date() + timedelta(days=day_offset)
+        window_start = datetime.combine(day, time(9), tzinfo=timezone)
+        window_end = datetime.combine(day, time(18), tzinfo=timezone)
+        if window_end <= now:
+            continue
+        window_start = max(window_start, now)
+        rows = await services.application.list_available_slots(
+            ListAvailableSlotsQuery(
+                actor=actor,
+                property_id=detail.ticket.property_id,
+                issue_category=detail.ticket.issue_category,
+                search_window_start=window_start,
+                search_window_end=window_end,
+                requested_duration_minutes=60,
+                max_results=max_results - len(slots),
+            )
+        )
+        slots.extend(AvailableSlotResponse.model_validate(row) for row in rows)
+        if len(slots) >= max_results:
+            break
+    return tuple(slots[:max_results])
+
+
+@router.get(
+    "/tickets/{ticket_id}/available-slots",
+    response_model=AvailableSlotPageResponse,
+)
+async def list_ticket_available_slots(
+    ticket_id: UUID,
+    max_results: int = Query(default=8, ge=1, le=20),
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+) -> AvailableSlotPageResponse:
+    return AvailableSlotPageResponse(
+        items=await _operator_slots(
+            ticket_id=ticket_id,
+            identity=identity,
+            services=services,
+            max_results=max_results,
+        )
+    )
+
+
+@router.post(
+    "/tickets/{ticket_id}/appointment",
+    response_model=OperationResponse,
+)
+async def book_ticket_appointment(
+    ticket_id: UUID,
+    request: OperatorBookAppointmentRequest,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+) -> OperationResponse:
+    if request.scheduled_start.tzinfo is None or request.scheduled_end.tzinfo is None:
+        raise ApiError(422, "TIMEZONE_REQUIRED", "上门时间必须包含时区。")
+    if request.scheduled_start <= datetime.now(UTC):
+        raise ApiError(409, "SLOT_EXPIRED", "该上门时间已经过期，请重新选择。")
+    if request.scheduled_end - request.scheduled_start != timedelta(hours=1):
+        raise ApiError(422, "INVALID_SLOT", "上门时间必须使用系统提供的一小时服务时段。")
+
+    candidates = await _operator_slots(
+        ticket_id=ticket_id,
+        identity=identity,
+        services=services,
+        max_results=20,
+    )
+    if not any(
+        slot.worker_id == request.worker_id
+        and slot.scheduled_start == request.scheduled_start
+        and slot.scheduled_end == request.scheduled_end
+        for slot in candidates
+    ):
+        raise ApiError(409, "SLOT_UNAVAILABLE", "该时间刚刚被占用，请重新选择。")
+
+    result = await services.application.book_appointment(
+        BookAppointmentCommand(
+            metadata=MutationMetadata(
+                actor_type=identity.actor_type,
+                actor_id=identity.actor_id,
+                trace_id=uuid4(),
+                idempotency_key=idempotency_key,
+                occurred_at=datetime.now(UTC),
+            ),
+            ticket_id=ticket_id,
+            worker_id=request.worker_id,
+            starts_at=request.scheduled_start,
+            ends_at=request.scheduled_end,
+            expected_ticket_version=request.expected_ticket_version,
+        )
+    )
+    if not result.ok:
+        raise ApiError(409, result.code.upper(), "工单状态已经变化，请刷新后重新安排。")
+    return OperationResponse.model_validate(result)
+
+
+@router.post("/tickets/{ticket_id}/repair-progress", response_model=OperationResponse)
+async def record_repair_progress(
+    ticket_id: UUID,
+    request: RecordRepairProgressRequest,
+    identity: AuthenticatedIdentity = Depends(require_operator),
+    services: ApiServices = Depends(get_services),
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+) -> OperationResponse:
+    if request.event_type not in {
+        WorkerEventType.STARTED,
+        WorkerEventType.COMPLETED,
+        WorkerEventType.FAILED_TO_COMPLETE,
+    }:
+        raise ApiError(422, "INVALID_REPAIR_PROGRESS", "该操作不属于现场维修进度。")
+    if request.event_type is WorkerEventType.FAILED_TO_COMPLETE and (
+        request.failure_reason is None or not request.note or not request.note.strip()
+    ):
+        raise ApiError(422, "FAILURE_DETAILS_REQUIRED", "请填写本次无法完成的原因。")
+    if request.event_type is not WorkerEventType.FAILED_TO_COMPLETE and request.failure_reason:
+        raise ApiError(422, "UNEXPECTED_FAILURE_REASON", "当前操作不需要无法完成原因。")
+    result = await services.application.record_worker_event(
+        RecordWorkerEventCommand(
+            metadata=MutationMetadata(
+                actor_type=identity.actor_type,
+                actor_id=identity.actor_id,
+                trace_id=uuid4(),
+                idempotency_key=idempotency_key,
+                occurred_at=datetime.now(UTC),
+            ),
+            ticket_id=ticket_id,
+            appointment_id=request.appointment_id,
+            subject_worker_id=request.worker_id,
+            event_type=request.event_type,
+            external_event_key=f"operator:{identity.actor_id}:{idempotency_key}",
+            expected_ticket_version=request.expected_ticket_version,
+            expected_appointment_version=request.expected_appointment_version,
+            failure_reason=request.failure_reason,
+            worker_statement=request.note,
+            reason_text=request.note,
+            evidence=(request.note.strip(),) if request.note and request.note.strip() else (),
+        )
+    )
+    return OperationResponse.model_validate(result)
 
 
 @router.get("/threads/{thread_id}", response_model=OperatorThreadResponse)

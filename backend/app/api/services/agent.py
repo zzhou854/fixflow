@@ -14,6 +14,8 @@ from app.agent_runtime.models import (
     AgentRunResult,
     AgentStateView,
     AgentTurnInput,
+    CancelAppointmentSlotSelectionResume,
+    NeedInformationInterrupt,
     ProvideInformationResume,
     RunStatus,
     SelectAppointmentSlotResume,
@@ -34,6 +36,7 @@ from app.api.schemas.agent import (
 from app.api.schemas.tickets import TicketListItemResponse
 from app.api.services.sse import SSEEventBus
 from app.application.agent_reliability import (
+    AgentReliabilityConflict,
     AgentReliabilityError,
     AgentReliabilityService,
 )
@@ -48,7 +51,7 @@ from app.application.agent_reliability_models import (
 from app.application.auth import AuthenticatedIdentity
 from app.application.query_models import QueryActor
 from app.application.services import FixFlowApplicationService
-from app.domain.enums import WorkflowStage
+from app.domain.enums import TicketStatus, WorkflowStage
 from app.infrastructure.database.models.observability import (
     AgentRunStatus,
     AgentRunTrigger,
@@ -62,6 +65,7 @@ from app.replay.capture import (
     message_hash,
 )
 from app.replay.models import (
+    CancelSlotSelectionReplayInput,
     MessageReplayInput,
     ProvideInformationReplayInput,
     ReplayMessageMetadata,
@@ -309,6 +313,20 @@ class AgentApiService:
                 record.property_id is not None and state.property_id != record.property_id
             ):
                 continue
+            can_delete = record.lifecycle_status is ThreadLifecycleStatus.ARCHIVED
+            if can_delete and state.active_ticket_id is not None:
+                try:
+                    detail = await self._application.get_ticket_detail(
+                        QueryActor(identity.actor_type, identity.actor_id),
+                        state.active_ticket_id,
+                    )
+                    can_delete = detail.ticket.ticket_status in {
+                        TicketStatus.CANCELLED,
+                        TicketStatus.CLOSED,
+                    }
+                except Exception:
+                    # Missing or unreadable business facts must fail closed.
+                    can_delete = False
             items.append(
                 ResidentThreadSummaryResponse(
                     thread_id=record.thread_id,
@@ -321,6 +339,7 @@ class AgentApiService:
                     updated_at=state.updated_at or record.updated_at,
                     lifecycle_status=record.lifecycle_status,
                     archived_at=record.archived_at,
+                    can_delete=can_delete,
                     version=record.version,
                 )
             )
@@ -347,7 +366,39 @@ class AgentApiService:
             thread_id=record.thread_id,
             lifecycle_status=record.lifecycle_status,
             archived_at=record.archived_at,
+            deleted_at=record.deleted_at,
             version=record.version,
+        )
+
+    async def delete_thread(
+        self,
+        identity: AuthenticatedIdentity,
+        *,
+        thread_id: UUID,
+        expected_version: int,
+    ) -> ThreadLifecycleResponse:
+        if self._reliability is None:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "会话管理服务暂不可用。")
+        record = await self._reliability.require_archived_thread(
+            thread_id=thread_id,
+            resident_id=identity.user_id,
+        )
+        if record.version != expected_version:
+            raise AgentReliabilityConflict("thread version conflict")
+        state = await self._orchestrator.get_state(thread_id, self._caller(identity), uuid4())
+        if state is None:
+            raise AgentReliabilityConflict("cannot verify thread business state")
+        if state.active_ticket_id is not None:
+            detail = await self._application.get_ticket_detail(
+                QueryActor(identity.actor_type, identity.actor_id), state.active_ticket_id
+            )
+            if detail.ticket.ticket_status not in {TicketStatus.CANCELLED, TicketStatus.CLOSED}:
+                raise ApiError(409, "THREAD_DELETE_BLOCKED", "工单仍在处理中，只能归档会话。")
+        return await self.set_thread_lifecycle(
+            identity,
+            thread_id=thread_id,
+            lifecycle_status=ThreadLifecycleStatus.DELETED,
+            expected_version=expected_version,
         )
 
     async def record_api_replay(
@@ -542,9 +593,11 @@ class AgentApiService:
     ) -> tuple[AgentRunResult, MessageOutcome, RequiredUserAction]:
         outcome = self._message_outcome(result)
         required_action = self._required_user_action(result)
-        assistant_message = result.assistant_message or self._default_assistant_message(
-            outcome,
-            required_action,
+        assistant_message = result.assistant_message
+        if assistant_message is None and isinstance(result.interrupt, NeedInformationInterrupt):
+            assistant_message = result.interrupt.message
+        assistant_message = assistant_message or self._default_assistant_message(
+            outcome, required_action
         )
         result = result.model_copy(update={"assistant_message": assistant_message})
         stage = self._failure_stage(result) if outcome is MessageOutcome.ESCALATED else None
@@ -746,6 +799,11 @@ class AgentApiService:
                 intent_version=request.intent_version,
                 candidate_fingerprint=request.candidates_fingerprint,
                 ticket_id=request.ticket_id,
+            )
+        if request.kind == "CANCEL_APPOINTMENT_SLOT_SELECTION":
+            return CancelSlotSelectionReplayInput(
+                intent_version=request.intent_version,
+                candidate_fingerprint=request.candidates_fingerprint,
             )
         return SelectSlotReplayInput(
             intent_version=request.intent_version,
@@ -1000,6 +1058,10 @@ class AgentApiService:
             return ProvideInformationResume(**request.model_dump(), trace_id=trace_id)
         if request.kind == "SELECT_DUPLICATE_TICKET":
             return SelectDuplicateTicketResume(**request.model_dump(), trace_id=trace_id)
+        if request.kind == "CANCEL_APPOINTMENT_SLOT_SELECTION":
+            return CancelAppointmentSlotSelectionResume(
+                **request.model_dump(), trace_id=trace_id
+            )
         return SelectAppointmentSlotResume(**request.model_dump(), trace_id=trace_id)
 
     @staticmethod

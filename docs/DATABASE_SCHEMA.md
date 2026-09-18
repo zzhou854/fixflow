@@ -14,9 +14,9 @@ and idempotency records. Pure domain objects and transition rules remain under
 
 | Table | Responsibility |
 | --- | --- |
-| `users` | Preset resident and operator identities; only password hashes are stored |
+| `users` | Resident and operator identities; only password hashes are stored |
 | `properties` | Serviceable residential-unit identity and address |
-| `resident_property_relations` | Resident authorization link to a property |
+| `resident_property_relations` | Resident authorization link to an existing property, including self-registration binding |
 | `repair_tickets` | Current ticket snapshot, issue facts, severity, escalation prior, rework count, and optimistic version |
 | `ticket_status_history` | Append-only accepted ticket transition evidence |
 | `workers` | Maintenance-worker identity, service area, and active flag |
@@ -180,7 +180,8 @@ Revision `20260730_0007` adds the commercial-hardening control records without
 modifying revisions 0001-0006:
 
 - `agent_thread_records`: resident ownership, optional verified property,
-  activity ordering, optimistic version, and recoverable archive state;
+  activity ordering, optimistic version, recoverable archive state, and an
+  irreversible resident-visibility deletion tombstone;
 - `agent_messages`: immutable per-thread user/assistant messages linked to one
   Agent Run with unique message and sequence identities;
 - `human_review_cases`: typed pre-ticket/operator work items with active-case
@@ -200,3 +201,9 @@ prompt/schema version, result status, latency, safe error code, structured
 result hash, and timestamp. A named CHECK enforces that success has a hash and
 no error while failure has an error and no hash. It stores no input/output
 text, prompt, credential, token, business decision, or mutation payload.
+
+Revision `20260909_0009` adds the `DELETED` thread lifecycle tombstone plus
+`deleted_at` and `deleted_by_actor_id`. Only an already archived conversation
+without a non-terminal linked ticket may enter this irreversible resident-view
+state. Business tickets, appointments, messages, checkpoints, traces, replay,
+and audit facts remain retained.

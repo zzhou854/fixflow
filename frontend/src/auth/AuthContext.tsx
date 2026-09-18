@@ -1,10 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
-import type { User } from '../types'
+import type { RegisterResidentInput, User } from '../types'
 
 interface AuthValue {
-  token: string | null; user: User | null; restoring: boolean; login: (username: string, password: string) => Promise<User>; logout: () => void
+  token: string | null; user: User | null; restoring: boolean; login: (username: string, password: string) => Promise<User>; register: (input: RegisterResidentInput) => Promise<User>; logout: () => void
 }
 
 const STORAGE_KEY = 'fixflow.demo.session'
@@ -39,6 +39,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoring,
     login: async (username, password) => {
       const next = await api.login(username, password)
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ access_token: next.access_token }))
+      setToken(next.access_token); setUser(next.user); setRestoring(false); return next.user
+    },
+    register: async (input) => {
+      const next = await api.registerResident(input)
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ access_token: next.access_token }))
       setToken(next.access_token); setUser(next.user); setRestoring(false); return next.user
     },

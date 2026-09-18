@@ -32,6 +32,10 @@ DEMO_RESIDENT_USERNAME = "resident_demo"
 DEMO_OPERATOR_USERNAME = "operator_demo"
 DEMO_RESIDENT_PASSWORD = "ResidentDemo!2026"
 DEMO_OPERATOR_PASSWORD = "OperatorDemo!2026"
+TEST_RESIDENT_USERNAME = "resident_test"
+TEST_RESIDENT_PASSWORD = "ResidentTest!2026"
+TEST_OPERATOR_USERNAME = "operator_test"
+TEST_OPERATOR_PASSWORD = "OperatorTest!2026"
 
 
 def _id(name: str) -> UUID:
@@ -52,6 +56,14 @@ async def seed() -> None:
             role="RESIDENT",
             hasher=hasher,
         )
+        test_resident = await _upsert_user(
+            session,
+            user_id=_id("resident-test"),
+            username=TEST_RESIDENT_USERNAME,
+            password=TEST_RESIDENT_PASSWORD,
+            role="RESIDENT",
+            hasher=hasher,
+        )
         await _upsert_user(
             session,
             user_id=_id("operator"),
@@ -60,33 +72,60 @@ async def seed() -> None:
             role="OPERATOR",
             hasher=hasher,
         )
-        property_ = await session.get(Property, _id("property"))
-        if property_ is None:
-            property_ = Property(
-                id=_id("property"),
-                community_name="星河花园",
-                building_no="3",
-                unit_no="2",
-                room_no="1201",
-                address_text="星河花园 3 栋 2 单元 1201",
-                is_active=True,
-            )
-            session.add(property_)
-        relation = await session.scalar(
-            select(ResidentPropertyRelation).where(
-                ResidentPropertyRelation.resident_id == resident.id,
-                ResidentPropertyRelation.property_id == property_.id,
-            )
+        await _upsert_user(
+            session,
+            user_id=_id("operator-test"),
+            username=TEST_OPERATOR_USERNAME,
+            password=TEST_OPERATOR_PASSWORD,
+            role="OPERATOR",
+            hasher=hasher,
         )
-        if relation is None:
-            session.add(
-                ResidentPropertyRelation(
-                    id=_id("resident-property"),
-                    resident_id=resident.id,
-                    property_id=property_.id,
-                    is_active=True,
+        existing_properties = {
+            (item.building_no, item.unit_no, item.room_no): item
+            for item in (
+                await session.scalars(select(Property).where(Property.community_name == "星河花园"))
+            ).all()
+        }
+        properties: dict[tuple[str, str, str], Property] = {}
+        for building in range(1, 4):
+            for unit in range(1, 3):
+                for floor in range(1, 13):
+                    for door in range(1, 5):
+                        key = (str(building), str(unit), f"{floor}{door:02d}")
+                        property_ = existing_properties.get(key)
+                        if property_ is None:
+                            property_ = Property(
+                                id=(
+                                    _id("property")
+                                    if key == ("3", "2", "1201")
+                                    else _id(f"property-{'-'.join(key)}")
+                                ),
+                                community_name="星河花园",
+                                building_no=key[0],
+                                unit_no=key[1],
+                                room_no=key[2],
+                                address_text=(f"星河花园 {key[0]} 栋 {key[1]} 单元 {key[2]}"),
+                                is_active=True,
+                            )
+                            session.add(property_)
+                        properties[key] = property_
+        for account, relation_name, property_key in (
+            (resident, "resident-property", ("3", "2", "1201")),
+            (test_resident, "resident-test-property", ("1", "1", "101")),
+        ):
+            relation = await session.get(ResidentPropertyRelation, _id(relation_name))
+            if relation is None:
+                session.add(
+                    ResidentPropertyRelation(
+                        id=_id(relation_name),
+                        resident_id=account.id,
+                        property_id=properties[property_key].id,
+                        is_active=True,
+                    )
                 )
-            )
+            else:
+                relation.property_id = properties[property_key].id
+                relation.is_active = True
         for skill, suffix, name in (
             (WorkerSkillType.PLUMBING, "plumbing", "演示水暖维修员"),
             (WorkerSkillType.ELECTRICAL, "electrical", "演示电工"),

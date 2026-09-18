@@ -6,7 +6,7 @@ from app.agent.enums import PendingAction
 from app.agent.state import CandidateSlot, ToolResultSummary
 from app.agent_runtime.context import NodeContext
 from app.agent_runtime.idempotency import build_pending_operation
-from app.agent_runtime.rules import RESIDENT_SLOT_RESULT_LIMIT
+from app.agent_runtime.rules import RESIDENT_SLOT_RESULT_LIMIT, requested_clock_has_passed
 from app.agent_runtime.runtime_state import (
     RuntimeGraphState,
     dump_state,
@@ -29,6 +29,31 @@ async def list_slots(context: NodeContext, graph_state: RuntimeGraphState) -> Ru
     if not state.user_availability_windows:
         return dump_state(state.model_copy(update={"workflow_stage": WorkflowStage.NEED_INFO}))
     window = state.user_availability_windows[0]
+    if requested_clock_has_passed(state):
+        return dump_state(
+            state.model_copy(
+                update={
+                    "candidate_slots": (),
+                    "candidate_slots_fingerprint": None,
+                    "workflow_stage": WorkflowStage.NEED_INFO,
+                }
+            )
+        )
+    search_window_start = window.starts_at
+    if state.current_reference_time is not None:
+        # Broad windows such as "今天下午" can remain useful after their start;
+        # only search the portion that is still in the future.
+        search_window_start = max(search_window_start, state.current_reference_time)
+    if search_window_start >= window.ends_at:
+        return dump_state(
+            state.model_copy(
+                update={
+                    "candidate_slots": (),
+                    "candidate_slots_fingerprint": None,
+                    "workflow_stage": WorkflowStage.NEED_INFO,
+                }
+            )
+        )
     response = await context.mcp.list_available_slots(
         ListAvailableSlotsRequest(
             actor_type=state.actor_type,
@@ -36,10 +61,15 @@ async def list_slots(context: NodeContext, graph_state: RuntimeGraphState) -> Ru
             trace_id=state.trace_id,
             property_id=state.property_id,
             issue_category=state.issue_category,
-            search_window_start=window.starts_at,
+            search_window_start=search_window_start,
             search_window_end=window.ends_at,
             requested_duration_minutes=state.service_duration_minutes,
             max_results=RESIDENT_SLOT_RESULT_LIMIT,
+            excluded_appointment_id=(
+                state.active_appointment_id
+                if state.task_intent.value == "RESCHEDULE_APPOINTMENT"
+                else None
+            ),
         )
     )
     data = require_data(response)
@@ -213,6 +243,12 @@ async def reschedule(context: NodeContext, graph_state: RuntimeGraphState) -> Ru
                 "candidate_slots_fingerprint": None,
                 "selected_candidate_slot": None,
                 "snapshot_refresh_required": True,
+                "last_tool_result": ToolResultSummary(
+                    result_code=response.result_code.value,
+                    message=response.message,
+                    resource_id=data.resource_id,
+                    resource_version=data.resource_version,
+                ),
             }
         )
     )

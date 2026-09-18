@@ -17,7 +17,7 @@ import {
   STAGE_LABELS,
   TICKET_STATUS_LABELS,
 } from '../residentDisplay'
-import type { OperatorThread, Ticket, TicketDetail } from '../types'
+import type { AvailableSlot, OperatorThread, Ticket, TicketDetail } from '../types'
 
 const RUN_STATUS_LABELS: Record<OperatorThread['run_status'], string> = {
   COMPLETED: '已完成本轮处理',
@@ -65,6 +65,10 @@ const WORKER_EVENT_LABELS: Record<string, string> = {
   NO_SHOW: '未按时到场',
 }
 
+const SUPERVISOR_TRANSFER_STATUSES = new Set([
+  'OPEN', 'SCHEDULED', 'IN_PROGRESS', 'PENDING_ACCEPTANCE', 'REWORK_REQUIRED',
+])
+
 function shortId(value: string): string {
   return value.slice(0, 8)
 }
@@ -78,6 +82,7 @@ interface EscalationAttempt {
 
 export function OperatorPage() {
   const { token, user, logout } = useAuth()
+  const excludedResidentUsername = user?.username === 'operator_test' ? 'resident_demo' : undefined
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [detail, setDetail] = useState<TicketDetail | null>(null)
   const [threadId, setThreadId] = useState('')
@@ -86,6 +91,11 @@ export function OperatorPage() {
   const [category, setCategory] = useState<string>()
   const [severity, setSeverity] = useState<string>()
   const [escalation, setEscalation] = useState<EscalationAttempt | null>(null)
+  const [repairBusy, setRepairBusy] = useState(false)
+  const [failureReason, setFailureReason] = useState('FOLLOW_UP_REQUIRED')
+  const [failureNote, setFailureNote] = useState('')
+  const [availableSlots, setAvailableSlots] = useState<AvailableSlot[] | null>(null)
+  const [scheduleBusy, setScheduleBusy] = useState(false)
 
   const load = useCallback(async () => {
     if (!token) return
@@ -94,18 +104,59 @@ export function OperatorPage() {
     if (category) query.set('issue_category', category)
     if (severity) query.set('severity', severity)
     try {
-      setTickets((await api.operatorTickets(token, `?${query}`)).items)
+      const items = (await api.operatorTickets(token, `?${query}`)).items
+      setTickets(items.filter((item) => item.resident_username !== excludedResidentUsername))
     } catch (reason) {
       toast.error(reason instanceof ApiError ? reason.body.message : '加载失败')
     }
-  }, [token, status, category, severity])
+  }, [token, status, category, severity, excludedResidentUsername])
 
   useEffect(() => { void load() }, [load])
 
   async function openTicket(ticket: Ticket) {
+    await openTicketById(ticket.ticket_id)
+  }
+
+  async function openTicketById(ticketId: string) {
     if (!token) return
-    try { setDetail(await api.operatorTicket(token, ticket.ticket_id)) }
+    setAvailableSlots(null)
+    try { setDetail(await api.operatorTicket(token, ticketId)) }
     catch (reason) { toast.error(reason instanceof ApiError ? reason.body.message : '详情加载失败') }
+  }
+
+  async function loadAvailableSlots() {
+    if (!token || !detail) return
+    setScheduleBusy(true)
+    try {
+      const items = (await api.operatorAvailableSlots(token, detail.ticket.ticket_id)).items
+      setAvailableSlots(items)
+      if (items.length === 0) toast.warning('未来八天暂无可用上门时间。')
+    } catch (reason) {
+      toast.error(reason instanceof ApiError ? reason.body.message : '可用时间加载失败')
+    } finally {
+      setScheduleBusy(false)
+    }
+  }
+
+  async function bookAppointment(slot: AvailableSlot) {
+    if (!token || !detail) return
+    setScheduleBusy(true)
+    try {
+      await api.operatorBookAppointment(
+        token,
+        detail.ticket.ticket_id,
+        slot,
+        detail.ticket.version,
+      )
+      setDetail(await api.operatorTicket(token, detail.ticket.ticket_id))
+      setAvailableSlots(null)
+      await load()
+      toast.success('上门时间已安排。')
+    } catch (reason) {
+      toast.error(reason instanceof ApiError ? reason.body.message : '安排失败，请刷新后重试')
+    } finally {
+      setScheduleBusy(false)
+    }
   }
 
   async function inspectThread() {
@@ -134,9 +185,9 @@ export function OperatorPage() {
       setEscalation(null)
       setDetail(await api.operatorTicket(token, ticket.ticket_id))
       await load()
-      toast.success('工单已进入人工升级状态。')
+      toast.success('工单已转交主管处理。')
     } catch (reason) {
-      toast.error(reason instanceof ApiError ? reason.body.message : '人工升级失败')
+      toast.error(reason instanceof ApiError ? reason.body.message : '转交主管失败')
     }
   }
 
@@ -154,8 +205,46 @@ export function OperatorPage() {
     }
   }
 
+  async function updateRepairProgress(eventType: 'STARTED' | 'COMPLETED' | 'FAILED_TO_COMPLETE') {
+    const appointment = detail?.ticket.appointment
+    if (!token || !detail || !appointment) return
+    if (eventType === 'FAILED_TO_COMPLETE' && !failureNote.trim()) {
+      toast.warning('请填写本次无法完成的具体原因。')
+      return
+    }
+    const ticket = detail.ticket
+    setRepairBusy(true)
+    try {
+      await api.recordRepairProgress(token, ticket.ticket_id, {
+        appointment_id: appointment.appointment_id,
+        worker_id: appointment.worker_id,
+        expected_ticket_version: ticket.version,
+        expected_appointment_version: appointment.appointment_version,
+        event_type: eventType,
+        failure_reason: eventType === 'FAILED_TO_COMPLETE' ? failureReason : null,
+        note: eventType === 'FAILED_TO_COMPLETE' ? failureNote.trim() : null,
+      })
+      setDetail(await api.operatorTicket(token, ticket.ticket_id))
+      await load()
+      if (eventType === 'STARTED') toast.success('已记录开始维修。')
+      if (eventType === 'COMPLETED') toast.success('已提交维修结果，等待住户确认。')
+      if (eventType === 'FAILED_TO_COMPLETE') {
+        setFailureNote('')
+        toast.success('已记录本次无法完成，工单将继续安排后续处理。')
+      }
+    } catch (reason) {
+      toast.error(reason instanceof ApiError ? reason.body.message : '维修进度更新失败')
+    } finally {
+      setRepairBusy(false)
+    }
+  }
+
   const businessWorkspace = <>
-    {token && <HumanReviewQueue token={token} />}
+    {token && <HumanReviewQueue
+      token={token}
+      excludedResidentUsername={excludedResidentUsername}
+      onOpenTicket={openTicketById}
+    />}
     <Card title="工单处理">
       <Space wrap>
         <Select aria-label="工单状态" allowClear placeholder="工单状态" onChange={setStatus} options={['OPEN','SCHEDULED','IN_PROGRESS','PENDING_ACCEPTANCE','REWORK_REQUIRED','ESCALATED','CANCELLED','CLOSED'].map((value) => ({ value, label: TICKET_STATUS_LABELS[value] ?? value }))} />
@@ -166,7 +255,6 @@ export function OperatorPage() {
     </Card>
     <Table rowKey="ticket_id" dataSource={tickets} pagination={false} onRow={(record) => ({ onClick: () => void openTicket(record) })} columns={[
       { title: '工单号', dataIndex: 'ticket_id', render: (value: string) => shortId(value) },
-      { title: '住户', dataIndex: 'resident_username' },
       { title: '房屋', dataIndex: 'property_label' },
       { title: '问题类型', dataIndex: 'issue_category', render: (value: string) => CATEGORY_LABELS[value] ?? '其他问题' },
       { title: '位置', dataIndex: 'issue_location' },
@@ -232,7 +320,6 @@ export function OperatorPage() {
         {detail && <Space direction="vertical" className="drawer-stack">
           <Descriptions column={1} bordered>
             <Descriptions.Item label="工单号">{detail.ticket.ticket_id}</Descriptions.Item>
-            <Descriptions.Item label="住户">{detail.ticket.resident_username}</Descriptions.Item>
             <Descriptions.Item label="房屋">{detail.ticket.property_label}</Descriptions.Item>
             <Descriptions.Item label="问题类型/位置">{CATEGORY_LABELS[detail.ticket.issue_category] ?? '其他问题'} / {detail.ticket.issue_location}</Descriptions.Item>
             <Descriptions.Item label="描述">{detail.issue_description}</Descriptions.Item>
@@ -240,8 +327,75 @@ export function OperatorPage() {
             <Descriptions.Item label="上门安排">{detail.ticket.appointment ? new Date(detail.ticket.appointment.scheduled_start).toLocaleString() : '尚未安排'}</Descriptions.Item>
             <Descriptions.Item label="维修人员最新动态">{detail.latest_worker_event ? (WORKER_EVENT_LABELS[detail.latest_worker_event.event_type] ?? '状态已更新') : '暂无动态'}</Descriptions.Item>
           </Descriptions>
-          {detail.ticket.ticket_status !== 'ESCALATED' && <Card size="small" title="人工升级">
+          {['OPEN', 'REWORK_REQUIRED'].includes(detail.ticket.ticket_status) && (
+            <Card size="small" title={detail.ticket.ticket_status === 'REWORK_REQUIRED' ? '安排再次上门' : '安排上门'}>
+              {availableSlots === null ? (
+                <Button type="primary" loading={scheduleBusy} onClick={() => void loadAvailableSlots()}>
+                  查看可用时间
+                </Button>
+              ) : availableSlots.length > 0 ? (
+                <List
+                  dataSource={availableSlots}
+                  renderItem={(slot) => <List.Item
+                    actions={[<Button
+                      key={`${slot.worker_id}-${slot.scheduled_start}`}
+                      type="primary"
+                      loading={scheduleBusy}
+                      onClick={() => void bookAppointment(slot)}
+                    >安排这个时间</Button>]}
+                  >
+                    <List.Item.Meta
+                      title={`${new Date(slot.scheduled_start).toLocaleString('zh-CN', { weekday: 'short', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}–${new Date(slot.scheduled_end).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`}
+                      description={`维修人员：${slot.worker_name}`}
+                    />
+                  </List.Item>}
+                />
+              ) : (
+                <Alert type="warning" showIcon message="未来八天暂无可用上门时间" />
+              )}
+            </Card>
+          )}
+          {detail.ticket.ticket_status === 'SCHEDULED' && detail.ticket.appointment && <Card size="small" title="现场维修">
             <Space direction="vertical">
+              <Typography.Text>维修人员到场并实际开始处理时记录。现场调整和再次测试不需要重复操作。</Typography.Text>
+              <Button type="primary" loading={repairBusy} onClick={() => void updateRepairProgress('STARTED')}>开始维修</Button>
+            </Space>
+          </Card>}
+          {detail.ticket.ticket_status === 'IN_PROGRESS' && detail.ticket.appointment && <Card size="small" title="现场维修结果">
+            <Space direction="vertical" className="drawer-stack">
+              <Typography.Text>现场仍可继续维修时保持当前状态，住户与维修人员直接沟通即可。</Typography.Text>
+              <Button type="primary" loading={repairBusy} onClick={() => void updateRepairProgress('COMPLETED')}>已修好，等待住户确认</Button>
+              <Select
+                aria-label="本次无法完成原因"
+                value={failureReason}
+                onChange={setFailureReason}
+                options={[
+                  { value: 'FOLLOW_UP_REQUIRED', label: '需要配件或再次上门' },
+                  { value: 'SPECIAL_RESOURCE_REQUIRED', label: '需要其他工种或专业资源' },
+                  { value: 'SAFETY_RISK', label: '存在安全风险' },
+                  { value: 'RESPONSIBILITY_CONFLICT', label: '存在责任争议' },
+                  { value: 'INDETERMINATE', label: '现场原因暂时无法确定' },
+                ]}
+              />
+              <Input.TextArea
+                aria-label="无法完成情况说明"
+                value={failureNote}
+                onChange={(event) => setFailureNote(event.target.value)}
+                placeholder="说明为什么本次上门无法完成"
+                maxLength={1000}
+              />
+              <Button danger loading={repairBusy} onClick={() => void updateRepairProgress('FAILED_TO_COMPLETE')}>本次无法完成，需要后续处理</Button>
+            </Space>
+          </Card>}
+          {detail.ticket.ticket_status === 'PENDING_ACCEPTANCE' && <Alert
+            type="info"
+            showIcon
+            message="等待住户确认维修结果"
+            description="若现场仍有问题，维修人员继续处理即可；确认修好后由住户完成工单。"
+          />}
+          {SUPERVISOR_TRANSFER_STATUSES.has(detail.ticket.ticket_status) && <Card size="small" title="转交主管">
+            <Space direction="vertical">
+              <Typography.Text>遇到责任争议、安全风险或需要特殊资源时，将工单交给主管继续处理。</Typography.Text>
               {escalation?.ticketId === detail.ticket.ticket_id && <Alert
                 type={escalation.status === 'MANUAL_REVIEW' ? 'warning' : 'info'}
                 message={`对账状态：${escalation.status}`}
@@ -254,7 +408,7 @@ export function OperatorPage() {
                   type="primary"
                   disabled={Boolean(escalation && escalation.ticketId === detail.ticket.ticket_id && escalation.status !== 'RESOLVED_NOT_COMMITTED')}
                   onClick={() => void escalateTicket()}
-                >{escalation?.status === 'RESOLVED_NOT_COMMITTED' ? '使用原请求重试' : '人工升级'}</Button>
+                >{escalation?.status === 'RESOLVED_NOT_COMMITTED' ? '重新转交主管' : '转交主管'}</Button>
                 {escalation?.caseId && <Button onClick={() => void refreshEscalation()}>刷新对账状态</Button>}
               </Space>
             </Space>

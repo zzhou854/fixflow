@@ -156,6 +156,11 @@ _ERROR_RESULTS: dict[str, tuple[ResultCode, str, bool]] = {
         "The maximum result count is invalid.",
         False,
     ),
+    "appointment_time_in_past": (
+        ResultCode.VALIDATION_ERROR,
+        "The appointment start time has already passed.",
+        False,
+    ),
 }
 
 
@@ -403,6 +408,7 @@ class MCPApplicationAdapter:
                     search_window_end=request.search_window_end,
                     requested_duration_minutes=request.requested_duration_minutes,
                     max_results=request.max_results,
+                    excluded_appointment_id=request.excluded_appointment_id,
                 )
             )
             return ToolResponse[AvailableSlotsData](

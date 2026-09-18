@@ -16,6 +16,7 @@ from app.agent.state import (
 from app.agent_runtime.routing import (
     route_after_interpret,
     route_after_policy,
+    route_after_slot_lookup,
     route_after_snapshot,
     route_duplicates,
 )
@@ -161,3 +162,17 @@ def test_snapshot_router_covers_booking_rescheduling_status_and_human_paths(
         candidate_slots=(candidate,) if selected else (),
     )
     assert route_after_snapshot(dump_state(state)) == expected
+
+
+def test_empty_slot_result_requests_another_time_instead_of_showing_empty_picker() -> None:
+    state = _new_repair_state(
+        user_availability_windows=(
+            TimeWindow(
+                starts_at=datetime(2030, 1, 10, 23, tzinfo=UTC),
+                ends_at=datetime(2030, 1, 11, 1, tzinfo=UTC),
+            ),
+        ),
+        candidate_slots=(),
+    )
+
+    assert route_after_slot_lookup(dump_state(state)) == "need_availability_information"

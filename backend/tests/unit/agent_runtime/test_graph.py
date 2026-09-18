@@ -231,7 +231,20 @@ class FakePropertyOperationsClient:
     async def reschedule_appointment(
         self, request: RescheduleAppointmentRequest
     ) -> ToolResponse[MutationResultData]:
-        raise AssertionError("not expected")
+        self.calls.append(("reschedule_appointment", request))
+        return self._response(
+            MutationResultData(
+                resource_type="appointment",
+                resource_id=self.appointment_id,
+                resource_version=2,
+                ticket_status=TicketStatus.SCHEDULED,
+                ticket_version=3,
+                appointment_status=AppointmentStatus.BOOKED,
+                appointment_version=2,
+            ),
+            request.trace_id,
+            ResultCode.UPDATED,
+        )
 
     async def escalate_to_operator(
         self, request: EscalateToOperatorRequest
@@ -491,6 +504,39 @@ async def test_missing_availability_resumes_without_duplicate_ticket() -> None:
 
 
 @pytest.mark.asyncio
+async def test_past_explicit_clock_is_rejected_without_querying_slots() -> None:
+    resident_id, property_id = uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    orchestrator = _orchestrator(
+        mcp,
+        {
+            "utterance_intent": "NEW_REPAIR",
+            "issue_category": "WATER_LEAK",
+            "issue_location": "厨房",
+            "issue_description_update": "厨房水槽下漏水",
+            "user_availability_windows": [
+                {
+                    "starts_at": "2026-07-20T09:00:00Z",
+                    "ends_at": "2026-07-20T11:00:00Z",
+                }
+            ],
+        },
+    )
+    turn = _turn(resident_id, property_id).model_copy(
+        update={"user_message": "厨房水槽下漏水，上午九点上门"}
+    )
+
+    result = await orchestrator.start_turn(turn)
+
+    assert result.run_status is RunStatus.INTERRUPTED
+    assert isinstance(result.interrupt, NeedInformationInterrupt)
+    assert result.interrupt.message == (
+        "您填写的上门时间已经过去，请选择当前时间之后的日期和时间。"
+    )
+    assert all(name != "list_available_slots" for name, _ in mcp.calls)
+
+
+@pytest.mark.asyncio
 async def test_door_lock_policy_requires_identity_and_appointment_topics() -> None:
     resident_id, property_id = uuid4(), uuid4()
     mcp = FakePropertyOperationsClient(resident_id, property_id)
@@ -636,6 +682,142 @@ async def test_single_exact_duplicate_is_adopted_without_creating_a_second_ticke
     assert isinstance(result.interrupt, AppointmentSlotSelectionInterrupt)
     assert result.active_ticket_id == mcp.ticket_id
     assert all(name != "create_repair_ticket" for name, _ in mcp.calls)
+
+
+@pytest.mark.asyncio
+async def test_booked_duplicate_explains_that_existing_appointment_was_reused() -> None:
+    resident_id, property_id = uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    mcp.booked = True
+    mcp.duplicate_tickets = (
+        OpenRepairTicketItem(
+            ticket_id=mcp.ticket_id,
+            ticket_version=2,
+            resident_id=resident_id,
+            property_id=property_id,
+            issue_category=IssueCategory.WATER_LEAK,
+            issue_location="厨房水槽下",
+            severity=Severity.MEDIUM,
+            ticket_status=TicketStatus.SCHEDULED,
+            rework_count=0,
+        ),
+    )
+    orchestrator = _orchestrator(
+        mcp,
+        {
+            "utterance_intent": "NEW_REPAIR",
+            "issue_category": "WATER_LEAK",
+            "issue_location": "厨房水槽下",
+            "issue_description_update": "厨房水槽下仍在漏水",
+            "user_availability_windows": [
+                {"starts_at": "2026-07-21T12:00:00Z", "ends_at": "2026-07-21T18:00:00Z"}
+            ],
+        },
+    )
+
+    result = await orchestrator.start_turn(_turn(resident_id, property_id))
+
+    assert result.run_status is RunStatus.COMPLETED
+    assert result.active_ticket_id == mcp.ticket_id
+    assert result.active_appointment_id == mcp.appointment_id
+    assert result.assistant_message == (
+        "检测到同一问题已有工单，并且已经安排上门；本次没有重复创建工单或预约。"
+    )
+    assert all(name != "create_repair_ticket" for name, _ in mcp.calls)
+    assert all(name != "book_appointment" for name, _ in mcp.calls)
+
+
+@pytest.mark.asyncio
+async def test_booked_ticket_can_enter_reschedule_without_returning_duplicate_reply() -> None:
+    resident_id, property_id = uuid4(), uuid4()
+    mcp = FakePropertyOperationsClient(resident_id, property_id)
+    mcp.booked = True
+    mcp.duplicate_tickets = (
+        OpenRepairTicketItem(
+            ticket_id=mcp.ticket_id,
+            ticket_version=2,
+            resident_id=resident_id,
+            property_id=property_id,
+            issue_category=IssueCategory.WATER_LEAK,
+            issue_location="厨房水槽下",
+            severity=Severity.MEDIUM,
+            ticket_status=TicketStatus.SCHEDULED,
+            rework_count=0,
+        ),
+    )
+    orchestrator = _orchestrator(
+        mcp,
+        (
+            {
+                "utterance_intent": "NEW_REPAIR",
+                "issue_category": "WATER_LEAK",
+                "issue_location": "厨房水槽下",
+                "issue_description_update": "厨房水槽下漏水",
+                "user_availability_windows": [
+                    {"starts_at": "2026-07-21T12:00:00Z", "ends_at": "2026-07-21T18:00:00Z"}
+                ],
+            },
+            {"utterance_intent": "RESCHEDULE_APPOINTMENT"},
+            {
+                "utterance_intent": "PROVIDE_INFORMATION",
+                "user_availability_windows": [
+                    {"starts_at": "2026-07-22T12:00:00Z", "ends_at": "2026-07-22T18:00:00Z"}
+                ],
+            },
+        ),
+    )
+    turn = _turn(resident_id, property_id)
+    existing = await orchestrator.start_turn(turn)
+    assert existing.run_status is RunStatus.COMPLETED
+
+    requesting_time = await orchestrator.start_turn(
+        turn.model_copy(
+            update={
+                "trace_id": uuid4(),
+                "user_message": "我要改期",
+                "reference_time": datetime(2026, 7, 20, 11, tzinfo=UTC),
+            }
+        )
+    )
+    assert requesting_time.run_status is RunStatus.INTERRUPTED
+    assert isinstance(requesting_time.interrupt, NeedInformationInterrupt)
+    assert requesting_time.interrupt.missing_fields == ("AVAILABILITY",)
+    assert requesting_time.assistant_message is None
+
+    slots = await orchestrator.resume(
+        turn.thread_id,
+        _caller(resident_id),
+        ProvideInformationResume(
+            kind="PROVIDE_INFORMATION",
+            intent_version=requesting_time.interrupt.intent_version,
+            user_message="后天下午三点",
+            reference_time=datetime(2026, 7, 20, 11, tzinfo=UTC),
+            timezone_name="UTC",
+            trace_id=uuid4(),
+        ),
+    )
+
+    assert slots.run_status is RunStatus.INTERRUPTED
+    assert isinstance(slots.interrupt, AppointmentSlotSelectionInterrupt)
+    assert slots.assistant_message is None
+    assert slots.active_ticket_id == mcp.ticket_id
+
+    completed = await orchestrator.resume(
+        turn.thread_id,
+        _caller(resident_id),
+        SelectAppointmentSlotResume(
+            kind="SELECT_APPOINTMENT_SLOT",
+            intent_version=slots.interrupt.intent_version,
+            candidates_fingerprint=slots.interrupt.candidates_fingerprint,
+            rank=1,
+            trace_id=uuid4(),
+        ),
+    )
+
+    assert completed.run_status is RunStatus.COMPLETED
+    assert completed.interrupt is None
+    assert completed.assistant_message == "改期成功，新的上门时间已经更新。"
+    assert [name for name, _ in mcp.calls].count("reschedule_appointment") == 1
 
 
 @pytest.mark.asyncio

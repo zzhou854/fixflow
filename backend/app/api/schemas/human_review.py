@@ -36,6 +36,8 @@ class HumanReviewCaseResponse(ApiModel):
     resolved_at: datetime | None
     resolution_code: str | None
     resolution_note: str | None
+    resident_username: str | None
+    property_address: str | None
 
 
 class HumanReviewCasePage(ApiModel):

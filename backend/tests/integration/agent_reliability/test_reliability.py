@@ -209,6 +209,28 @@ async def test_finalize_message_is_atomic_idempotent_and_archivable(
             limit=5,
             offset=0,
         )
+        deleted = await service.set_thread_lifecycle(
+            thread_id=thread_id,
+            resident_id=resident_id,
+            lifecycle_status=ThreadLifecycleStatus.DELETED,
+            actor_id=resident_id,
+            expected_version=archived.version,
+        )
+        assert deleted.deleted_at is not None
+        assert not await service.list_threads(
+            resident_id=resident_id,
+            lifecycle_status=None,
+            limit=5,
+            offset=0,
+        )
+        with pytest.raises(AgentReliabilityConflict, match="invalid thread lifecycle transition"):
+            await service.set_thread_lifecycle(
+                thread_id=thread_id,
+                resident_id=resident_id,
+                lifecycle_status=ThreadLifecycleStatus.ACTIVE,
+                actor_id=resident_id,
+                expected_version=deleted.version,
+            )
     finally:
         await engine.dispose()
 

@@ -172,7 +172,7 @@ def test_unauthorized_transition_actor() -> None:
     ("action", "allowed", "denied", "outcome"),
     [
         (AppointmentAction.SUPERSEDE, ActorType.OPERATOR, ActorType.WORKER, None),
-        (AppointmentAction.FULFILL, ActorType.OPERATOR, ActorType.RESIDENT, None),
+        (AppointmentAction.FULFILL, ActorType.RESIDENT, ActorType.SYSTEM, None),
         (
             AppointmentAction.MARK_NO_SHOW,
             ActorType.SYSTEM,

@@ -85,8 +85,19 @@ class SelectSlotReplayInput(ReplayModel):
     rank: int = Field(ge=1)
 
 
+class CancelSlotSelectionReplayInput(ReplayModel):
+    kind: Literal["CANCEL_APPOINTMENT_SLOT_SELECTION"] = (
+        "CANCEL_APPOINTMENT_SLOT_SELECTION"
+    )
+    intent_version: int = Field(ge=1)
+    candidate_fingerprint: Sha256
+
+
 ResumeReplayInput = Annotated[
-    ProvideInformationReplayInput | SelectDuplicateReplayInput | SelectSlotReplayInput,
+    ProvideInformationReplayInput
+    | SelectDuplicateReplayInput
+    | SelectSlotReplayInput
+    | CancelSlotSelectionReplayInput,
     Field(discriminator="kind"),
 ]
 
@@ -105,6 +116,7 @@ ReplayInputEnvelope = Annotated[
     | ProvideInformationReplayInput
     | SelectDuplicateReplayInput
     | SelectSlotReplayInput
+    | CancelSlotSelectionReplayInput
     | OperatorActionReplayInput,
     Field(discriminator="kind"),
 ]

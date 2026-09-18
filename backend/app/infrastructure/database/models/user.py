@@ -21,7 +21,7 @@ from app.infrastructure.database.models.common import TimestampMixin, UUIDPrimar
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Preset resident or property-operator identity."""
+    """Resident or property-operator identity."""
 
     __tablename__ = "users"
     __table_args__ = (CheckConstraint("role IN ('RESIDENT', 'OPERATOR')", name="role_values"),)

@@ -55,7 +55,10 @@ def merge_interpretation(state: AgentState, output: InterpretMessageOutput) -> A
     intent_changed = (
         state.task_intent is not AgentIntent.UNKNOWN and merged_task_intent is not state.task_intent
     )
-    version_changed = category_changed or location_changed or intent_changed
+    task_restarted = (
+        state.workflow_stage is WorkflowStage.DONE and output.utterance_intent in TASK_INTENTS
+    )
+    version_changed = category_changed or location_changed or intent_changed or task_restarted
     new_safety = tuple(flag for flag in output.safety_flags if flag not in state.safety_flags)
     invalidate_plan = version_changed or bool(new_safety)
 
@@ -96,14 +99,14 @@ def merge_interpretation(state: AgentState, output: InterpretMessageOutput) -> A
         )
     if version_changed:
         updates.update(
-            user_availability_windows=(),
+            user_availability_windows=output.user_availability_windows,
             service_duration_minutes=None,
             snapshot_refresh_required=True,
         )
-        merged_user_availability = ()
+        merged_user_availability = output.user_availability_windows
     if new_safety:
         updates["safety_review_required"] = True
-    updates["missing_fields"] = compute_missing_fields(
+    missing_fields = compute_missing_fields(
         task_intent=merged_task_intent,
         property_id=state.property_id,
         issue_category=merged_category,
@@ -111,4 +114,7 @@ def merge_interpretation(state: AgentState, output: InterpretMessageOutput) -> A
         issue_description=merged_description,
         user_availability_windows=merged_user_availability,
     )
+    updates["missing_fields"] = missing_fields
+    if missing_fields:
+        updates["workflow_stage"] = WorkflowStage.NEED_INFO
     return state.model_copy(update=updates)

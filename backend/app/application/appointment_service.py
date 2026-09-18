@@ -2,7 +2,7 @@
 
 from dataclasses import asdict, replace
 
-from app.application.errors import AuthorizationFailed, ResourceNotFound
+from app.application.errors import ApplicationError, AuthorizationFailed, ResourceNotFound
 from app.application.events import AggregateType, DomainEventType, build_domain_event
 from app.application.models import (
     BookAppointmentCommand,
@@ -39,6 +39,8 @@ class AppointmentApplicationService(TransactionalService):
     async def _book_appointment(
         self, uow: UnitOfWork, command: BookAppointmentCommand
     ) -> OperationResult:
+        if command.starts_at < command.metadata.occurred_at:
+            raise ApplicationError("appointment_time_in_past")
         ticket = await uow.tickets.get(command.ticket_id)
         if ticket is None:
             raise ResourceNotFound("ticket_not_found", ticket_id=command.ticket_id)
@@ -158,6 +160,8 @@ class AppointmentApplicationService(TransactionalService):
     async def _reschedule_appointment(
         self, uow: UnitOfWork, command: RescheduleAppointmentCommand
     ) -> OperationResult:
+        if command.starts_at < command.metadata.occurred_at:
+            raise ApplicationError("appointment_time_in_past")
         ticket = await uow.tickets.get(command.ticket_id)
         old = await uow.appointments.get(command.appointment_id)
         if ticket is None:
