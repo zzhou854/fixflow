@@ -1,0 +1,23 @@
+{
+  "scorer_id": "grounded_response_holdout_scorer",
+  "scorer_version": "1.2.0",
+  "suite_id": "grounded_response_holdout",
+  "implementation": "app.llm.online.holdout_scoring",
+  "metrics": [
+    {"name": "completion_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "outcome_preservation_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "required_action_preservation_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "required_information_coverage", "direction": "HIGHER_IS_BETTER"},
+    {"name": "forbidden_information_violation_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "allowed_fact_precision", "direction": "HIGHER_IS_BETTER"},
+    {"name": "unsupported_claim_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "fabricated_identifier_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "fabricated_schedule_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "unauthorized_promise_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "deterministic_template_compliance", "direction": "HIGHER_IS_BETTER"},
+    {"name": "technical_leakage_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "safety_template_compliance", "direction": "HIGHER_IS_BETTER"},
+    {"name": "natural_response_completion_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "semantic_template_compliance", "direction": "HIGHER_IS_BETTER"}
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "manifest_schema_version": "holdout-manifest-v2",
+  "dataset_id": "grounded_response_holdout",
+  "dataset_version": "1.0.0",
+  "purpose": "HOLDOUT_QUALIFICATION",
+  "case_count": 60,
+  "single_turn_count": 60,
+  "multi_turn_count": 0,
+  "category_distribution": [
+    {
+      "label": "APPOINTMENT_BOOKED",
+      "count": 4
+    },
+    {
+      "label": "APPOINTMENT_FAILED",
+      "count": 4
+    },
+    {
+      "label": "AUTHORIZATION_DENIED",
+      "count": 4
+    },
+    {
+      "label": "CANCELLED_OR_CLOSED",
+      "count": 4
+    },
+    {
+      "label": "HUMAN_CASE_CREATED",
+      "count": 4
+    },
+    {
+      "label": "HUMAN_CASE_FAILED",
+      "count": 4
+    },
+    {
+      "label": "NEED_INFORMATION",
+      "count": 4
+    },
+    {
+      "label": "POLICY_CONFLICT",
+      "count": 4
+    },
+    {
+      "label": "POLICY_INSUFFICIENT",
+      "count": 4
+    },
+    {
+      "label": "SAFETY_ESCALATION",
+      "count": 4
+    },
+    {
+      "label": "SLOT_SELECTION",
+      "count": 4
+    },
+    {
+      "label": "TICKET_CREATED",
+      "count": 4
+    },
+    {
+      "label": "TICKET_CREATE_FAILED",
+      "count": 4
+    },
+    {
+      "label": "UNKNOWN_COMMIT",
+      "count": 4
+    },
+    {
+      "label": "UNSUPPORTED_REQUEST",
+      "count": 4
+    }
+  ],
+  "dataset_sha256": "a11949a6db8168398d6c7eb06882eed59da32b3e09a9b4d5ec8121527008c146",
+  "golden_sha256": "9fb6104833c473ef727a866ddbaf6cee3a75e9b2dfcd2cb58eda8a86c9037a83",
+  "identity": {
+    "code_commit": "63b78e08ad97cab40314e1f3b34e1f6b8671e5ba",
+    "prompt_version": "grounded_response@1.0.0",
+    "prompt_sha256": "6cb80356371a1e086ec8e355cee72a26de48eb5ffe75a9502e06a7182a87ab1d",
+    "schema_version": "grounded-response-draft-v1",
+    "schema_sha256": "6cebaa74f1120b66c4bc41e547aeed27b6b7291e79001e442f9c8bccde2609ff",
+    "normalization_version": "grounded-template-renderer-v1",
+    "normalization_sha256": "96b0edba320032e792c9b5aa30bf5aa9b971ea878b54cc072cee66c5138471c8",
+    "scorer_version": "grounded_response_holdout_scorer@1.0.0",
+    "scorer_sha256": "2cf4ec6f84a9e21ba84f72f160d50c6a1a5b3882c338522031d93a4f4ac82c0b",
+    "gate_version": "grounded_response_holdout_gate@1.0.0",
+    "gate_sha256": "0ee719e293ed6b71a1d9d2b682ce696f5a60984f5af3fd84c75cbccc806f30d0",
+    "provider_router_version": "deepseek-flash-pro-router-v1"
+  },
+  "golden_review_status": "AUTOMATED_CHECKED_REVIEW_PENDING",
+  "created_at": "2026-07-30T16:10:07.513244Z",
+  "sealed_at": "2026-07-30T16:10:07.516244Z",
+  "approved_at": null,
+  "approved_by": null,
+  "first_live_call_at": null,
+  "live_call_count": 0,
+  "status": "SEALED"
+}

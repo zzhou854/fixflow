@@ -1,0 +1,15 @@
+{
+  "dataset_id": "resident_interpretation",
+  "dataset_version": "1.0.0",
+  "dataset_schema_version": "evaluation-case-v1",
+  "description": "120-case synthetic Chinese property-maintenance interpretation corpus",
+  "locale": "zh-CN",
+  "case_count": 120,
+  "created_for_prompt_id": "resident_interpretation",
+  "created_for_schema_version": "interpretation-result-v1",
+  "provenance": "synthetic_engineering_fixture",
+  "review_status": "engineering_authored",
+  "contains_real_personal_data": false,
+  "case_file": "resident_interpretation_v1.jsonl",
+  "dataset_hash": "a0dfb91aed5653eafcb5649beee1f9106ac4d6b332df50923c68d5f02e979296"
+}

@@ -1,0 +1,229 @@
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, vi } from 'vitest'
+import { api } from '../api/client'
+import type { AgentThread } from '../types'
+import { ResidentPage } from './ResidentPage'
+
+vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ token: 'token', user: { user_id: 'r', username: 'resident_demo', actor_type: 'RESIDENT' }, logout: vi.fn() }) }))
+vi.mock('../hooks/useSSE', () => ({ useSSE: () => 'idle' }))
+vi.mock('../api/client', async (load) => {
+  const actual = await load<typeof import('../api/client')>()
+  return { ...actual, api: { ...actual.api, properties: vi.fn(), residentThreads: vi.fn(), getThread: vi.fn(), createThread: vi.fn(), sendMessage: vi.fn(), resume: vi.fn(), archiveThread: vi.fn(), restoreThread: vi.fn(), deleteThread: vi.fn(), acceptRepair: vi.fn() } }
+})
+
+beforeEach(() => {
+  sessionStorage.clear()
+  vi.clearAllMocks()
+  vi.mocked(api.properties).mockResolvedValue([])
+  vi.mocked(api.residentThreads).mockResolvedValue({ items: [], limit: 5, offset: 0 })
+})
+
+test('renders a resident message and the agent reply', async () => {
+  vi.mocked(api.properties).mockResolvedValue([{ property_id: 'p', community_name: '星河花园', building_no: '3', unit_no: '2', room_no: '1201', address_text: '星河花园 1201' }])
+  vi.mocked(api.residentThreads).mockResolvedValue({ items: [], limit: 20, offset: 0 })
+  vi.mocked(api.createThread).mockResolvedValue({ thread_id: 't', trace_id: 'trace', message_id: 'm', workflow_stage: 'NEED_INFO', run_status: 'INTERRUPTED', message_outcome: 'COMPLETED', business_status: 'NEED_INFORMATION', template_id: 'NEED_INFORMATION', required_user_action: 'PROVIDE_DETAILS', display_action_text: '请补充具体位置', assistant_message: '请补充具体位置', interrupt: null, active_ticket: null, active_appointment: null, policy_status: { sufficiency: null, conflict: false, evidence_ids: [] }, structured_issue: { issue_category: null, issue_location: null, issue_description: null, severity: null }, safety_review_required: false, error_code: null, development_mode: true, conversation_messages: [{ role: 'USER', content: '家里漏水', created_at: '2026-07-27T12:00:00+08:00' }, { role: 'ASSISTANT', content: '请补充具体位置', created_at: '2026-07-27T12:00:01+08:00' }] })
+  render(<ResidentPage />)
+  const input = await screen.findByPlaceholderText('请描述问题，例如：厨房水龙头漏水，明天下午有空')
+  await userEvent.type(input, '家里漏水')
+  await userEvent.click(screen.getByRole('button', { name: /发送/ }))
+  expect(await screen.findByText('家里漏水')).toBeInTheDocument()
+  expect(await screen.findByText('请补充具体位置')).toBeInTheDocument()
+})
+
+test('shows that a fresh session is ready instead of pretending SSE is connecting', async () => {
+  render(<ResidentPage />)
+
+  expect(await screen.findByText('可以开始报修')).toBeInTheDocument()
+  expect(screen.queryByText('正在连接服务')).not.toBeInTheDocument()
+})
+
+test('shows a recoverable error when resident bootstrap data cannot be loaded', async () => {
+  vi.mocked(api.properties).mockRejectedValueOnce(new Error('network unavailable'))
+  render(<ResidentPage />)
+
+  expect(await screen.findByText('服务暂时不可用')).toBeInTheDocument()
+  expect(screen.getByText('暂时无法读取您的房屋和报修记录')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: '重新加载' }))
+  expect(await screen.findByText('可以开始报修')).toBeInTheDocument()
+})
+
+test('restores only the saved thread id through the state API', async () => {
+  sessionStorage.setItem('fixflow.demo.thread_id', 'saved-thread')
+  vi.mocked(api.properties).mockResolvedValue([])
+  vi.mocked(api.residentThreads).mockResolvedValue({ items: [], limit: 20, offset: 0 })
+  vi.mocked(api.getThread).mockResolvedValue({ thread_id: 'saved-thread', trace_id: 'trace', message_id: null, workflow_stage: 'DONE', run_status: 'COMPLETED', message_outcome: 'COMPLETED', business_status: 'DONE', template_id: 'DONE', required_user_action: 'NONE', display_action_text: null, assistant_message: null, interrupt: null, active_ticket: null, active_appointment: null, policy_status: { sufficiency: null, conflict: false, evidence_ids: [] }, structured_issue: { issue_category: null, issue_location: null, issue_description: null, severity: null }, safety_review_required: false, error_code: null, development_mode: true })
+  render(<ResidentPage />)
+  expect(await screen.findByText('本次处理已完成')).toBeInTheDocument()
+  expect(api.getThread).toHaveBeenCalledWith('token', 'saved-thread')
+})
+
+test('keeps previous sessions visible after starting a new session', async () => {
+  vi.mocked(api.properties).mockResolvedValue([{ property_id: 'p', community_name: '星河花园', building_no: '3', unit_no: '2', room_no: '1201', address_text: '星河花园 1201' }])
+  vi.mocked(api.residentThreads).mockResolvedValue({
+    items: [{
+      thread_id: 'old-thread', property_id: 'p', workflow_stage: 'NEED_INFO',
+      run_status: 'INTERRUPTED', issue_category: 'WATER_LEAK', issue_location: '厨房',
+      active_ticket_id: null, lifecycle_status: 'ACTIVE', archived_at: null, version: 1,
+      can_delete: true,
+      updated_at: '2026-07-27T12:00:00+08:00',
+    }], limit: 20, offset: 0,
+  })
+  render(<ResidentPage />)
+  expect(await screen.findByText('漏水报修 · 厨房')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /新建报修会话/ }))
+  expect(screen.getByText('漏水报修 · 厨房')).toBeInTheDocument()
+})
+
+test('opens a recent conversation with immediate loading feedback', async () => {
+  const summary = {
+    thread_id: 'recent-thread', property_id: 'p', workflow_stage: 'HUMAN_REVIEW' as const,
+    run_status: 'NEEDS_HUMAN_REVIEW' as const, issue_category: 'WATER_LEAK',
+    issue_location: '厨房', active_ticket_id: 'ticket-1', lifecycle_status: 'ACTIVE' as const,
+    archived_at: null, version: 2, can_delete: false,
+    updated_at: '2026-09-10T14:33:02+08:00',
+  }
+  vi.mocked(api.residentThreads).mockResolvedValue({ items: [summary], limit: 5, offset: 0 })
+  let resolveThread!: (value: AgentThread) => void
+  vi.mocked(api.getThread).mockReturnValue(new Promise((resolve) => { resolveThread = resolve }))
+  render(<ResidentPage />)
+
+  const recentTitle = await screen.findByText('漏水报修 · 厨房')
+  await userEvent.click(recentTitle.closest('button') as HTMLButtonElement)
+  expect(screen.getByText('正在打开会话…')).toBeInTheDocument()
+  expect(api.getThread).toHaveBeenCalledWith('token', 'recent-thread')
+
+  resolveThread({
+    thread_id: 'recent-thread', trace_id: 'trace', message_id: null,
+    workflow_stage: 'HUMAN_REVIEW', run_status: 'NEEDS_HUMAN_REVIEW',
+    message_outcome: 'ESCALATED', business_status: 'HUMAN_REVIEW',
+    template_id: 'HUMAN_REVIEW', required_user_action: 'CONTACT_OPERATOR',
+    display_action_text: null, assistant_message: '物业正在处理', interrupt: null,
+    active_ticket: null, active_appointment: null,
+    policy_status: { sufficiency: null, conflict: false, evidence_ids: [] },
+    structured_issue: { issue_category: 'WATER_LEAK', issue_location: '厨房', issue_description: '漏水', severity: 'MEDIUM' },
+    safety_review_required: false, error_code: null, development_mode: true,
+    conversation_messages: [
+      { role: 'USER', content: '厨房漏水', created_at: '2026-09-10T14:30:00+08:00' },
+      { role: 'ASSISTANT', content: '物业正在处理', created_at: '2026-09-10T14:33:02+08:00' },
+    ],
+  })
+  expect(await screen.findByText('厨房漏水')).toBeInTheDocument()
+  expect(await screen.findByText('物业正在处理')).toBeInTheDocument()
+})
+
+test('opens the conversation drawer with the active filter and API page limit', async () => {
+  render(<ResidentPage />)
+  await userEvent.click(await screen.findByRole('button', { name: /查看全部会话/ }))
+  expect(api.residentThreads).toHaveBeenCalledWith('token', 'active', 50, 0)
+})
+
+test('uses the resume endpoint when chatting during a need-information interrupt', async () => {
+  sessionStorage.setItem('fixflow.demo.thread_id', 'needs-info')
+  vi.mocked(api.properties).mockResolvedValue([{ property_id: 'p', community_name: '星河花园', building_no: '3', unit_no: '2', room_no: '1201', address_text: '星河花园 1201' }])
+  vi.mocked(api.residentThreads).mockResolvedValue({ items: [], limit: 20, offset: 0 })
+  vi.mocked(api.getThread).mockResolvedValue({
+    thread_id: 'needs-info', trace_id: 'trace', message_id: null, workflow_stage: 'NEED_INFO',
+    run_status: 'INTERRUPTED', message_outcome: 'COMPLETED', business_status: 'NEED_INFORMATION', template_id: 'NEED_INFORMATION', required_user_action: 'PROVIDE_DETAILS', display_action_text: '请补充位置', assistant_message: '请补充位置',
+    interrupt: { kind: 'NEED_INFORMATION', intent_version: 3, missing_fields: ['ISSUE_LOCATION'], message: '请补充位置' },
+    active_ticket: null, active_appointment: null,
+    policy_status: { sufficiency: null, conflict: false, evidence_ids: [] },
+    structured_issue: { issue_category: 'WATER_LEAK', issue_location: null, issue_description: '漏水', severity: null },
+    safety_review_required: false, error_code: null, development_mode: true,
+    conversation_messages: [],
+  })
+  vi.mocked(api.resume).mockResolvedValue({
+    thread_id: 'needs-info', trace_id: 'trace-2', message_id: null, workflow_stage: 'FINDING_SLOTS',
+    run_status: 'COMPLETED', message_outcome: 'COMPLETED', business_status: 'DETAILS_RECEIVED', template_id: 'DETAILS_RECEIVED', required_user_action: 'NONE', display_action_text: null, assistant_message: '已收到位置',
+    interrupt: null, active_ticket: null, active_appointment: null,
+    policy_status: { sufficiency: 'SUFFICIENT', conflict: false, evidence_ids: [] },
+    structured_issue: { issue_category: 'WATER_LEAK', issue_location: '厨房', issue_description: '漏水', severity: 'MEDIUM' },
+    safety_review_required: false, error_code: null, development_mode: true,
+    conversation_messages: [{ role: 'USER', content: '厨房水槽下方', created_at: '2026-07-27T12:00:00+08:00' }],
+  })
+  render(<ResidentPage />)
+  const input = await screen.findByPlaceholderText('直接补充房间，例如：卧室')
+  await userEvent.type(input, '厨房水槽下方')
+  await userEvent.keyboard('{Enter}')
+  expect(api.resume).toHaveBeenCalledWith(
+    'token',
+    'needs-info',
+    expect.objectContaining({
+      kind: 'PROVIDE_INFORMATION',
+      intent_version: 3,
+      user_message: '厨房水槽下方',
+    }),
+    expect.any(String),
+  )
+  expect(api.sendMessage).not.toHaveBeenCalled()
+})
+
+test('reuses the same request identity when the resident retries a failed send', async () => {
+  vi.mocked(api.properties).mockResolvedValue([{ property_id: 'p', community_name: '星河花园', building_no: '3', unit_no: '2', room_no: '1201', address_text: '星河花园 1201' }])
+  vi.mocked(api.createThread)
+    .mockRejectedValueOnce(new Error('network unavailable'))
+    .mockResolvedValue({
+      thread_id: 'retry-thread', trace_id: 'trace', message_id: 'message', workflow_stage: 'NEED_INFO',
+      run_status: 'INTERRUPTED', message_outcome: 'COMPLETED', business_status: 'NEED_INFORMATION', template_id: 'NEED_INFORMATION', required_user_action: 'PROVIDE_DETAILS', display_action_text: '请补充位置', assistant_message: '请补充位置',
+      interrupt: null, active_ticket: null, active_appointment: null,
+      policy_status: { sufficiency: null, conflict: false, evidence_ids: [] },
+      structured_issue: { issue_category: 'WATER_LEAK', issue_location: null, issue_description: '漏水', severity: null },
+      safety_review_required: false, error_code: null, development_mode: true,
+      conversation_messages: [{ role: 'USER', content: '家里漏水', created_at: '2026-09-08T10:00:00+08:00' }],
+    })
+
+  render(<ResidentPage />)
+  await screen.findByText('星河花园 1201')
+  const input = await screen.findByPlaceholderText('请描述问题，例如：厨房水龙头漏水，明天下午有空')
+  await userEvent.type(input, '家里漏水')
+  await userEvent.click(screen.getByRole('button', { name: /发送/ }))
+  await waitFor(() => expect(api.createThread).toHaveBeenCalledTimes(1))
+  await screen.findByText('这次没有处理完成')
+  await userEvent.click(await screen.findByRole('button', { name: /重试这条消息/ }))
+
+  expect(api.createThread).toHaveBeenCalledTimes(2)
+  expect(vi.mocked(api.createThread).mock.calls[1]).toEqual(
+    vi.mocked(api.createThread).mock.calls[0],
+  )
+})
+
+test('asks for a reschedule without inventing resident availability', async () => {
+  sessionStorage.setItem('fixflow.demo.thread_id', 'scheduled-thread')
+  vi.mocked(api.properties).mockResolvedValue([{ property_id: 'p', community_name: '星河花园', building_no: '3', unit_no: '2', room_no: '1201', address_text: '星河花园 1201' }])
+  const scheduledThread: AgentThread = {
+    thread_id: 'scheduled-thread', trace_id: 'trace', message_id: null, workflow_stage: 'DONE',
+    run_status: 'COMPLETED', message_outcome: 'COMPLETED', business_status: 'SCHEDULED', template_id: 'SCHEDULED', required_user_action: 'NONE', display_action_text: null, assistant_message: null,
+    interrupt: null,
+    active_ticket: { ticket_id: 'ticket', resident_id: 'r', resident_username: 'resident_demo', property_id: 'p', property_label: '星河花园 1201', issue_category: 'ELECTRICAL', issue_location: '卧室', severity: 'MEDIUM', ticket_status: 'SCHEDULED', rework_count: 0, version: 2, updated_at: '2026-09-09T00:00:00+08:00', appointment: { appointment_id: 'appointment', worker_id: 'worker', purpose: 'INITIAL_REPAIR', status: 'BOOKED', scheduled_start: '2026-09-10T14:00:00+08:00', scheduled_end: '2026-09-10T15:00:00+08:00', appointment_version: 1 } },
+    active_appointment: null,
+    policy_status: { sufficiency: 'SUFFICIENT', conflict: false, evidence_ids: [] },
+    structured_issue: { issue_category: 'ELECTRICAL', issue_location: '卧室', issue_description: '灯不亮', severity: 'MEDIUM' },
+    safety_review_required: false, error_code: null, development_mode: true,
+    conversation_messages: [],
+  }
+  vi.mocked(api.getThread).mockResolvedValue(scheduledThread)
+  vi.mocked(api.sendMessage).mockResolvedValue({
+    ...scheduledThread,
+    workflow_stage: 'INTAKE',
+    run_status: 'INTERRUPTED',
+    interrupt: { kind: 'NEED_INFORMATION', intent_version: 2, missing_fields: ['AVAILABILITY'], message: '请告诉我您方便维修人员上门的日期和时间段。' },
+  })
+
+  render(<ResidentPage />)
+  await userEvent.click(await screen.findByRole('button', { name: '申请改期' }))
+
+  expect(api.sendMessage).toHaveBeenCalledWith(
+    'token',
+    'scheduled-thread',
+    '我要改期',
+    expect.any(String),
+    expect.any(String),
+  )
+  expect(api.sendMessage).not.toHaveBeenCalledWith(
+    expect.anything(),
+    expect.anything(),
+    expect.stringContaining('明天下午'),
+    expect.anything(),
+    expect.anything(),
+  )
+})

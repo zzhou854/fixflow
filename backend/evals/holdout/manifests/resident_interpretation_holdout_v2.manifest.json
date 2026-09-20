@@ -1,0 +1,47 @@
+{
+  "manifest_schema_version": "holdout-manifest-v2",
+  "dataset_id": "resident_interpretation_holdout",
+  "dataset_version": "2.0.0",
+  "purpose": "HOLDOUT_QUALIFICATION",
+  "case_count": 180,
+  "single_turn_count": 120,
+  "multi_turn_count": 60,
+  "category_distribution": [
+    {
+      "label": "DOOR_LOCK",
+      "count": 60
+    },
+    {
+      "label": "ELECTRICAL",
+      "count": 60
+    },
+    {
+      "label": "WATER_LEAK",
+      "count": 60
+    }
+  ],
+  "dataset_sha256": "ea7f4efdc5994e1c11444999c4171306caea98c431b41df08991acbc592a8c07",
+  "golden_sha256": "cf93a02c8013ab66d061ff56de5003a5bba8d0f93c69b244284f5a822b789822",
+  "identity": {
+    "code_commit": "63b78e08ad97cab40314e1f3b34e1f6b8671e5ba",
+    "prompt_version": "resident_fact_extraction@2.0.0",
+    "prompt_sha256": "5b2cf61635f541c5db8e72f092f42be763210d006b6f69ea5de275d6b25f6d6b",
+    "schema_version": "resident-facts-v2",
+    "schema_sha256": "00fd9026ef5d8e6d55b9a0ac4b51973ba4084693665ce875d21d24d28fe6727c",
+    "normalization_version": "hybrid-normalization-v1",
+    "normalization_sha256": "0a5ce935006dd2341262dbc5a9f496d6a8d5674ac8db333f27880d8e068092e1",
+    "scorer_version": "resident_interpretation_holdout_scorer@1.0.0",
+    "scorer_sha256": "5a22dab5c0678f30367a179e191fe3015ceb8ff24c39997e85eef2035822dc27",
+    "gate_version": "resident_interpretation_holdout_gate@1.0.0",
+    "gate_sha256": "f6dc16dfef629fa55b6f6a12763bdb6c26e028870b638f65229e2a78be3069aa",
+    "provider_router_version": "deepseek-flash-pro-router-v1"
+  },
+  "golden_review_status": "AUTOMATED_CHECKED_REVIEW_PENDING",
+  "created_at": "2026-07-30T16:10:07.490242Z",
+  "sealed_at": "2026-07-30T16:10:07.500246Z",
+  "approved_at": null,
+  "approved_by": null,
+  "first_live_call_at": null,
+  "live_call_count": 0,
+  "status": "SEALED"
+}

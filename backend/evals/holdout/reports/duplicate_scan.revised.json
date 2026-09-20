@@ -1,0 +1,43 @@
+{
+  "comparison_scope": {
+    "includes_challenges_v1_to_v7": true,
+    "includes_cross_suite_check": true,
+    "includes_development": true,
+    "includes_docs": true,
+    "includes_old_holdouts": true,
+    "includes_prompt_sources": true,
+    "includes_tests": true,
+    "jsonl_reference_count": 13,
+    "text_reference_count": 245
+  },
+  "grounded": {
+    "candidate_case_count": 60,
+    "duplicate_case_ids": [],
+    "exact_text_duplicate_case_ids": [],
+    "internal_duplicate_case_ids": [],
+    "joined_turn_duplicate_case_ids": [],
+    "known_fingerprint_duplicate_case_ids": [],
+    "near_duplicate_algorithm": "unicode-nfkc-punctuationless-sequence-matcher",
+    "near_duplicate_algorithm_version": "1.0.0",
+    "near_duplicate_threshold": 0.88,
+    "near_duplicates": [],
+    "normalized_text_duplicate_case_ids": [],
+    "punctuationless_duplicate_case_ids": [],
+    "reference_unit_count": 35610
+  },
+  "structured": {
+    "candidate_case_count": 180,
+    "duplicate_case_ids": [],
+    "exact_text_duplicate_case_ids": [],
+    "internal_duplicate_case_ids": [],
+    "joined_turn_duplicate_case_ids": [],
+    "known_fingerprint_duplicate_case_ids": [],
+    "near_duplicate_algorithm": "unicode-nfkc-punctuationless-sequence-matcher",
+    "near_duplicate_algorithm_version": "1.0.0",
+    "near_duplicate_threshold": 0.88,
+    "near_duplicates": [],
+    "normalized_text_duplicate_case_ids": [],
+    "punctuationless_duplicate_case_ids": [],
+    "reference_unit_count": 35490
+  }
+}

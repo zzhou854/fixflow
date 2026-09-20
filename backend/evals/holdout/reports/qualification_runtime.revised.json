@@ -1,0 +1,15 @@
+{
+  "approval": "PENDING_HUMAN_SIGNATURE",
+  "canary_status": "NOT_EXECUTED",
+  "default_provider": "scripted",
+  "formal_holdout_live_call_count": 0,
+  "formal_shadow_status": "NOT_EXECUTED",
+  "grounded_identity_matches_manifest": true,
+  "online_provider_status": "NOT_ACTIVATED",
+  "provider_router_file_sha256": "50a27853a8aa943c61962063b5dde41c7a2ebb4f49c75475487c432e01c7a22e",
+  "runtime_commit": "990bbfcbf0c03e40c4b339be71b959a0065a30ba",
+  "runtime_identity_sha256": "f7974ccab691e499f51c6cdbacb237cc648efe57d635e7d0fd15b6c4ad738d39",
+  "runtime_tag": "qualification-runtime-structured-2.1.0-grounded-1.1.0",
+  "structured_identity_matches_manifest": true,
+  "worktree_clean": true
+}

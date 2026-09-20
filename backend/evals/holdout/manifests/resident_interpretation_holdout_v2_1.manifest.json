@@ -1,0 +1,47 @@
+{
+  "approved_at": null,
+  "approved_by": null,
+  "case_count": 180,
+  "category_distribution": [
+    {
+      "count": 60,
+      "label": "DOOR_LOCK"
+    },
+    {
+      "count": 60,
+      "label": "ELECTRICAL"
+    },
+    {
+      "count": 60,
+      "label": "WATER_LEAK"
+    }
+  ],
+  "created_at": "2026-07-30T17:53:41.265879Z",
+  "dataset_id": "resident_interpretation_holdout",
+  "dataset_sha256": "a93bf7d3d049d878f20411065bbc6e6bff2f96a06d1428b76c2ecc0beaea1c51",
+  "dataset_version": "2.1.0",
+  "first_live_call_at": null,
+  "golden_review_status": "AUTOMATED_CHECKED_REVIEW_PENDING",
+  "golden_sha256": "0f05b22dd5f56549abf93f240b3430da6d4ae778258a91cf2aee395f8bff72c9",
+  "identity": {
+    "code_commit": "990bbfcbf0c03e40c4b339be71b959a0065a30ba",
+    "gate_sha256": "13964a6d2cae2c264a3e95e404d7c2d4e85ebe8d23c06b0affd34877c9e7ba07",
+    "gate_version": "resident_interpretation_holdout_gate@1.1.0",
+    "normalization_sha256": "0a5ce935006dd2341262dbc5a9f496d6a8d5674ac8db333f27880d8e068092e1",
+    "normalization_version": "hybrid-normalization-v1",
+    "prompt_sha256": "5b2cf61635f541c5db8e72f092f42be763210d006b6f69ea5de275d6b25f6d6b",
+    "prompt_version": "resident_fact_extraction@2.0.0",
+    "provider_router_version": "deepseek-flash-pro-router-v1",
+    "schema_sha256": "00fd9026ef5d8e6d55b9a0ac4b51973ba4084693665ce875d21d24d28fe6727c",
+    "schema_version": "resident-facts-v2",
+    "scorer_sha256": "c6ff380349f6dfa4437a4617a74a3e9f4682164a2f77565ce9f51e170229d94b",
+    "scorer_version": "resident_interpretation_holdout_scorer@1.1.0"
+  },
+  "live_call_count": 0,
+  "manifest_schema_version": "holdout-manifest-v2",
+  "multi_turn_count": 60,
+  "purpose": "HOLDOUT_QUALIFICATION",
+  "sealed_at": "2026-07-30T17:53:41.265879Z",
+  "single_turn_count": 120,
+  "status": "SEALED"
+}

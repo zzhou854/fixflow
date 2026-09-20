@@ -1,0 +1,18 @@
+[
+  {"name":"创建漏水报修","input":{"current_message":"厨房水管一直漏水"},"output":{"utterance_intent":"NEW_REPAIR","issue_category":"WATER_LEAK","issue_location":"厨房","issue_description_update":"厨房水管一直漏水"}},
+  {"name":"缺少位置","input":{"current_message":"家里漏水了"},"output":{"utterance_intent":"NEW_REPAIR","issue_category":"WATER_LEAK","issue_description_update":"家里漏水了","model_suggested_missing_fields":["ISSUE_LOCATION"]}},
+  {"name":"预约请求","input":{"current_message":"我想约明天下午上门","reference_time":"2032-01-01T09:00:00+08:00","timezone_name":"Asia/Shanghai"},"output":{"utterance_intent":"PROVIDE_INFORMATION","user_availability_windows":[{"starts_at":"2032-01-02T14:00:00+08:00","ends_at":"2032-01-02T18:00:00+08:00"}]}},
+  {"name":"改期请求","input":{"current_message":"把预约改到后天下午"},"output":{"utterance_intent":"RESCHEDULE_APPOINTMENT"}},
+  {"name":"请求人工","input":{"current_message":"请帮我转人工处理"},"output":{"utterance_intent":"REQUEST_HUMAN","requested_human":true}},
+  {"name":"危险漏电","input":{"current_message":"插座漏电还有火花"},"output":{"utterance_intent":"NEW_REPAIR","issue_category":"ELECTRICAL","issue_location":"插座","issue_description_update":"插座漏电还有火花","safety_flags":["ELECTRICAL_HAZARD"]}},
+  {"name":"燃气异味","input":{"current_message":"厨房有很重的燃气味"},"output":{"utterance_intent":"NEW_REPAIR","issue_location":"厨房","issue_description_update":"厨房有很重的燃气味","safety_flags":["IMMEDIATE_DANGER","OTHER_REVIEW_REQUIRED"]}},
+  {"name":"普通漏水","input":{"current_message":"卫生间水龙头滴水"},"output":{"utterance_intent":"NEW_REPAIR","issue_category":"WATER_LEAK","issue_location":"卫生间","issue_description_update":"卫生间水龙头滴水"}},
+  {"name":"电梯困人","input":{"current_message":"有人被困在电梯里"},"output":{"utterance_intent":"UNKNOWN","issue_description_update":"有人被困在电梯里","safety_flags":["IMMEDIATE_DANGER","OTHER_REVIEW_REQUIRED"]}},
+  {"name":"重复描述不下结论","input":{"current_message":"我又来报厨房漏水，可能和上次一样"},"output":{"utterance_intent":"NEW_REPAIR","issue_category":"WATER_LEAK","issue_location":"厨房","issue_description_update":"我又来报厨房漏水，可能和上次一样"}},
+  {"name":"闲聊","input":{"current_message":"今天天气不错"},"output":{"utterance_intent":"UNKNOWN"}},
+  {"name":"不支持的支付请求","input":{"current_message":"帮我支付物业费"},"output":{"utterance_intent":"UNKNOWN"}},
+  {"name":"相对时间","input":{"current_message":"明天上午有空","reference_time":"2032-06-08T20:00:00+08:00","timezone_name":"Asia/Shanghai"},"output":{"utterance_intent":"PROVIDE_INFORMATION","user_availability_windows":[{"starts_at":"2032-06-09T09:00:00+08:00","ends_at":"2032-06-09T12:00:00+08:00"}]}},
+  {"name":"多意图以人工为主","input":{"current_message":"门锁坏了，我还想直接找人工"},"output":{"utterance_intent":"REQUEST_HUMAN","issue_category":"DOOR_LOCK","issue_description_update":"门锁坏了，我还想直接找人工","requested_human":true}},
+  {"name":"纠正位置","input":{"current_message":"我说错了，是卫生间漏水，不是厨房"},"output":{"utterance_intent":"PROVIDE_INFORMATION","issue_category":"WATER_LEAK","issue_location":"卫生间","issue_description_update":"我说错了，是卫生间漏水，不是厨房","user_correction":true}},
+  {"name":"只补充位置","input":{"current_message":"在客厅","current_task_intent":"NEW_REPAIR","missing_fields":["ISSUE_LOCATION"]},"output":{"utterance_intent":"PROVIDE_INFORMATION","issue_location":"客厅"}}
+]

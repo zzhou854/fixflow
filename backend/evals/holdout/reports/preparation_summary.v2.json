@@ -1,0 +1,19 @@
+{
+  "approval": "PENDING_HUMAN_SIGNATURE",
+  "duplicate_scan": "PASS",
+  "grounded_case_count": 90,
+  "grounded_dataset_sha256": "e3949114ededb238daa831495fa7a865b22984ef25a219004650341bbaa07e7a",
+  "grounded_deterministic_count": 60,
+  "grounded_golden_sha256": "6487b22200a7c72e7f68a8e92389fa2b3514d3baa25aeb69a03dc977aec630ef",
+  "grounded_natural_count": 30,
+  "grounded_version": "1.2.0",
+  "live_call_count": 0,
+  "qualification_execution_count": 0,
+  "runtime_commit": "35e58526d5e10c42c080a20090166af2d13861b8",
+  "signature": null,
+  "status": "REVISED_HOLDOUT_SEALED_AWAITING_EXTERNAL_REVIEW",
+  "structured_case_count": 180,
+  "structured_dataset_sha256": "5597454685b72a8518b949c940ada88b212c586314f97dfee23d72e5604a5328",
+  "structured_golden_sha256": "f7ac762c4bb3e0f5253bc1f4c25f3cffab2a7b637b036710a468dd6fb1da0a3f",
+  "structured_version": "2.2.0"
+}

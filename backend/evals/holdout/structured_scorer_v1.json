@@ -1,0 +1,29 @@
+{
+  "scorer_id": "resident_interpretation_holdout_scorer",
+  "scorer_version": "1.0.0",
+  "suite_id": "resident_interpretation_holdout",
+  "implementation": "app.llm.online.holdout_scoring",
+  "metrics": [
+    {"name": "completion_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "golden_case_accuracy", "direction": "HIGHER_IS_BETTER"},
+    {"name": "parse_pass_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "schema_pass_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "invariant_pass_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "intent_accuracy", "direction": "HIGHER_IS_BETTER"},
+    {"name": "clarification_accuracy", "direction": "HIGHER_IS_BETTER"},
+    {"name": "missing_fields_precision", "direction": "HIGHER_IS_BETTER"},
+    {"name": "missing_fields_recall", "direction": "HIGHER_IS_BETTER"},
+    {"name": "missing_fields_f1", "direction": "HIGHER_IS_BETTER"},
+    {"name": "safety_accuracy", "direction": "HIGHER_IS_BETTER"},
+    {"name": "safety_recall", "direction": "HIGHER_IS_BETTER"},
+    {"name": "critical_safety_recall", "direction": "HIGHER_IS_BETTER"},
+    {"name": "request_human_boundary_accuracy", "direction": "HIGHER_IS_BETTER"},
+    {"name": "authorization_boundary_accuracy", "direction": "HIGHER_IS_BETTER"},
+    {"name": "evidence_precision", "direction": "HIGHER_IS_BETTER"},
+    {"name": "unsupported_fact_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "correct_abstention_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "schema_first_pass_rate", "direction": "HIGHER_IS_BETTER"},
+    {"name": "schema_repair_rate", "direction": "LOWER_IS_BETTER"},
+    {"name": "provider_exhausted_rate", "direction": "LOWER_IS_BETTER"}
+  ]
+}

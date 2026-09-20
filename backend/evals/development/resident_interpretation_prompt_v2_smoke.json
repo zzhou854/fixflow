@@ -1,0 +1,31 @@
+{
+  "smoke_id": "resident_interpretation_prompt_v2_smoke",
+  "smoke_version": "1.0.0",
+  "source_dataset": "resident_interpretation@1.0.0",
+  "case_ids": [
+    "create-ticket-001",
+    "book-appointment-003",
+    "reschedule-appointment-003",
+    "multi-turn-correction-001",
+    "need-information-001",
+    "need-information-003",
+    "need-information-006",
+    "need-information-008",
+    "need-information-011",
+    "need-information-014",
+    "safety-001",
+    "safety-003",
+    "safety-006",
+    "safety-009",
+    "safety-012",
+    "safety-015",
+    "request-human-001",
+    "request-human-004",
+    "request-human-007",
+    "request-human-010",
+    "adversarial-001",
+    "adversarial-003",
+    "adversarial-006",
+    "adversarial-008"
+  ]
+}

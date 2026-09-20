@@ -1,0 +1,21 @@
+.env
+.venv/
+.tools/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.artifacts/
+.idea/
+.vscode/
+dist/
+build/
+node_modules/
+*.tsbuildinfo
+
+# Local development-agent and job-search materials are not product source.
+AGENTS.md
+docs/interview/
